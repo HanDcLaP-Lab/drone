@@ -80,10 +80,10 @@ int main(void)
     }
     
     motor_pwm_init(); ///pwm输出初始化
-    Flight_Control_Init();
-    system_delay_ms(5000);  
+    Flight_Control_Init(); 
     
-    pit_ms_init(PIT_NUM0, 1);    
+    pit_ms_init(PIT_NUM0, 1);  
+     system_delay_ms(5000); 
     pit_ms_init(PIT_NUM1, 20);
     // 此处编写用户代码 例如外设初始化代码等
     /**======================这一段是校准用的，使用可在第一个delay打断点

@@ -202,7 +202,7 @@ void wireless_uart_callback (void)
         // --- ĞÂÔöÂß¼­ ---
         if(wireless_uart_data == 'r') {
             wireless_uart_send_string("land\r\n");
-            flight_target.cur_state = landing; 
+            flight_target.cur_state = pre_landing; 
         }
         else if(wireless_uart_data == 's') {
             wireless_uart_send_string("emergency stop\r\n");

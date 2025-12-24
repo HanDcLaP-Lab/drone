@@ -65,6 +65,8 @@ void Set_Target_Velocity(float vx, float vy, float yaw_rate) {
 
 // 飞行控制主循环,调用后直接输出PWM
 void Flight_Control_Loop(void) {
+    if(flight_target.cur_state == pre_landing && imu_data.z < LAND_HEIGHT + 2) flight_target.cur_state = landing;
+
     float target_height = 0.0f;
     //-------------飞行状态-----------------//
     switch (flight_target.cur_state)
@@ -104,9 +106,9 @@ void Flight_Control_Loop(void) {
     float throttle_adj = PID_Calculate(&pid_height_vel, climb_rate_error, CTRL_DT);
 
     int16_t base_throttle = HOVER_THROTTLE + (int16_t)throttle_adj;
-    
+    printf("%f" , throttle_adj);
     // 安全限幅
-    if (base_throttle > MAX_PWM - 2000) base_throttle = MAX_PWM - 2000;
+    if (base_throttle > MAX_PWM) base_throttle = MAX_PWM;
     if (base_throttle < MIN_PWM) base_throttle = MIN_PWM;
 
     // ---------------- 2. 水平速度控制 ----------------
@@ -144,7 +146,7 @@ void Flight_Control_Loop(void) {
     motor_out.rb = (int16_t)(base_throttle - out_roll + out_pitch - out_yaw); // 右后
     motor_out.lf = (int16_t)(base_throttle + out_roll - out_pitch - out_yaw); // 左前
     motor_out.lb = (int16_t)(base_throttle - out_roll - out_pitch + out_yaw); // 左后
-
+    printf("%d %f %f %f ",base_throttle , out_roll , out_pitch , out_yaw);
     // ---------------- 5. 输出限幅 ----------------
     int16_t *motors = (int16_t*)&motor_out;
     for(int i=0; i<4; i++) {
