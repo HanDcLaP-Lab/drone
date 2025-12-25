@@ -1,6 +1,7 @@
 #include "zf_common_headfile.h"
 
 uint8 data_buffer[32];
+char buf[16];
 uint8 data_len;
 void wireless_uart_init_(){
     
@@ -28,4 +29,14 @@ void wireless_uart_get_(){
             wireless_uart_send_buffer(data_buffer, strlen((const char *)data_buffer));    // 显示收到的数据个数
             wireless_uart_send_string(".\r\n");
         }
+}
+void wireless_uart_send_int(int32_t send_a)
+{
+    snprintf(buf, sizeof(buf), "%d", send_a);
+    wireless_uart_send_string(buf);
+}
+void wireless_uart_send_float(float send_a)
+{
+    snprintf(buf, sizeof(buf), "%.2f",send_a);
+    wireless_uart_send_string(buf);
 }

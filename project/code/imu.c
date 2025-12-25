@@ -97,8 +97,10 @@ static void Navigation_Update(float ax, float ay, float az) {
     w_az = w_az - GRAVITY_MSS;
 
     // 4. 零速修正 (死区)
-    if (fabsf(w_ax) < 0.15f) w_ax = 0;
-    if (fabsf(w_ay) < 0.15f) w_ay = 0;
+    if(fabs(w_ax)<0.05)w_ax=0;
+    if(fabs(w_ay)<0.05)w_ay=0;
+    w_ax = Kalman_Update(&K_w_ax,w_ax);
+    w_ay = Kalman_Update(&K_w_ay,w_ay);
     if (fabsf(w_az) < 0.2f) w_az = 0;
 
     // 更新到结构体
@@ -139,15 +141,15 @@ static void Navigation_Update(float ax, float ay, float az) {
         float vz_error = tof_height_speed_cms - imu_data.vz;
         imu_data.vz += vz_error * Z_CORRECT_VEL_GAIN;
     }
-    /*
+
     // 5. 速度积分 (带阻尼)
-    imu_data.vx = imu_data.vx * 0.3f + w_ax * DT * 0.7;
-    imu_data.vy = imu_data.vy * 0.3f + w_ay * DT * 0.7;
+    imu_data.vx += w_ax * DT *100.0f;
+    imu_data.vy += w_ay * DT *100.0f;
+    //if(pit0_cnt%20==0)printf(" %.2f,%.2f ",w_ax,w_ay);
     
     // 6. 位置积分 (cm)
     imu_data.x += imu_data.vx * DT * 100.0f;
     imu_data.y += imu_data.vy * DT * 100.0f;
-*/
 }
 
 // ================= 对外接口函数 =================

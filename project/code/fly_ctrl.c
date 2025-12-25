@@ -26,6 +26,7 @@ static float Constrain_Float(float val, float min, float max) {
 void Flight_Control_Init(void) {
     flight_target.cur_state = normal;
     flight_target.is_armed = 2; 
+    flight_target.height = 0; 
     
     // ----------- 初始化 PID 参数 (Kp, Ki, Kd, MaxI, MaxOut) -----------
     // 1. 高度环
@@ -67,15 +68,14 @@ void Set_Target_Velocity(float vx, float vy, float yaw_rate) {
 void Flight_Control_Loop(void) {
     if(flight_target.cur_state == pre_landing && imu_data.z < LAND_HEIGHT + 2) flight_target.cur_state = landing;
 
-    float target_height = 0.0f;
     //-------------飞行状态-----------------//
     switch (flight_target.cur_state)
     {
     case normal:
-        target_height = TARGET_HEIGHT_CM;
+        flight_target.target_height = TARGET_HEIGHT_CM;
         break;
     case pre_landing:
-        target_height = LAND_HEIGHT;
+        flight_target.target_height = LAND_HEIGHT;
         break;
     case landing:
         Flight_Lock();
@@ -96,7 +96,9 @@ void Flight_Control_Loop(void) {
 
     // ---------------- 1. 高度控制 ----------------
     // 外环：位置误差 -> 目标上升速度
-    float height_error = target_height - imu_data.z;
+
+    flight_target.height = flight_target.height*0.94 + flight_target.target_height * 0.06;
+    float height_error = flight_target.height - imu_data.z;
     // 计算位置环 PID
     float target_climb_rate = PID_Calculate(&pid_height_pos, height_error, CTRL_DT);
     
@@ -106,7 +108,7 @@ void Flight_Control_Loop(void) {
     float throttle_adj = PID_Calculate(&pid_height_vel, climb_rate_error, CTRL_DT);
 
     int16_t base_throttle = HOVER_THROTTLE + (int16_t)throttle_adj;
-    printf("%f" , throttle_adj);
+    //printf("%f" , throttle_adj);
     // 安全限幅
     if (base_throttle > MAX_PWM) base_throttle = MAX_PWM;
     if (base_throttle < MIN_PWM) base_throttle = MIN_PWM;
@@ -146,7 +148,7 @@ void Flight_Control_Loop(void) {
     motor_out.rb = (int16_t)(base_throttle - out_roll + out_pitch - out_yaw); // 右后
     motor_out.lf = (int16_t)(base_throttle + out_roll - out_pitch - out_yaw); // 左前
     motor_out.lb = (int16_t)(base_throttle - out_roll - out_pitch + out_yaw); // 左后
-    printf("%d %f %f %f ",base_throttle , out_roll , out_pitch , out_yaw);
+    //printf("%d %f %f %f ",base_throttle , out_roll , out_pitch , out_yaw);
     // ---------------- 5. 输出限幅 ----------------
     int16_t *motors = (int16_t*)&motor_out;
     for(int i=0; i<4; i++) {

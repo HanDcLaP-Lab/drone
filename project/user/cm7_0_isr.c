@@ -37,6 +37,8 @@
 #include "zf_common_headfile.h"
 
 uint32_t pit0_cnt= 0;
+uint16_t target=0;
+
 // **************************** PIT中断函数 (1ms一次) ****************************
 void pit0_ch0_isr()
 {
@@ -52,6 +54,7 @@ void pit0_ch0_isr()
         {
               dl1b_finsh_flag= 0;
               imu_data.tof_z = dl1b_distance_mm;
+              if(imu_data.tof_z >= 1400) imu_data.tof_z=1400;
               
               static float last_tof_z;
               
@@ -83,14 +86,30 @@ void pit0_ch1_isr()                     // 定时器通道 1 周期中断服务函数
 
     //-------------------------------飞行逻辑控制---------------------------------//
     
-    Set_Target_Velocity(0, 0, 0);
+    Set_Target_Velocity(0, 0, 0); ///这里暂时写成目标高度，再在control_loop中根据状态更正
 
     if (imu_data.is_calibrated && flight_target.is_armed == 2) {
         Flight_Unlock(); // 【警告】调试时请注释掉这行，防止上电即飞
     }
     Flight_Control_Loop(); // 计算
-    //wireless_uart_send_string((const char *)motor_out.lf);
-       printf("%d %d %d %d",motor_out.lf,motor_out.rf,motor_out.lb,motor_out.rb);
+    /*
+    wireless_uart_send_int(motor_out.lf);
+    wireless_uart_send_string(" ");
+    wireless_uart_send_int(motor_out.rf);
+    wireless_uart_send_string(" ");
+    wireless_uart_send_int(motor_out.lb);
+    wireless_uart_send_string(" ");
+    wireless_uart_send_int(motor_out.rb);
+    wireless_uart_send_string(" ");*/
+    
+     //printf("%d %d %d %d",motor_out.lf,motor_out.rf,motor_out.lb,motor_out.rb)
+       //printf("%.2f %.2f",imu_data.vx,imu_data.vy);
+    /*motor_out.lf=target;
+    motor_out.rf=target;
+    motor_out.lb=target;
+    motor_out.rb=target*/;
+    wireless_uart_send_int(flight_target.cur_state);
+          wireless_uart_send_float(flight_target.height);
     motor_pwm_set();
 
     //-------------------------------飞行逻辑控制--------------------------------//

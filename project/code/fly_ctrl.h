@@ -19,15 +19,14 @@ typedef enum {
 } STATE;
 
 // =================== 飞行参数配置 ===================
-#define TARGET_HEIGHT_CM 30.0f// 目标高度 (cm)
-#define LAND_HEIGHT 10.0f  //着陆时熄火高度
-#define HOVER_THROTTLE      2000    // 悬停油门
-#define MAX_PWM             3000    // 最大PWM
+#define TARGET_HEIGHT_CM 80.0f// 目标高度 (cm)
+#define LAND_HEIGHT 15.0f  //着陆时熄火高度
+#define HOVER_THROTTLE      3750    // 悬停油门
+#define MAX_PWM             4600    // 最大PWM
 #define MIN_PWM             0    // 最小PWM
 #define MAX_TILT_ANGLE      20.0f   // 最大倾角
 #define CTRL_DT             0.02f  // 控制周期 1ms (原代码宏定义为 DT，建议改名防止冲突)
 #define CTRL_DT             0.02f  // 控制周期 1ms (原代码宏定义为 DT，建议改名防止冲突)
-extern float duty_LF, duty_LB, duty_RF, duty_RB;
 // 5 - 10 -> 0% - 100%
 
 // =================== 控制目标结构体 ===================
@@ -35,6 +34,8 @@ typedef struct {
     float vel_x_cm_s;  // 目标 X 轴速度
     float vel_y_cm_s;  // 目标 Y 轴速度
     float yaw_rate;    // 目标偏航角速度
+    float height; //当前目标高度
+    float target_height;  //预期目标高度
     uint8_t is_armed;  // 解锁状态
     STATE cur_state; //飞行状态
 } Flight_Target_t;
@@ -59,7 +60,6 @@ void Flight_Unlock(void);
 void Flight_Lock(void);
 void motor_pwm_set(void);
 void motor_pwm_init(void);
-void motor_pwm_set(void);
 void motor_pwm_init(void);
 
 #endif

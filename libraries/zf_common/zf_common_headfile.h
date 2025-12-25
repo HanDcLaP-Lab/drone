@@ -109,5 +109,6 @@
 #include "fly_ctrl.h"
 #include "pid.h"
 #include "wireless_uart.h"
+#include "kalman_filter.h"
 //-------------------------------------------------------”√ªß≤„---------------------------------------------------------
 #endif
