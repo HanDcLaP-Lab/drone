@@ -110,5 +110,6 @@
 #include "pid.h"
 #include "wireless_uart.h"
 #include "kalman_filter.h"
+#include "image.h"
 //-------------------------------------------------------”√ªß≤„---------------------------------------------------------
 #endif
