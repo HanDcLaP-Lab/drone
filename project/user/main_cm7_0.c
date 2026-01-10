@@ -69,6 +69,7 @@ int main(void)
         }
         gpio_toggle_level(LED1);                                                // 翻转 LED 引脚输出电平 控制 LED 亮灭 初始化出错这个灯会闪的很慢
     }
+    camera_init();
     Kalman_Init(&K_w_ax,1e-4f,0.01,0);
     Kalman_Init(&K_w_ay,1e-4f,0.01,0);
 
@@ -87,15 +88,9 @@ int main(void)
     pit_ms_init(PIT_NUM0, 1);  
      system_delay_ms(5000); 
     pit_ms_init(PIT_NUM1, 20);
+    pit_ms_init(PIT_NUM2, 20);
     // 此处编写用户代码 例如外设初始化代码等
-    /**======================这一段是校准用的，使用可在第一个delay打断点
-    pwm_set_duty(PWM_CH1,(int)(10 * (PWM_DUTY_MAX / 100)));; 
-    system_delay_ms(1000);
-      pwm_set_duty(PWM_CH1,(int)(6 * (PWM_DUTY_MAX / 100))); 
-      system_delay_ms(100);
-    pwm_set_duty(PWM_CH1,(int)(5 * (PWM_DUTY_MAX / 100))); 
-    system_delay_ms(1000);*/
-
+    
     
     // 此处编写用户代码 例如外设初始化代码等
 
