@@ -47,6 +47,7 @@
 
 #define PIT_NUM0              (PIT_CH0 )
 #define PIT_NUM1              (PIT_CH1 )
+#define PIT_NUM2              (PIT_CH2 )
 #define LED1                    (P19_0) 
 
    
@@ -57,6 +58,7 @@ int main(void)
     
     gpio_init(LED1, GPO, GPIO_HIGH, GPO_PUSH_PULL);   
     wireless_uart_init_();
+    seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_DEBUG_UART);
     while(1)///定时器0初始化
     {
         if(imu660ra_init())
@@ -78,7 +80,9 @@ int main(void)
         if(dl1b_init())
             gpio_toggle_level(LED1);                                            // 翻转 LED 引脚输出电平 控制 LED 亮灭 初始化出错这个灯会闪的很慢
         else
-            break;
+            {
+                break;
+            }
         system_delay_ms(1000);                                                  // 闪灯表示异常
     }
     
@@ -88,7 +92,7 @@ int main(void)
     pit_ms_init(PIT_NUM0, 1);  
      system_delay_ms(5000); 
     pit_ms_init(PIT_NUM1, 20);
-    pit_ms_init(PIT_NUM2, 20);
+    pit_ms_init(PIT_NUM2, 200);
     // 此处编写用户代码 例如外设初始化代码等
     
     

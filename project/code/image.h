@@ -7,7 +7,8 @@
 #define STACK_SIZE 4096     // DFS 栈大小
 #define MAX_LIGHTS 20       // 最大识别灯光数量
 #define MAX_DOTS 10         // 最大记录的连通域数量
-
+#define THRESHOLD 120      //二值化阈值设置
+#define MIN_LIGHT_SIZE  10   //灯最小判定大小
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---
@@ -35,5 +36,5 @@ extern CameraObject cam_down;
 // 函数声明
 void camera_init(void);           // 初始化
 void image_processing_loop(void); // 图像处理主循环
-
+void image_send(void);  //发送图像
 #endif /* CODE_IMAGE_H_ */

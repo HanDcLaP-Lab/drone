@@ -117,13 +117,13 @@ void Flight_Control_Loop(void) {
     // X轴速度 (前后) -> Target Pitch
     // 假设：抬头为正，向前飞需要负Pitch
     
-    float err_vx = flight_target.vel_x_cm_s - imu_data.vx; 
+    //float err_vx = flight_target.vel_x_cm_s - imu_data.vx; 
     //float target_pitch = PID_Calculate(&pid_vel_x, err_vx, CTRL_DT); 
     float target_pitch = 0; 
     
     // Y轴速度 (左右) -> Target Roll
     // 假设：右倾为正，向右飞需要正Roll
-    float err_vy = flight_target.vel_y_cm_s - imu_data.vy; 
+    //float err_vy = flight_target.vel_y_cm_s - imu_data.vy; 
     //float target_roll = PID_Calculate(&pid_vel_y, err_vy, CTRL_DT);
     float target_roll = 0;
 

@@ -5,12 +5,22 @@
 uint8_t buffer_bin_down[MT9V03X_H][MT9V03X_W];
 // 定义 DFS 访问标记数组 (静态分配以防栈溢出)
 uint8_t visited_buffer[MT9V03X_H * MT9V03X_W];
-
+uint8 image_copy[MT9V03X_H][MT9V03X_W];
 // 定义全局实例
 CameraObject cam_down;
 
 // --- 2. 初始化函数 ---
 void camera_init(void) {
+    while(1)
+    {
+        if(mt9v03x_init())
+            gpio_toggle_level(P19_0);                                            // 翻转 LED 引脚输出电平 控制 LED 亮灭 初始化出错这个灯会闪的很慢
+        else
+            break;
+        system_delay_ms(500);                                                   // 闪灯表示异常
+    }
+    seekfree_assistant_camera_information_config(SEEKFREE_ASSISTANT_GRAY, image_copy[0], MT9V03X_W, MT9V03X_H);
+    seekfree_assistant_camera_boundary_config(NO_BOUNDARY, 0 ,NULL , NULL ,NULL , NULL , NULL , NULL);
     // 初始化下视摄像头
     cam_down.width = MT9V03X_W;
     cam_down.height = MT9V03X_H;
@@ -20,7 +30,7 @@ void camera_init(void) {
     cam_down.binarized_image = (uint8_t *)buffer_bin_down;
     
     // 参数配置
-    cam_down.threshold = 100;   // 二值化阈值 (需根据实际场地光照调整)
+    cam_down.threshold = THRESHOLD;   // 二值化阈值 (需根据实际场地光照调整)
     cam_down.margin_cut = 5;    // 四周裁剪 5 像素
 }
 
@@ -145,7 +155,7 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
     uint8_t valid_idx = 0;
     for (int i = 0; i < cam->components_count && i < MAX_DOTS; i++) {
         // 筛选条件：像素点数量 > 5 (对于无人机远距离，灯光可能较小，阈值可调小)
-        if (cam->dot_num[i] > 5) {
+        if (cam->dot_num[i] > MIN_LIGHT_SIZE) {
             if (valid_idx < MAX_LIGHTS) {
                 // 计算质心
                 cam->centers[valid_idx][0] = sum_r[i] / cam->dot_num[i]; // Row (Y)
@@ -167,4 +177,21 @@ void image_processing_loop(void) {
     
     // 3. 计算质心
     calculate_centroids(&cam_down, visited_buffer);
+
+} 
+
+void image_send(void){
+    if(mt9v03x_finish_flag)
+    {
+        mt9v03x_finish_flag = 0;
+        //遍历赋值并放大显示 (1变255)
+        for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++)
+        {
+            // 如果是1则变为255(白)，如果是0保持0(黑)
+            image_copy[0][i] = cam_down.binarized_image[i] * 255; 
+        }
+
+        // 发送图像
+        seekfree_assistant_camera_send();
+    }
 }
