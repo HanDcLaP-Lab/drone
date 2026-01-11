@@ -10,6 +10,11 @@
 #define PWM_RB             (TCPWM_CH58_P17_3)
 //引脚定义
 
+typedef struct {
+    float x; // 对应图像的 Col 方向 (无人机右)
+    float y; // 对应图像的 Row 方向 (无人机前，注意图像Row0在上面，所以需要取反)
+} Vector2D;
+
 //--------------------飞行状态----------------------//
 typedef enum {
     normal,//正常巡飞
@@ -26,18 +31,24 @@ typedef enum {
 #define MIN_PWM             0    // 最小PWM
 #define MAX_TILT_ANGLE      20.0f   // 最大倾角
 #define CTRL_DT             0.02f  // 控制周期 1ms (原代码宏定义为 DT，建议改名防止冲突)
-#define CTRL_DT             0.02f  // 控制周期 1ms (原代码宏定义为 DT，建议改名防止冲突)
+#define POS_P_GAIN 0.8f     //从像素点误差到速度的乘子
+
+
+#define IMG_CENTER_X (MT9V03X_W / 2.0f) // 94
+#define IMG_CENTER_Y (MT9V03X_H / 2.0f) // 60
 // 5 - 10 -> 0% - 100%
 
 // =================== 控制目标结构体 ===================
 typedef struct {
-    float vel_x_cm_s;  // 目标 X 轴速度
-    float vel_y_cm_s;  // 目标 Y 轴速度
-    float yaw_rate;    // 目标偏航角速度
-    float height; //当前目标高度
-    float target_height;  //预期目标高度
-    uint8_t is_armed;  // 解锁状态
-    STATE cur_state; //飞行状态
+    float vel_x_cm_s;
+    float vel_y_cm_s;
+    float yaw_rate;
+    float height;
+    float target_height;
+    float target_yaw;   // 新增：无人机期望的绝对偏航角 (度)
+    
+    uint8_t is_armed;
+    STATE cur_state;
 } Flight_Target_t;
 
 // =================== 电机输出结构体 ===================
@@ -61,5 +72,5 @@ void Flight_Lock(void);
 void motor_pwm_set(void);
 void motor_pwm_init(void);
 void motor_pwm_init(void);
-
+void Air_Ground_Control_Loop(float car_angle_deg);
 #endif

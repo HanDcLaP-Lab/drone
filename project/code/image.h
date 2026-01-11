@@ -8,7 +8,7 @@
 #define MAX_LIGHTS 20       // 最大识别灯光数量
 #define MAX_DOTS 10         // 最大记录的连通域数量
 #define THRESHOLD 120      //二值化阈值设置
-#define MIN_LIGHT_SIZE  10   //灯最小判定大小
+#define MIN_LIGHT_SIZE  5   //灯最小判定大小
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---

@@ -21,6 +21,14 @@ static float Constrain_Float(float val, float min, float max) {
     return val;
 }
 
+static float Get_Yaw_Error(float target, float current) {
+    float error = target - current;
+    // 将误差限制在 -180 到 +180 之间，走最短路径
+    while (error > 180.0f)  error -= 360.0f;
+    while (error < -180.0f) error += 360.0f;
+    return error;
+}
+
 // =================== 核心控制逻辑 ===================
 
 void Flight_Control_Init(void) {
@@ -142,6 +150,8 @@ void Flight_Control_Loop(void) {
     // Yaw PID (不能置0)
     float yaw_err = 0 - imu_data.yaw;
     float out_yaw = PID_Calculate(&pid_yaw, yaw_err, CTRL_DT);
+    // float yaw_err = Get_Yaw_Error(flight_target.target_yaw, imu_data.yaw);
+    // float out_yaw = PID_Calculate(&pid_yaw, yaw_err, CTRL_DT);
 
     // ---------------- 4. 电机混控 ----------------
     motor_out.rf = (int16_t)(base_throttle + out_roll + out_pitch + out_yaw); // 右前
@@ -172,4 +182,118 @@ void motor_pwm_init(){
     pwm_init(PWM_LB, 50, 500);
     pwm_init(PWM_RF, 50, 500);
     pwm_init(PWM_RB, 50, 500);
+}
+
+
+/**
+ * @brief 空地协同控制主循环
+ * @param car_angle_deg 小车发来的当前自身绝对偏航角 (度)
+ */
+void Air_Ground_Control_Loop(float car_angle_deg) {
+    
+    // ================= 1. 状态同步 =================
+    // 让无人机的目标偏航角时刻跟随小车，保持机头朝向一致
+    // 注意：需要在 Flight_Control_Loop 中使用 target_yaw 进行 PID 控制
+    flight_target.target_yaw = car_angle_deg; 
+
+    // ================= 2. 视觉目标搜索 =================
+    int car_idx = -1;
+    int beacon_idx = -1;
+    uint32_t max_size = 0;
+    uint32_t second_size = 0;
+
+    // 遍历所有识别到的灯光，通过面积大小区分小车和信标
+    // 逻辑：最大的连通域是小车，第二大的是信标
+    for (int i = 0; i < cam_down.light_number; i++) {
+        // 简单的冒泡逻辑找出第一大和第二大
+        if (cam_down.dot_num[i] > max_size) {
+            // 原最大变为第二大
+            second_size = max_size;
+            beacon_idx = car_idx;
+            
+            // 更新最大为当前
+            max_size = cam_down.dot_num[i];
+            car_idx = i;
+        } else if (cam_down.dot_num[i] > second_size) {
+            // 更新第二大
+            second_size = cam_down.dot_num[i];
+            beacon_idx = i;
+        }
+    }
+
+    // 如果未找到小车，直接返回，保持当前状态（或悬停）
+    if (car_idx == -1) {
+        // 可选：丢失目标时原地悬停
+        Set_Target_Velocity(0, 0, 0); 
+        return; 
+    }
+
+    // ================= 3. 获取图像坐标 =================
+    // image.c 中: centers[i][0] = Row (Y), centers[i][1] = Col (X)
+    float car_row = (float)cam_down.centers[car_idx][0];
+    float car_col = (float)cam_down.centers[car_idx][1];
+    
+    // ================= 4. 无人机位置跟随控制 =================
+    // 目标：将小车保持在图像中心
+    // 坐标系定义：
+    // Row(Y)轴：上小下大。无人机向前飞，景物向下移(Row变大)。
+    //           若小车在上方(Row小)，需要无人机向前飞去追。
+    //           Error = Center_Row - Car_Row. (60 - 10 = 50 -> 向前)
+    // Col(X)轴：左小右大。无人机向右飞，景物向左移(Col变小)。
+    //           若小车在右方(Col大)，需要无人机向右飞去追。
+    //           Error = Car_Col - Center_Col. (150 - 94 = 56 -> 向右)
+
+    float error_row = IMG_CENTER_Y - car_row; 
+    float error_col = car_col - IMG_CENTER_X;
+
+    // 计算目标速度 (cm/s)
+    float target_vx = error_row * POS_P_GAIN;
+    float target_vy = error_col * POS_P_GAIN;
+    
+    // 赋值给飞行控制目标 (yaw_rate 传 0，因为我们用 target_yaw 独立控制了)
+    Set_Target_Velocity(target_vx, target_vy, 0);
+
+
+    // ================= 5. 小车导航指令计算 =================
+    // 只有当同时看到信标和小车时，才能计算导航路径
+    if (beacon_idx != -1) {
+        float beacon_row = (float)cam_down.centers[beacon_idx][0];
+        float beacon_col = (float)cam_down.centers[beacon_idx][1];
+
+        // 5.1 计算 [无人机坐标系] 下的矢量 (小车 -> 信标)
+        // X轴(前): 图像上方为前。若信标在小车前方(Row更小)，dx 应为正。
+        //          dx = Car_Row - Beacon_Row
+        float vec_x_drone = car_row - beacon_row; 
+        
+        // Y轴(右): 图像右侧为右。若信标在小车右方(Col更大)，dy 应为正。
+        //          dy = Beacon_Col - Car_Col
+        float vec_y_drone = beacon_col - car_col;
+
+        // 5.2 计算距离 (像素距离，可根据实际高度换算为物理距离)
+        float distance = sqrtf(vec_x_drone * vec_x_drone + vec_y_drone * vec_y_drone);
+
+        // 5.3 计算 [无人机坐标系] 下的角度 (弧度)
+        float angle_drone_frame = atan2f(vec_y_drone, vec_x_drone);
+        
+        // 5.4 坐标系变换: 无人机系 -> 小车系
+        // 目标角度(小车系) = 目标角度(无人机系) + (无人机Yaw - 小车Yaw)
+        // 因为我们已经在第一步做了 flight_target.target_yaw = car_angle_deg
+        // 所以理论上 (yaw_drone - yaw_car) 应该趋近于 0，
+        // 但为了动态修正跟随误差，保留这个补偿公式是必要的。
+
+        float yaw_drone_rad = imu_data.yaw * (3.1415926f / 180.0f);
+        float yaw_car_rad   = car_angle_deg * (3.1415926f / 180.0f);
+        
+        float angle_car_frame = angle_drone_frame + (yaw_drone_rad - yaw_car_rad);
+        
+        // 转换为角度 (-180 ~ 180)
+        float send_angle_deg = angle_car_frame * (180.0f / 3.1415926f);
+        
+        // 归一化到 -180 ~ 180
+        while(send_angle_deg > 180.0f)  send_angle_deg -= 360.0f;
+        while(send_angle_deg < -180.0f) send_angle_deg += 360.0f;
+
+        // ================= 6. 发送指令 =================
+        // 在这里调用你的通信函数，将 distance 和 send_angle_deg 发送给小车
+    }
 }
