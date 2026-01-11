@@ -125,16 +125,15 @@ void Flight_Control_Loop(void) {
     // X轴速度 (前后) -> Target Pitch
     // 假设：抬头为正，向前飞需要负Pitch
     
-    //float err_vx = flight_target.vel_x_cm_s - imu_data.vx; 
-    //float target_pitch = PID_Calculate(&pid_vel_x, err_vx, CTRL_DT); 
-    float target_pitch = 0; 
+    float err_vx = flight_target.vel_x_cm_s - imu_data.vx; 
+    float target_pitch = PID_Calculate(&pid_vel_x, err_vx, CTRL_DT); 
+    // float target_pitch = 0; // 
     
     // Y轴速度 (左右) -> Target Roll
     // 假设：右倾为正，向右飞需要正Roll
-    //float err_vy = flight_target.vel_y_cm_s - imu_data.vy; 
-    //float target_roll = PID_Calculate(&pid_vel_y, err_vy, CTRL_DT);
-    float target_roll = 0;
-
+    float err_vy = flight_target.vel_y_cm_s - imu_data.vy; 
+    float target_roll = PID_Calculate(&pid_vel_y, err_vy, CTRL_DT);
+    //float target_roll = 0;
     target_pitch = Constrain_Float(target_pitch, -MAX_TILT_ANGLE, MAX_TILT_ANGLE);
     target_roll  = Constrain_Float(target_roll,  -MAX_TILT_ANGLE, MAX_TILT_ANGLE);
 
@@ -296,4 +295,66 @@ void Air_Ground_Control_Loop(float car_angle_deg) {
         // ================= 6. 发送指令 =================
         // 在这里调用你的通信函数，将 distance 和 send_angle_deg 发送给小车
     }
+}
+
+
+
+//
+void Simple_Hover_Control(void) {
+    // --- 1. 寻找最大的灯 (视为目标) ---
+    int max_idx = -1;
+    uint16_t max_size = 0;
+
+    for (int i = 0; i < cam_down.light_number; i++) {
+        if (cam_down.dot_num[i] > max_size) {
+            max_size = cam_down.dot_num[i];
+            max_idx = i;
+        }
+    }
+
+    // --- 2. 如果没找到灯，原地悬停 ---
+    if (max_idx == -1) {
+        Set_Target_Velocity(0, 0, 0);
+        return;
+    }
+
+    // --- 3. 获取目标坐标 ---
+    // image.c 中 centers: [0]是Row(Y), [1]是Col(X)
+    float target_row = (float)cam_down.centers[max_idx][0];
+    float target_col = (float)cam_down.centers[max_idx][1];
+
+    // --- 4. 计算视觉误差 ---
+    // Row误差 (代表前后距离): 图像上方Row小。目标在上方(Row<Center) -> error_row > 0
+    // Col误差 (代表左右距离): 图像右侧Col大。目标在右侧(Col>Center) -> error_col > 0
+    float error_row = IMG_CENTER_Y - target_row; 
+    float error_col = target_col - IMG_CENTER_X;
+
+    // --- 5. 交叉映射控制 (关键修改) ---
+    
+    // [目标：前后移动] 
+    // 视觉误差源：error_row
+    // 实际控制通道：vel_y (因为底层vel_y控制了Pitch/前后)
+    // 极性推导：
+    //   目标在前方 (error_row > 0) -> 需要低头前飞 (Pitch Down)
+    //   底层逻辑：out_roll (+) 是抬头 (Front+, Back-)。
+    //   所以我们需要 out_roll 为负。
+    //   Flight_Control_Loop 中：out_roll 来自 target_roll 来自 vel_y。
+    //   结论：需要 vel_y 为负。
+    float target_vy_output = -1.0f * error_row * HOVER_POS_GAIN;
+
+    // [目标：左右移动]
+    // 视觉误差源：error_col
+    // 实际控制通道：vel_x (因为底层vel_x控制了Roll/左右)
+    // 极性推导：
+    //   目标在右侧 (error_col > 0) -> 需要右倾侧飞 (Roll Right)
+    //   底层逻辑：out_pitch (+) 是左倾 (Left-, Right+ 还是反的? 需根据混控确认)
+    //   根据混控：out_pitch > 0 是 (RF+, LF-) 即左倾/Roll Left。
+    //   所以我们需要 out_pitch 为负 (右倾)。
+    //   Flight_Control_Loop 中：out_pitch 来自 target_pitch 来自 vel_x。
+    //   结论：需要 vel_x 为负。
+    float target_vx_output = -1.0f * error_col * HOVER_POS_GAIN;
+
+    // --- 6. 发送指令 ---
+    // 注意：这里我们将 视觉计算出的"前后指令" 填入了 vy，"左右指令" 填入了 vx
+    Set_Target_Velocity(target_vx_output, target_vy_output, 0);
 }

@@ -124,6 +124,7 @@ void pit0_ch2_isr()                     // 定时器通道 2 周期中断服务函数
     image_processing_loop();
     // printf("%d" ,cam_down.light_number);
     image_send();
+    Simple_Hover_Control();
     
     
 }

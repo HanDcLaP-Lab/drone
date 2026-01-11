@@ -32,7 +32,7 @@ typedef enum {
 #define MAX_TILT_ANGLE      20.0f   // 最大倾角
 #define CTRL_DT             0.02f  // 控制周期 1ms (原代码宏定义为 DT，建议改名防止冲突)
 #define POS_P_GAIN 0.8f     //从像素点误差到速度的乘子
-
+#define HOVER_POS_GAIN 0.5f    //从像素点误差到速度的乘子,定点悬停时使用
 
 #define IMG_CENTER_X (MT9V03X_W / 2.0f) // 94
 #define IMG_CENTER_Y (MT9V03X_H / 2.0f) // 60
@@ -73,4 +73,5 @@ void motor_pwm_set(void);
 void motor_pwm_init(void);
 void motor_pwm_init(void);
 void Air_Ground_Control_Loop(float car_angle_deg);
+void Simple_Hover_Control(void);
 #endif
