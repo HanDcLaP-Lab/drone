@@ -43,8 +43,8 @@ void Flight_Control_Init(void) {
 
     // 姿态环 (Roll/Pitch) - 这是最内环，Kp 需要响应快
     // 假设输入是角度误差，输出是电机PWM差值
-    PID_Init(&pid_roll,  4.5f, 0.02f, 1.2f, 500, 1000);
-    PID_Init(&pid_pitch, 4.5f, 0.02f, 1.2f, 500, 1000);
+    PID_Init(&pid_roll,  4.5f, 0.02f, 0.2f, 500, 1000);
+    PID_Init(&pid_pitch, 4.5f, 0.02f, 0.2f, 500, 1000);
     
     // Yaw 环
     PID_Init(&pid_yaw,   6.0f, 0.05f, 0.0f, 500, 1000);
@@ -122,8 +122,7 @@ void Flight_Control_Loop(void) {
     // Yaw PID (使用角度环)
     float yaw_err = Get_Angle_Error(flight_target.target_yaw, imu_data.yaw);
     float out_yaw = PID_Calculate(&pid_yaw, yaw_err, CTRL_DT);
-
-    printf("%.1f %.1f %.1f",out_pitch,out_roll,out_yaw);
+    //if(out_pitch > 500 || out_pitch < -500) printf("pitch: %.1f err: %.1f pre_err: %.1f integral:%.1f/r/n" ,out_pitch , pitch_err, pid_pitch.prev_error , pid_pitch.integral);
     // ================= 4. 电机混控 (Quad-X) =================
     // 定义确认：
     // Pitch Out > 0 -> 需要抬头 -> 前电机(LF, RF)加, 后电机(LB, RB)减
@@ -237,6 +236,9 @@ void Simple_Hover_Control(void) {
 
     // 5. 执行控制
     // 注意：这里的 target_yaw 保持不变，还是锁定值
+    if(cam_down.dot_num[0] > VALID_MIN_NUM){
+        target_roll_val = target_pitch_val = 0;
+    }
     Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
 
     // [可选调试] 

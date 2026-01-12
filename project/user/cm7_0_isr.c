@@ -49,8 +49,8 @@ void pit0_ch0_isr() {
     dl1b_get_distance();
     if (dl1b_finsh_flag == 1) {
         dl1b_finsh_flag = 0;
-        //imu_data.tof_z = dl1b_distance_mm;
-        imu_data.tof_z = 800;
+        imu_data.tof_z = dl1b_distance_mm;
+        //imu_data.tof_z = 800;
         if(imu_data.tof_z >= 1400) imu_data.tof_z=1400;
         static float last_tof_z;
         imu_data.tof_vz = imu_data.tof_z - last_tof_z;
@@ -85,25 +85,7 @@ void pit0_ch1_isr()  // 定时器通道 1 周期中断服务函数
     image_processing_loop();
     Simple_Hover_Control();
     Flight_Control_Loop();  // 计算
-                            /*
-                            wireless_uart_send_int(motor_out.lf);
-                            wireless_uart_send_string(" ");
-                            wireless_uart_send_int(motor_out.rf);
-                            wireless_uart_send_string(" ");
-                            wireless_uart_send_int(motor_out.lb);
-                            wireless_uart_send_string(" ");
-                            wireless_uart_send_int(motor_out.rb);
-                            wireless_uart_send_string(" ");*/
-
-    // printf("%d %d %d %d",motor_out.lf,motor_out.rf,motor_out.lb,motor_out.rb)
-    // printf("%.2f %.2f",imu_data.vx,imu_data.vy);
-    /*motor_out.lf=target;
-    motor_out.rf=target;
-    motor_out.lb=target;
-    motor_out.rb=target*/
-    ;
-    // wireless_uart_send_int(flight_target.cur_state);
-    // wireless_uart_send_float(flight_target.height);
+                        
     motor_pwm_set();
 
     //-------------------------------飞行逻辑控制--------------------------------//
@@ -112,26 +94,14 @@ void pit0_ch1_isr()  // 定时器通道 1 周期中断服务函数
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
-    // image_processing_loop();
+    image_processing_loop();
     //  printf("%d" ,cam_down.light_number);
     // image_send();
-    // Simple_Hover_Control();
-    // Debug_Visual_Logic_Print();
-
-    // wireless_uart_send_string(" ");
-    // wireless_uart_send_int(motor_out.lf);
-    // wireless_uart_send_string(" ");
-    // wireless_uart_send_int(motor_out.rf);
-    // wireless_uart_send_string(" ");
-    // wireless_uart_send_int(motor_out.lb);
-    // wireless_uart_send_string(" ");
-    // wireless_uart_send_int(motor_out.rb);
-    // wireless_uart_send_float(imu_data.z);
-
+    //Simple_Hover_Control();
+    //printf("%d" , cam_down.dot_num[0]);
     // printf("%d", dl1b_distance_mm);
     //IMU_Check_Data_Print();
     //Debug_Motor_Output_Print();
-    //printf("%.1f,%.1f %.1f,%.1f",imu_data.roll,flight_target.target_roll,imu_data.pitch,flight_target.target_pitch);
 }
 
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数

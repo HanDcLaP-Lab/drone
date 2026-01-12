@@ -16,7 +16,7 @@
 #define MAX_PWM             4600    
 #define MIN_PWM             0    
 #define MAX_TILT_ANGLE      30.0f   // 最大倾角限制 (度) - 既然没速度环，这个限制很重要
-#define CTRL_DT             0.001  // 控制周期 
+#define CTRL_DT             0.02  // 控制周期 
 
 // 视觉控制增益
 #define VISUAL_POS_P_GAIN   1.0f   // 像素误差 -> 角度 
@@ -24,7 +24,7 @@
 #define IMG_CENTER_X (MT9V03X_W / 2.0f) 
 #define IMG_CENTER_Y (MT9V03X_H / 2.0f) 
 
-
+#define VALID_MIN_NUM 300
 
 //--------------------飞行状态----------------------//
 typedef enum {
