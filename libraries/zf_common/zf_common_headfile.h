@@ -111,5 +111,6 @@
 #include "wireless_uart.h"
 #include "kalman_filter.h"
 #include "image.h"
+#include "display.h"
 //-------------------------------------------------------”√ªß≤„---------------------------------------------------------
 #endif

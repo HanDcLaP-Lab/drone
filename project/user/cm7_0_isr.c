@@ -102,6 +102,7 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
     // printf("%d", dl1b_distance_mm);
     //IMU_Check_Data_Print();
     //Debug_Motor_Output_Print();
+    display_motor_output_display();
 }
 
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数
