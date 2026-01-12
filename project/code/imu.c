@@ -1,7 +1,7 @@
 #include "imu.h"
 
 // ================= 全局变量定义 =================
-IMU_Data_t imu_data = {0}; // 实例化结构体
+IMU_Data_t imu_data = {0}; 
 
 // 内部算法变量
 static float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f; // 四元数
@@ -12,8 +12,8 @@ static float offset_gx = 0, offset_gy = 0, offset_gz = 0;
 static uint16_t calib_cnt = 0;
 
 extern uint32_t pit0_cnt;
+
 // ================= 内部辅助函数 =================
-// 快速平方根倒数
 static float invSqrt(float x) {
     float halfx = 0.5f * x;
     float y = x;
@@ -39,7 +39,7 @@ static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, floa
     gz *= (PI / 180.0f);
 
     // 3. 加速度归一化
-    if (accel_magnitude < 0.1f) return; // 防止除0
+    if (accel_magnitude < 0.1f) return; 
     float inv_norm = 1.0f / accel_magnitude;
     ax *= inv_norm;
     ay *= inv_norm;
@@ -80,7 +80,7 @@ static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, floa
     q3 *= norm;
 }
 
-// 惯性导航更新 (位置/速度)
+// 惯性导航更新 (已移除不可靠的水平积分)
 static void Navigation_Update(float ax, float ay, float az) {
     // 1. 预计算四元数乘积
     float q0q1 = q0 * q1, q0q2 = q0 * q2, q0q3 = q0 * q3;
@@ -88,73 +88,59 @@ static void Navigation_Update(float ax, float ay, float az) {
     float q2q2 = q2 * q2, q2q3 = q2 * q3, q3q3 = q3 * q3;
 
     // 2. 将机体加速度旋转到世界坐标系
-    // world_ax/ay/az 对应 北/东/地
     float w_ax = (1 - 2*(q2q2 + q3q3))*ax + 2*(q1q2 - q0q3)*ay + 2*(q1q3 + q0q2)*az;
     float w_ay = 2*(q1q2 + q0q3)*ax + (1 - 2*(q1q1 + q3q3))*ay + 2*(q2q3 - q0q1)*az;
     float w_az = 2*(q1q3 - q0q2)*ax + 2*(q2q3 + q0q1)*ay + (1 - 2*(q1q1 + q2q2))*az;
 
-    // 3. 去除重力 (假设 Z 轴向下为正 9.8)
+    // 3. 去除重力
     w_az = w_az - GRAVITY_MSS;
 
-    // 4. 零速修正 (死区)
-    if(fabs(w_ax)<0.05)w_ax=0;
-    if(fabs(w_ay)<0.05)w_ay=0;
-    w_ax = Kalman_Update(&K_w_ax,w_ax);
-    w_ay = Kalman_Update(&K_w_ay,w_ay);
-    if (fabsf(w_az) < 0.2f) w_az = 0;
+    // 4. 滤波与死区
+    if(fabsf(w_ax) < 0.1f) w_ax = 0; // 稍微增大死区
+    if(fabsf(w_ay) < 0.1f) w_ay = 0;
+    if(fabsf(w_az) < 0.2f) w_az = 0;
+    
+    // 使用卡尔曼滤波 (如果需要的话，也可以暂时注释掉)
+    w_ax = Kalman_Update(&K_w_ax, w_ax);
+    w_ay = Kalman_Update(&K_w_ay, w_ay);
 
-    // 更新到结构体
+    // 更新到结构体 (仅用于观察方向，不用于位置控制)
     imu_data.world_ax = w_ax;
     imu_data.world_ay = w_ay;
     imu_data.world_az = w_az;
 
-    // ================== 核心：Z轴二阶互补滤波 ==================
-    // 统一单位到 cm 和 cm/s，因为飞控 PID 通常用 cm
+    // ================== Z轴二阶互补滤波 (保留可靠部分) ==================
     float acc_up_cms2 = w_az * 100.0f; 
     
-    // A. 预测步骤 (Prediction) - 纯积分
-    // h = h + v*dt + 0.5*a*dt^2
+    // 预测
     imu_data.z += imu_data.vz * DT + 0.5f * acc_up_cms2 * DT * DT;
-    // v = v + a*dt
     imu_data.vz += acc_up_cms2 * DT;
 
-    // B. 测量修正步骤 (Correction)
-    // 只有当 ToF 数据有效时才修正 (假设范围 1cm - 200cm)
+    // ToF 修正 (保留)
     if (imu_data.tof_z > 10 && imu_data.tof_z < 2000 && pit0_cnt%20 == 0) {
-        // 1. 计算 ToF 投影高度 (几何修正)
         float rad_roll = imu_data.roll * (PI / 180.0f);
         float rad_pitch = imu_data.pitch * (PI / 180.0f);
-        // 这里的 cos 修正非常重要，防止倾斜时高度数值虚高
         float kc = fabsf(cosf(rad_roll) * cosf(rad_pitch));
         float tof_height_cm = (imu_data.tof_z / 10.0f) * kc;
-        float tof_height_speed_cms = (imu_data.tof_vz * 5.0f) * kc;
-        // 2. 计算估计误差
-        float z_error = tof_height_cm - imu_data.z;
+        float tof_height_speed_cms = (imu_data.tof_vz * 5.0f) * kc; // 注意单位换算
 
-        // 3. 修正位置 (P控制)
+        float z_error = tof_height_cm - imu_data.z;
         imu_data.z += z_error * Z_CORRECT_POS_GAIN;
 
-        // 4. 修正速度 (I控制，实际上是修正了速度的漂移)
-        // 误差 * 增益 * DT -> 加到速度上
-        //extern uint32_t pit0_cnt;
-        //if(pit0_cnt%1000 == 0)printf("%.1f %.1f",tof_height_speed_cms,imu_data.vz);
         float vz_error = tof_height_speed_cms - imu_data.vz;
         imu_data.vz += vz_error * Z_CORRECT_VEL_GAIN;
     }
 
-    // 5. 速度积分 (带阻尼)
-    imu_data.vx += w_ax * DT *100.0f;
-    imu_data.vy += w_ay * DT *100.0f;
-    //if(pit0_cnt%20==0)printf(" %.2f,%.2f ",w_ax,w_ay);
-    
-    // 6. 位置积分 (cm)
-    imu_data.x += imu_data.vx * DT * 100.0f;
-    imu_data.y += imu_data.vy * DT * 100.0f;
+    // ================== 水平通道清零 (核心修改) ==================
+    // 强制清零，避免数据漂移干扰判断
+    imu_data.vx = 0;
+    imu_data.vy = 0;
+    imu_data.x = 0;
+    imu_data.y = 0;
 }
 
 // ================= 对外接口函数 =================
 void IMU_Update_Loop(float tof_height_mm) {
-    // 1. 获取并转换原始数据 (使用库宏 + 9.8系数)
     float raw_gx = imu660ra_gyro_transition(imu660ra_gyro_x);
     float raw_gy = imu660ra_gyro_transition(imu660ra_gyro_y);
     float raw_gz = imu660ra_gyro_transition(imu660ra_gyro_z);
@@ -163,7 +149,7 @@ void IMU_Update_Loop(float tof_height_mm) {
     float raw_ay = imu660ra_acc_transition(imu660ra_acc_y) * GRAVITY_MSS;
     float raw_az = imu660ra_acc_transition(imu660ra_acc_z) * GRAVITY_MSS;
 
-    // 2. 上电自动校准 (前2000次)
+    // 校准
     if (imu_data.is_calibrated == 0) {
         calib_cnt++;
         offset_gx += raw_gx;
@@ -176,42 +162,46 @@ void IMU_Update_Loop(float tof_height_mm) {
             offset_gz /= 2000.0f;
             imu_data.is_calibrated = 1;
         }
-        return; // 校准期间不更新姿态
+        return; 
     }
 
-    // 3. 减去零偏
     raw_gx -= offset_gx;
     raw_gy -= offset_gy;
     raw_gz -= offset_gz;
 
-    // 4. 坐标轴映射 (黄金公式：竖装，X上，Y前)
-    float map_gx, map_gy, map_gz;
-    float map_ax, map_ay, map_az;
+    float map_ax = -raw_az;  // 机头方向 (原代码是用 y，现改为 z，并取反以匹配前推方向)
+    float map_ay = -raw_ay;  // 机身右侧 (原代码是用 z，现改为 y)
+    float map_az = -raw_ax;  // 垂直方向 (保持不变，因为重力没问题)
 
-    // 加速度映射
-    map_ax = raw_ay;   // 前
-    map_ay = -raw_az;  // 左
-    map_az = -raw_ax;  // 下 (重力)
+    // [陀螺仪映射]
+    // 目标：前倾 -> Pitch 变负；右倾 -> Roll 变正
+    float map_gx = -raw_gz;  // Roll (横滚) - 对应原代码的 Pitch 轴源，但赋予给 Roll
+    float map_gy = -raw_gy;  // Pitch (俯仰) - 对应原代码的 Roll 轴源，且取反以适配"低头为负"
+    float map_gz = -raw_gx;  // Yaw (航向) - 保持不变
 
-    // 陀螺仪映射
-    map_gx = raw_gy;  // Roll
-    map_gy = -raw_gz;  // Pitch
-    map_gz = -raw_gx;  // Yaw
-
-
-    // 5. 运行算法
     Mahony_Update(map_gx, map_gy, map_gz, map_ax, map_ay, map_az);
     
-    // 6. 更新欧拉角到结构体
-    // Roll
+    // 欧拉角转换
     imu_data.roll = -atan2f(2.0f * (q0 * q1 + q2 * q3), 1.0f + 2.0f * (q1 * q1 + q2 * q2)) * 180.0f / PI;
-    // Pitch
+    
     float sinp = 2.0f * (q0 * q2 - q3 * q1);
     if (fabsf(sinp) >= 1) imu_data.pitch = copysignf(90.0f, sinp);
     else imu_data.pitch = asinf(sinp) * 180.0f / PI;
-    // Yaw
+    
     imu_data.yaw = atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
 
-    // 7. 更新惯导位置
     Navigation_Update(map_ax, map_ay, map_az);
+}
+
+// [新增] 调试打印函数
+void IMU_Check_Data_Print(void) {
+    // 格式: R/P/Y (姿态) | Ax/Ay (世界加速度方向) | Z (高度)
+    // 方便放到串口绘图或者直接观察
+    printf("IMU: R:%5.1f P:%5.1f Y:%5.1f | Ax:%4.2f Ay:%4.2f | H:%5.1f\r\n", 
+           imu_data.roll, 
+           imu_data.pitch, 
+           imu_data.yaw,
+           imu_data.world_ax, // 重点观察：向前推是否为正
+           imu_data.world_ay, // 重点观察：向右推是否为正
+           imu_data.z);       // 重点观察：上抬是否增加
 }

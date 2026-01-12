@@ -92,7 +92,7 @@ int main(void)
     pit_ms_init(PIT_NUM0, 1);  
     system_delay_ms(5000); 
     pit_ms_init(PIT_NUM1, 20);
-    pit_ms_init(PIT_NUM2, 100);
+    pit_ms_init(PIT_NUM2, 500);
     // 此处编写用户代码 例如外设初始化代码等
     
     

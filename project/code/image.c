@@ -130,7 +130,39 @@ static void mark_components(CameraObject *cam, uint8_t *visited) {
     cam->components_count = label - 1;
 }
 
-// 提取质心
+static void sort_lights(CameraObject *cam) {
+    if (cam->light_number < 2) return; // 少于2个不用排
+
+    for (int i = 0; i < cam->light_number - 1; i++) {
+        for (int j = 0; j < cam->light_number - 1 - i; j++) {
+            // 如果后一个比前一个大，交换
+            if (cam->dot_num[j] < cam->dot_num[j+1]) {
+                // 1. 交换像素数
+                uint32_t temp_num = cam->dot_num[j];
+                cam->dot_num[j] = cam->dot_num[j+1];
+                cam->dot_num[j+1] = temp_num;
+
+                // 2. 交换坐标 (Row/Y)
+                uint32_t temp_row = cam->centers[j][0];
+                cam->centers[j][0] = cam->centers[j+1][0];
+                cam->centers[j+1][0] = temp_row;
+
+                // 3. 交换坐标 (Col/X)
+                uint32_t temp_col = cam->centers[j][1];
+                cam->centers[j][1] = cam->centers[j+1][1];
+                cam->centers[j+1][1] = temp_col;
+            }
+        }
+    }
+}
+
+
+
+
+
+
+
+// 提取质心 (已修改)
 static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
     uint32_t sum_r[MAX_LIGHTS] = {0};
     uint32_t sum_c[MAX_LIGHTS] = {0};
@@ -151,21 +183,28 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
         }
     }
 
-    // 2. 计算平均值并筛选
+    // 2. 计算平均值并初步筛选
     uint8_t valid_idx = 0;
     for (int i = 0; i < cam->components_count && i < MAX_DOTS; i++) {
-        // 筛选条件：像素点数量 > 5 (对于无人机远距离，灯光可能较小，阈值可调小)
         if (cam->dot_num[i] > MIN_LIGHT_SIZE) {
             if (valid_idx < MAX_LIGHTS) {
-                // 计算质心
                 cam->centers[valid_idx][0] = sum_r[i] / cam->dot_num[i]; // Row (Y)
                 cam->centers[valid_idx][1] = sum_c[i] / cam->dot_num[i]; // Col (X)
+                // 此时 dot_num[i] 还是对应的，需要搬运过来
+                // 注意：原代码逻辑这里 dot_num 索引是 i (label-1)，但输出索引是 valid_idx
+                // 所以要把 count 值赋给 dot_num[valid_idx]
+                cam->dot_num[valid_idx] = cam->dot_num[i]; 
+                
                 valid_idx++;
             }
         }
     }
     cam->light_number = valid_idx;
+
+    // 3. [新增] 按面积从大到小排序
+    sort_lights(cam);
 }
+
 
 // --- 4. 外部调用的处理入口 ---
 void image_processing_loop(void) {
