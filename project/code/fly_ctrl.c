@@ -123,6 +123,7 @@ void Flight_Control_Loop(void) {
     float yaw_err = Get_Angle_Error(flight_target.target_yaw, imu_data.yaw);
     float out_yaw = PID_Calculate(&pid_yaw, yaw_err, CTRL_DT);
 
+    printf("%.1f %.1f %.1f",out_pitch,out_roll,out_yaw);
     // ================= 4. 电机混控 (Quad-X) =================
     // 定义确认：
     // Pitch Out > 0 -> 需要抬头 -> 前电机(LF, RF)加, 后电机(LB, RB)减
@@ -262,8 +263,8 @@ void Air_Ground_Control_Loop_New(float car_angle_deg) {
     float error_row = IMG_CENTER_Y - car_row; 
     float error_col = car_col - IMG_CENTER_X;
     
-    float target_pitch_val = -1.0f * error_row * VISUAL_POS_P_GAIN;
-    float target_roll_val  =  1.0f * error_col * VISUAL_POS_P_GAIN;
+    float target_pitch_val = -0.32f * error_row * VISUAL_POS_P_GAIN;
+    float target_roll_val  =  0.32f * error_col * VISUAL_POS_P_GAIN;
     
     Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
 
