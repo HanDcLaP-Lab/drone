@@ -188,63 +188,37 @@ void Debug_Motor_Output_Print(void) {
 
 
 
-
 void Simple_Hover_Control(void) {
-    // 1. 检查是否有目标
-    // 由于 image.c 已经做了排序，light_number > 0 时，[0] 号一定就是最大的灯
+    // 1. 检查目标
     if (cam_down.light_number == 0) {
-        // 没看到目标：原地悬停 (或者保持上一次的姿态减速，这里先由你决定，暂且回正)
+        // 丢失目标时回正
         Set_Target_Attitude(0, 0, flight_target.target_yaw);
         return;
     }
 
-    // 2. 获取目标坐标 (直接取下标 0)
-    // Row (Y): 0在上方，Max在下方
-    // Col (X): 0在左方，Max在右方
+    // 2. 获取最亮点的坐标
     float target_row = (float)cam_down.centers[0][0]; 
     float target_col = (float)cam_down.centers[0][1];
 
-    // 3. 计算位置误差 (单位：像素)
-    // 期望位置：图像中心
-    // 坐标系定义：前/右 为正方向
+    // 3. 计算经过姿态补偿的角度误差
+    float err_pitch_deg, err_roll_deg;
+    Get_Attitude_Compensated_Error(target_row, target_col, &err_pitch_deg, &err_roll_deg);
+
+    // 4. 转换为控制指令
+    // 此时的 err 已经是度数了 (例如偏离了 5 度)
+    // VISUAL_POS_P_GAIN 变成了 "角度环的外环比例"
+    // 建议设置为 1.0f 左右。 
+    // 含义：目标偏离 5度，我就倾斜 5度 去追。
     
-    // [纵向/前后]
-    // 目标在图像上方 (Row 小) -> 飞机在后，目标在前 -> 误差应为正 (需要向前飞)
-    // Error = Center - Target. (Ex: 60 - 10 = +50)
-    float error_row = IMG_CENTER_Y - target_row; 
+    float target_pitch_val = err_pitch_deg * VISUAL_POS_P_GAIN;
+    float target_roll_val  = err_roll_deg  * VISUAL_POS_P_GAIN;
 
-    // [横向/左右]
-    // 目标在图像右方 (Col 大) -> 飞机在左，目标在右 -> 误差应为正 (需要向右飞)
-    // Error = Target - Center. (Ex: 150 - 94 = +56)
-    float error_col = target_col - IMG_CENTER_X;
-
-    // 4. 转换为姿态角指令 (P控制)
-    // 基于你确认的 IMU 定义：
-    // Pitch (+): 抬头 (后退/刹车)
-    // Pitch (-): 低头 (前进)
-    // Roll  (+): 左高右低 (向右飞) 
-    
-    // [Pitch计算]
-    // 目标在前 (error_row > 0) -> 需要前进 -> 需要低头 -> 需要 Pitch 为负
-    // 关系：Target_Pitch = -1 * Error * Kp
-    float target_pitch_val = -1.0f * error_row * VISUAL_POS_P_GAIN;
-
-    // [Roll计算]
-    // 目标在右 (error_col > 0) -> 需要右飞 -> 需要左高右低 -> 需要 Roll 为正
-    // 关系：Target_Roll = +1 * Error * Kp
-    float target_roll_val  =  1.0f * error_col * VISUAL_POS_P_GAIN;
-
-    // 5. 执行控制
-    // 注意：这里的 target_yaw 保持不变，还是锁定值
-    if(cam_down.dot_num[0] > VALID_MIN_NUM){
-        target_roll_val = target_pitch_val = 0;
-    }
+    // 5. 执行
     Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
-
-    // [可选调试] 
-    // 如果你在 pit0_ch2_isr 里没法打印那么多，可以在这里打印关键的误差
-    // printf("Vis: ErrR:%.1f ErrC:%.1f | SetP:%.1f SetR:%.1f\r\n", 
-    //         error_row, error_col, target_pitch_val, target_roll_val);
+    
+    // [调试打印] 
+    // 务必观察 err_roll_deg 在晃动飞机时是否稳定接近 0
+    // printf("Comp: P_deg:%.1f R_deg:%.1f\r\n", err_pitch_deg, err_roll_deg);
 }
 
 
@@ -278,4 +252,49 @@ void Air_Ground_Control_Loop_New(float car_angle_deg) {
     //     // 计算矢量、距离等逻辑...
     //     // ...
     // }
+}
+
+
+// 输入：原始像素坐标
+// 输出：去除姿态影响后的真实物理角度误差
+void Get_Attitude_Compensated_Error(float raw_row, float raw_col, float *out_err_pitch_deg, float *out_err_roll_deg) {
+    // 1. 归一化坐标 (以图像中心为原点)
+    // Row(Y)向下为正，Col(X)向右为正
+    float y_dist = raw_row - IMG_CENTER_Y; 
+    float x_dist = raw_col - IMG_CENTER_X; 
+
+    // 2. 像素转角度 (小孔成像模型)
+    // tan(angle) = pixel / f
+    // 这里不做去畸变，直接假设是线性的（在中心区域近似成立，边缘虽有误差但能接受）
+    float tan_angle_y = y_dist / CAM_F_PIXEL;
+    float tan_angle_x = x_dist / CAM_F_PIXEL;
+
+    // 转为角度 (度)
+    float angle_cam_y = atanf(tan_angle_y) * 180.0f / PI; // 观测到的俯仰角
+    float angle_cam_x = atanf(tan_angle_x) * 180.0f / PI; // 观测到的横滚角
+
+    // 3. 姿态补偿 (核心)
+    // 真实角度 = 观测角度 - 机身姿态偏移
+    // 符号说明：需要通过 SIGN_PITCH_COMP / SIGN_ROLL_COMP 实测确定
+    
+    // [Pitch] 机头抬高(Pitch+) -> 目标在图像上下移(y_dist变大) -> angle_cam_y 变大
+    // 为了消除这个变大，我们需要减去 Pitch
+    float angle_real_pitch = angle_cam_y - (imu_data.pitch * SIGN_PITCH_COMP);
+
+    // [Roll] 左端抬高(Roll+) -> 摄像头看左边 -> 目标在图像上右移(x_dist变大) -> angle_cam_x 变大
+    // 为了消除这个变大，我们需要减去 Roll
+    // (如果你的Roll定义不同，可能需要变成加上 Roll，即 SIGN_ROLL_COMP 设为 -1)
+    float angle_real_roll = angle_cam_x - (imu_data.roll * SIGN_ROLL_COMP);
+
+    // 4. 输出符合 PID 控制方向的误差
+    // 之前的逻辑：目标在上方(y负) -> error_row为正 -> 向前飞
+    // 现在的 angle_real_pitch 是几何角度。
+    // y_dist 负 -> angle_real 负。
+    // 我们希望输出 正 (向前飞)。所以取反。
+    *out_err_pitch_deg = -angle_real_pitch; 
+    
+    // 之前的逻辑：目标在右方(x正) -> error_col为正 -> 向右飞
+    // x_dist 正 -> angle_real 正。
+    // 我们希望输出 正 (向右飞)。保持不变。
+    *out_err_roll_deg  = angle_real_roll;   
 }

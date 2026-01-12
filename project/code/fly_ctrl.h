@@ -34,6 +34,15 @@ typedef enum {
     brake        // 停机
 } STATE;
 
+
+// ================= 视觉补偿参数 =================
+// 基于 MT9V03X + 2.1mm 广角镜头的估算值 (188x120分辨率)
+// 理论值约 87-88。如果发现补偿不足（晃动飞机时目标乱跑），调小此值；补偿过度，调大此值。
+#define CAM_F_PIXEL        88.0f   
+
+// [方向符号修正] 保持不变，需实测
+#define SIGN_PITCH_COMP    1.0f    
+#define SIGN_ROLL_COMP     -1.0f
 // =================== 控制目标结构体 ===================
 typedef struct {
     // --- 姿态目标 (直接控制量) ---
@@ -77,4 +86,5 @@ void Simple_Hover_Control(void);
 void Air_Ground_Control_Loop_New(float car_angle_deg);
 //-----调试打印函数----//
 void Debug_Motor_Output_Print(void);
+void Get_Attitude_Compensated_Error(float raw_row, float raw_col, float *out_err_pitch_deg, float *out_err_roll_deg);
 #endif
