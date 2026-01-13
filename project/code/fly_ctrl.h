@@ -16,7 +16,8 @@
 #define MAX_PWM             4800    
 #define MIN_PWM             0    
 #define MAX_TILT_ANGLE      30.0f   // 最大倾角限制 (度) - 既然没速度环，这个限制很重要
-#define CTRL_DT             0.005  // 控制周期 
+#define CTRL_DT_CTLOOP             0.001  // 控制周期 
+#define CTRL_DT_CTANG       0.005 //控制周期
 
 // 视觉控制增益
 #define VISUAL_POS_P_GAIN   1.0f   // 像素误差 -> 角度 
@@ -49,6 +50,11 @@ typedef struct {
     float target_roll;   // 期望横滚角 (度)
     float target_pitch;  // 期望俯仰角 (度)
     float target_yaw;    // 期望偏航角 (度)
+    // --- 姿态目标(串级控制量)
+    float target_g_roll;
+    float target_g_pitch;
+    float target_g_yaw;
+      
 
     // --- 高度目标 ---
     float height;        // 内部平滑后的当前高度目标
@@ -72,6 +78,7 @@ extern Motor_Output_t motor_out;
 
 // =================== 函数声明 ===================
 void Flight_Control_Init(void);
+void Flight_Control_Angle(void);
 void Flight_Control_Loop(void);
 // 新的控制接口：直接设定目标姿态
 void Set_Target_Attitude(float roll, float pitch, float yaw); 

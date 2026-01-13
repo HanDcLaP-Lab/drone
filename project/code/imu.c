@@ -207,6 +207,10 @@ void IMU_Update_Loop(float tof_height_mm) {
     float map_gy = -raw_gy;  // Pitch (俯仰) - 对应原代码的 Roll 轴源，且取反以适配"低头为负"
     float map_gz = -raw_gx;  // Yaw (航向) - 保持不变
 
+    imu_data.groll = Kalman_Update(&K_groll, map_gx);
+    imu_data.gpitch = Kalman_Update(&K_gpitch, map_gy);
+    imu_data.gyaw = Kalman_Update(&K_gyaw, map_gz);
+    
     Mahony_Update(map_gx, map_gy, map_gz, map_ax, map_ay, map_az);
     
     // 欧拉角转换

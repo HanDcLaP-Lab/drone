@@ -65,6 +65,12 @@ int main(void) {
     seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_DEBUG_UART);
 
     display_init();
+    camera_init();
+    Kalman_Init(&K_w_ax,1e-4f,0.01,0);
+    Kalman_Init(&K_w_ay,1e-4f,0.01,0);
+    Kalman_Init(&K_groll,1e-4f,0.01,0);
+    Kalman_Init(&K_gpitch,1e-4f,0.01,0);
+    Kalman_Init(&K_gyaw,1e-4f,0.01,0);
 
     Kalman_Init(&K_w_ax, 1e-4f, 0.01, 0);
     Kalman_Init(&K_w_ay, 1e-4f, 0.01, 0);

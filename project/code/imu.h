@@ -20,10 +20,15 @@
 
 // ================= 核心结构体定义 =================
 typedef struct {
-    // --- 姿态角 (单位: 度) ---
+    // --- 姿态角 (单位: 度、地球系
     float roll;
     float pitch;
     float yaw;
+    
+    //姿态角速度 单位：度/秒、飞机系
+    float groll;
+    float gpitch;
+    float gyaw;
 
     // --- 空间位置 (单位: cm) ---
     float x;
