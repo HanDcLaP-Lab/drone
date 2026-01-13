@@ -43,26 +43,35 @@
 // 本例程是开源库空工程 可用作移植或者测试各类内外设
 
 // **************************** 代码区域 ****************************
+//----------------------------多核通讯-----------------------------//
+
+#define DATA_LENGTH               (6)                                           // 数组数据长度
+
+#pragma location = 0x28001000                                                   // 将下面这个数组定义到指定的RAM地址，便于其他核心直接访问(开源库默认在 0x28001000 地址保留了8kb的空间用于数据交互)
+                                                                                // 此处为0x28001014的原因是前面放了一个M0的数组
+float m7_1_data[DATA_LENGTH] = {0};                        // 定义 M7_1 演示数据数组 浮点数类型
+
+
+int16_t image_cnt = 0;
 
 int main(void)
 {
     clock_init(SYSTEM_CLOCK_250M); 	// 时钟配置及系统初始化<务必保留>
     debug_info_init();                  // 调试串口信息初始化
-     
+    camera_init();
+    printf("test");
     // 此处编写用户代码 例如外设初始化代码等
 
-
-    
 
     // 此处编写用户代码 例如外设初始化代码等
     while(true)
-    {
-        // 此处编写需要循环执行的代码
-        
+    {          
+        image_processing_loop();
+        M7_1_data_send(m7_1_data);
+        SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
+        //image_cnt ++;
+        //if(image_cnt % 100 == 0) printf("%d" , image_cnt);                         
 
-      
-      
-        // 此处编写需要循环执行的代码
     }
 }
 

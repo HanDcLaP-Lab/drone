@@ -10,13 +10,13 @@
 #define PWM_RB             (TCPWM_CH58_P17_3)
 
 // =================== 飞行参数配置 ===================
-#define TARGET_HEIGHT_CM    80.0f   // 目标高度
+#define TARGET_HEIGHT_CM    40.0f   // 目标高度
 #define LAND_HEIGHT         15.0f   // 着陆高度
-#define HOVER_THROTTLE      3750    // 基础悬停油门 (需根据电池电压调整)
-#define MAX_PWM             4600    
+#define HOVER_THROTTLE      4200    // 基础悬停油门 (需根据电池电压调整)
+#define MAX_PWM             4800    
 #define MIN_PWM             0    
 #define MAX_TILT_ANGLE      30.0f   // 最大倾角限制 (度) - 既然没速度环，这个限制很重要
-#define CTRL_DT             0.02  // 控制周期 
+#define CTRL_DT             0.005  // 控制周期 
 
 // 视觉控制增益
 #define VISUAL_POS_P_GAIN   1.0f   // 像素误差 -> 角度 
@@ -82,8 +82,13 @@ void motor_pwm_init(void);
 
 // 视觉/上层逻辑
 void Air_Ground_Control_Loop(float car_angle_deg);
-void Simple_Hover_Control(void);
+void M7_1_data_send(float* M7_1_data);
 void Air_Ground_Control_Loop_New(float car_angle_deg);
+/**
+ * @brief 自动悬停控制逻辑封装
+ * @note 内部处理视觉补偿、姿态设定及 PID 计算
+ */
+void Flight_Hover_Control_Task(void);
 //-----调试打印函数----//
 void Debug_Motor_Output_Print(void);
 void Get_Attitude_Compensated_Error(float raw_row, float raw_col, float *out_err_pitch_deg, float *out_err_roll_deg);

@@ -38,7 +38,7 @@
 
 uint32_t pit0_cnt = 0;
 uint16_t target = 0;
-
+int16_t tof_cnt = 0;
 // **************************** PIT中断函数 (1ms一次) ****************************
 void pit0_ch0_isr() {
     pit_isr_flag_clear(PIT_CH0);
@@ -49,12 +49,13 @@ void pit0_ch0_isr() {
     dl1b_get_distance();
     if (dl1b_finsh_flag == 1) {
         dl1b_finsh_flag = 0;
-        imu_data.tof_z = dl1b_distance_mm;
-        //imu_data.tof_z = 800;
+        //imu_data.tof_z = dl1b_distance_mm;
+        imu_data.tof_z = 800;
         if(imu_data.tof_z >= 1400) imu_data.tof_z=1400;
         static float last_tof_z;
         imu_data.tof_vz = imu_data.tof_z - last_tof_z;
         last_tof_z = imu_data.tof_z;
+        tof_cnt ++;
     }
 
     // 2. 一键更新所有数据 (算法全封装在里面了)
@@ -68,41 +69,35 @@ void pit0_ch0_isr() {
         printf("\r\n [Pose] R=%.1f P=%.1f Y=%.1f |%.1f %.1f\r\n",
                 imu_data.roll, imu_data.pitch, imu_data.yaw,
                 imu_data.vz,imu_data.z);*/
+                //printf("%d " , pit0_cnt);
+                
     }
+    
 }
 
-void pit0_ch1_isr()  // 定时器通道 1 周期中断服务函数
+void pit0_ch1_isr() 
 {
     pit_isr_flag_clear(PIT_CH1);
 
-    //-------------------------------飞行逻辑控制---------------------------------//
-
-    // Set_Target_Velocity(0, 0, 0); ///这里暂时写成目标高度，再在control_loop中根据状态更正
-
-    if (imu_data.is_calibrated && flight_target.is_armed == 2) {
-        Flight_Unlock();  // 【警告】调试时请注释掉这行，防止上电即飞
-    }
-    image_processing_loop();
-    Simple_Hover_Control();
-    Flight_Control_Loop();  // 计算
-                        
-    motor_pwm_set();
-
-    //-------------------------------飞行逻辑控制--------------------------------//
+    // 调用封装好的悬停控制任务
+    Flight_Hover_Control_Task(); 
 }
 
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
-    image_processing_loop();
+    
+    //image_processing_loop();
     //  printf("%d" ,cam_down.light_number);
     // image_send();
     //Simple_Hover_Control();
     //printf("%d" , cam_down.dot_num[0]);
     // printf("%d", dl1b_distance_mm);
-    //IMU_Check_Data_Print();
+    IMU_Check_Data_Print();
     //Debug_Motor_Output_Print();
-    display_motor_output_display();
+    //display_motor_output_display();//
+    //printf("%d" , tof_cnt);
+    //wireless_uart_send_string("AAA");
 }
 
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数

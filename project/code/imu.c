@@ -24,7 +24,36 @@ static float invSqrt(float x) {
     return y;
 }
 
-// 核心姿态解算 (Mahony)
+void imu_init(void){
+    while(1)///定时器0初始化
+    {
+        if(imu660ra_init())
+        {
+           printf("\r\n imu660ra init error.");   
+        }
+        else
+        {
+           break;
+        } 
+        system_delay_ms(1000);                                       
+    }
+}
+
+void tof_init(void){
+    while(1)
+    {
+        if(dl1b_init())
+            printf("tof_init_error");
+        else
+            {
+                printf("tof_init_done");
+                break;
+
+            }
+        system_delay_ms(1000);                                                  // 闪灯表示异常
+    }
+}
+
 static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, float az) {
     float norm;
     float vx, vy, vz;
@@ -80,7 +109,7 @@ static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, floa
     q3 *= norm;
 }
 
-// 惯性导航更新 (已移除不可靠的水平积分)
+
 static void Navigation_Update(float ax, float ay, float az) {
     // 1. 预计算四元数乘积
     float q0q1 = q0 * q1, q0q2 = q0 * q2, q0q3 = q0 * q3;
@@ -138,7 +167,6 @@ static void Navigation_Update(float ax, float ay, float az) {
     imu_data.x = 0;
     imu_data.y = 0;
 }
-
 // ================= 对外接口函数 =================
 void IMU_Update_Loop(float tof_height_mm) {
     float raw_gx = imu660ra_gyro_transition(imu660ra_gyro_x);

@@ -52,7 +52,8 @@ extern IMU_Data_t imu_data;
 
 // ================= 函数声明 =================
 void IMU_Update_Loop(float tof_height_mm);
-
+void imu_init(void);
+void tof_init(void);
 // [新增] 专门用于确认 IMU 方向和数据的打印函数
 void IMU_Check_Data_Print(void);
 
