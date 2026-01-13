@@ -13,6 +13,9 @@ static PID_t pid_height_pos;
 static PID_t pid_roll;
 static PID_t pid_pitch;
 static PID_t pid_yaw;
+static PID_t pid_g_roll;
+static PID_t pid_g_pitch;
+static PID_t pid_g_yaw;
 
 // =================== 内部辅助函数 ===================
 static float Constrain_Float(float val, float min, float max) {
@@ -43,11 +46,13 @@ void Flight_Control_Init(void) {
 
     // 姿态环 (Roll/Pitch) - 这是最内环，Kp 需要响应快
     // 假设输入是角度误差，输出是电机PWM差值
-    PID_Init(&pid_roll,  4.5f, 0.02f, 0.2f, 500, 1000);
-    PID_Init(&pid_pitch, 4.5f, 0.02f, 0.2f, 500, 1000);
+    PID_Init(&pid_roll,  4.0f, 0.5f, 0.7f, 30, 40);
+    PID_Init(&pid_pitch, 4.0f, 0.5f, 0.7f, 30, 40);
+    PID_Init(&pid_yaw,   4.1f, 0.5f, 0.7f, 30, 40);
     
-    // Yaw 环
-    PID_Init(&pid_yaw,   6.0f, 0.05f, 0.0f, 500, 1000);
+    PID_Init(&pid_g_roll,  10.0f, 3.0f, 2.5f, 40, 1000);
+    PID_Init(&pid_g_pitch, 10.0f, 3.0f, 2.5f, 40, 1000);
+    PID_Init(&pid_g_yaw,   10.0f, 3.0f, 2.5f, 40, 1000);
 }
 
 void Flight_Unlock(void) {
@@ -76,6 +81,30 @@ void Set_Target_Attitude(float roll, float pitch, float yaw) {
     flight_target.target_yaw = yaw; // Yaw 通常不限幅，是绝对角度
 }
 
+//角度环PID(200hz左右
+void Flight_Control_Angle(void){
+    // 1. 计算误差 (绝对系)
+    float roll_error = flight_target.target_roll - imu_data.roll;
+    float pitch_error = flight_target.target_pitch - imu_data.pitch;
+    float yaw_error = Get_Angle_Error(flight_target.target_yaw, imu_data.yaw);
+  
+    // 2. PID 计算 (输出即视为机体角速度目标，基于小角度假设)
+    // 务必确保 CTRL_DT_CTANG 改为了 0.005f
+    float target_rate_roll_body = PID_Calculate(&pid_roll, roll_error, CTRL_DT_CTANG);
+    float target_rate_pitch_body = PID_Calculate(&pid_pitch, pitch_error, CTRL_DT_CTANG);
+    float target_rate_yaw_body = PID_Calculate(&pid_yaw, yaw_error, CTRL_DT_CTANG);
+
+    // 3. 【推荐】简单的坐标转换 (如果想飞得更激进)
+    // 如果飞机俯仰角较大，简单的对应关系会失效。可以加上简单的余弦补偿：
+    // float cos_pitch = cosf(imu_data.pitch * PI / 180.0f);
+    // target_rate_yaw_body = target_rate_yaw_earth * cos_pitch; // 典型的 Yaw 轴补偿
+
+    // 4. 原子化更新全局变量 (防止内环中断打断写入过程)
+    // 简单方法：先算好，最后赋值
+    flight_target.target_g_roll = target_rate_roll_body;
+    flight_target.target_g_pitch = target_rate_pitch_body;
+    flight_target.target_g_yaw = target_rate_yaw_body;
+}
 // 飞行控制主循环 (建议 500Hz 或 1000Hz 调用)
 void Flight_Control_Loop(void) {
     // 1. 状态机处理
@@ -100,10 +129,10 @@ void Flight_Control_Loop(void) {
     flight_target.height = flight_target.height * 0.94f + flight_target.target_height * 0.06f;
     
     float height_error = flight_target.height - imu_data.z;
-    float target_climb_rate = PID_Calculate(&pid_height_pos, height_error, CTRL_DT);
+    float target_climb_rate = PID_Calculate(&pid_height_pos, height_error, CTRL_DT_CTLOOP);
     
     float climb_rate_error = target_climb_rate - imu_data.vz;
-    float throttle_adj = PID_Calculate(&pid_height_vel, climb_rate_error, CTRL_DT);
+    float throttle_adj = PID_Calculate(&pid_height_vel, climb_rate_error, CTRL_DT_CTLOOP);
 
     int16_t base_throttle = HOVER_THROTTLE + (int16_t)throttle_adj;
     base_throttle = (int16_t)Constrain_Float(base_throttle, MIN_PWM, MAX_PWM);
@@ -112,16 +141,16 @@ void Flight_Control_Loop(void) {
     // 这里的目标已经是由视觉或上层逻辑直接给出的角度
 
     // Roll PID
-    float roll_err = flight_target.target_roll - imu_data.roll;
-    float out_roll = PID_Calculate(&pid_roll, roll_err, CTRL_DT);
+    float roll_err = flight_target.target_g_roll - imu_data.groll;
+    float out_roll = PID_Calculate(&pid_g_roll, roll_err, CTRL_DT_CTLOOP);
 
     // Pitch PID
-    float pitch_err = flight_target.target_pitch - imu_data.pitch;
-    float out_pitch = PID_Calculate(&pid_pitch, pitch_err, CTRL_DT);
+    float pitch_err = flight_target.target_g_pitch - imu_data.gpitch;
+    float out_pitch = PID_Calculate(&pid_g_pitch, pitch_err, CTRL_DT_CTLOOP);
 
     // Yaw PID (使用角度环)
-    float yaw_err = Get_Angle_Error(flight_target.target_yaw, imu_data.yaw);
-    float out_yaw = PID_Calculate(&pid_yaw, yaw_err, CTRL_DT);
+    float yaw_err = flight_target.target_g_yaw - imu_data.gyaw;
+    float out_yaw = PID_Calculate(&pid_yaw, yaw_err, CTRL_DT_CTLOOP);
     //if(out_pitch > 500 || out_pitch < -500) printf("pitch: %.1f err: %.1f pre_err: %.1f integral:%.1f/r/n" ,out_pitch , pitch_err, pid_pitch.prev_error , pid_pitch.integral);
     // ================= 4. 电机混控 (Quad-X) =================
     // 定义确认：
@@ -202,7 +231,7 @@ void Simple_Hover_Control(void) {
 
     // 3. 计算经过姿态补偿的角度误差
     float err_pitch_deg, err_roll_deg;
-    Get_Attitude_Compensated_Error(target_row, target_col, &err_pitch_deg, &err_roll_deg);
+    Get_Attitude_Compensated_Error(target_row, target_col, &err_pitch_deg, &err_roll_deg);///?
 
     // 4. 转换为控制指令
     // 此时的 err 已经是度数了 (例如偏离了 5 度)

@@ -60,6 +60,14 @@ void pit0_ch0_isr() {
     // 2. 一键更新所有数据 (算法全封装在里面了)
     IMU_Update_Loop(imu_data.tof_z);
     
+    //飞控计算
+    if (imu_data.is_calibrated && flight_target.is_armed == 2) {
+        Flight_Unlock();  // 【警告】调试时请注释掉这行，防止上电即飞
+    }
+    Flight_Control_Loop();  // 计算
+                        
+    motor_pwm_set();
+    
     // 3. 打印测试 (使用结构体 imu_data)
     if (pit0_cnt % 1000 == 0) {
         //     // 直接打印 imu_data 里的成员
@@ -77,16 +85,9 @@ void pit0_ch1_isr()  // 定时器通道 1 周期中断服务函数
 
     //-------------------------------飞行逻辑控制---------------------------------//
 
-    // Set_Target_Velocity(0, 0, 0); ///这里暂时写成目标高度，再在control_loop中根据状态更正
-
-    if (imu_data.is_calibrated && flight_target.is_armed == 2) {
-        Flight_Unlock();  // 【警告】调试时请注释掉这行，防止上电即飞
-    }
     image_processing_loop();
     Simple_Hover_Control();
-    Flight_Control_Loop();  // 计算
-                        
-    motor_pwm_set();
+    Flight_Control_Angle();
 
     //-------------------------------飞行逻辑控制--------------------------------//
 }
