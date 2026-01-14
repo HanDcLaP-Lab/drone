@@ -184,10 +184,10 @@ void IMU_Update_Loop(float tof_height_mm) {
         offset_gy += raw_gy;
         offset_gz += raw_gz;
         
-        if (calib_cnt >= 2000) {
-            offset_gx /= 2000.0f;
-            offset_gy /= 2000.0f;
-            offset_gz /= 2000.0f;
+        if (calib_cnt >= 25000) {
+            offset_gx /= 2500.0f;
+            offset_gy /= 2500.0f;
+            offset_gz /= 2500.0f;
             imu_data.is_calibrated = 1;
             imu_data.z = tof_height_mm / 10.0f;
         }

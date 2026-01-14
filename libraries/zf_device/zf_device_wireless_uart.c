@@ -206,7 +206,7 @@ void wireless_uart_callback (void)
         }
         else if(wireless_uart_data == 's') {
             wireless_uart_send_string("emergency stop\r\n");
-            flight_target.cur_state = brake;
+            flight_target.cur_state = landing;
         }
         // --- ĞÂÔöÂß¼­ ---
         

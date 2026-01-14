@@ -46,12 +46,12 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_height_pos, 0.8f, 0.0f, 0.0f, 0, 150);
     PID_Init(&pid_height_vel, 10.0f, 0.1f, 0.0f, 1000, 3000);
 
-    PID_Init(&pid_roll, 0.0f, 0.0f, 0.0f, 10, 40);
-    PID_Init(&pid_pitch, 0.0f, 0.0f, 0.0f, 10, 40);
+    PID_Init(&pid_roll, 3.0f, 0.0f, 0.0f, 10, 40);
+    PID_Init(&pid_pitch, 3.0f, 0.0f, 0.0f, 10, 40);
     PID_Init(&pid_yaw, 0.0f, 0.0f, 0.0f, 10, 0);
 
-    PID_Init(&pid_g_roll, 0.0f, 0.0f, 0.00f, 300, 800);
-    PID_Init(&pid_g_pitch, 0.0f, 0.0f, 0.00f, 300, 800);
+    PID_Init(&pid_g_roll, 4.0f, 0.0f, 0.00f, 300, 800);
+    PID_Init(&pid_g_pitch, 4.0f, 0.0f, 0.00f, 300, 800);
     PID_Init(&pid_g_yaw, 0.0f, 0.0f, 0.0f, 120, 400);
 }
 
