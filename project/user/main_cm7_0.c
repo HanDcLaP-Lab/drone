@@ -72,19 +72,18 @@ int main(void) {
     Kalman_Init(&K_gpitch,1e-4f,0.01,0);
     Kalman_Init(&K_gyaw,1e-4f,0.01,0);
 
-    Kalman_Init(&K_w_ax, 1e-4f, 0.01, 0);
-    Kalman_Init(&K_w_ay, 1e-4f, 0.01, 0);
-
     imu_init();
     tof_init();
 
     motor_pwm_init();  /// pwm输出初始化
     Flight_Control_Init();
     system_delay_ms(5000);
-    pit_ms_init(PIT_NUM0, 2);
-    // system_delay_ms(5000);
-    pit_ms_init(PIT_NUM1, 2);
+    
+    //system_delay_ms(3000);
+    pit_ms_init(PIT_NUM1, 1);
     pit_ms_init(PIT_NUM2, 200);
+    system_delay_ms(5000);
+    pit_ms_init(PIT_NUM0, 1);
     // 此处编写用户代码 例如外设初始化代码等
 
     // 此处编写用户代码 例如外设初始化代码等

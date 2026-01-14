@@ -50,7 +50,7 @@ void pit0_ch0_isr() {
     if (dl1b_finsh_flag == 1) {
         dl1b_finsh_flag = 0;
         //imu_data.tof_z = dl1b_distance_mm;
-        imu_data.tof_z = 800;
+        imu_data.tof_z = 400;
         if(imu_data.tof_z >= 1400) imu_data.tof_z=1400;
         static float last_tof_z;
         imu_data.tof_vz = imu_data.tof_z - last_tof_z;
@@ -65,7 +65,8 @@ void pit0_ch0_isr() {
     if (imu_data.is_calibrated && flight_target.is_armed == 2) {
         Flight_Unlock();  // 【警告】调试时请注释掉这行，防止上电即飞
     }
-    Flight_Control_Loop();  // 计算
+
+    Flight_Control_Loop(); 
                         
     motor_pwm_set();
     
@@ -103,7 +104,7 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
     // printf("%d", dl1b_distance_mm);
     IMU_Check_Data_Print();
     //Debug_Motor_Output_Print();
-    //display_motor_output_display();//
+    display_motor_output_display();//
     //printf("%d" , tof_cnt);
     //wireless_uart_send_string("AAA");
 }
