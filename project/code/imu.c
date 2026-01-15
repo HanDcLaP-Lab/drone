@@ -1,4 +1,5 @@
 #include "imu.h"
+#include "zf_common_headfile.h"
 
 // ================= 全局变量定义 =================
 IMU_Data_t imu_data = {0}; 
@@ -11,7 +12,6 @@ static float exInt = 0.0f, eyInt = 0.0f, ezInt = 0.0f;   // 积分误差
 static float offset_gx = 0, offset_gy = 0, offset_gz = 0;
 static uint16_t calib_cnt = 0;
 
-extern uint32_t pit0_cnt;
 
 // ================= 内部辅助函数 =================
 static float invSqrt(float x) {
@@ -129,9 +129,6 @@ static void Navigation_Update(float ax, float ay, float az) {
     if(fabsf(w_ay) < 0.1f) w_ay = 0;
     if(fabsf(w_az) < 0.2f) w_az = 0;
     
-    // 使用卡尔曼滤波 (如果需要的话，也可以暂时注释掉)
-    w_ax = Kalman_Update(&K_w_ax, w_ax);
-    w_ay = Kalman_Update(&K_w_ay, w_ay);
 
     // 更新到结构体 (仅用于观察方向，不用于位置控制)
     imu_data.world_ax = w_ax;
@@ -145,8 +142,9 @@ static void Navigation_Update(float ax, float ay, float az) {
     imu_data.z += imu_data.vz * DT + 0.5f * acc_up_cms2 * DT * DT;
     imu_data.vz += acc_up_cms2 * DT;
 
-    // ToF 修正 (保留)
-    if (imu_data.tof_z > 10 && imu_data.tof_z < 2000 && pit0_cnt%20 == 0) {
+    // ToF 修正 
+    if (imu_data.tof_z > 10 && imu_data.tof_z < 2000 && dl1b_finsh_flag == 1) {
+        dl1b_finsh_flag = 0;
         float rad_roll = imu_data.roll * (PI / 180.0f);
         float rad_pitch = imu_data.pitch * (PI / 180.0f);
         float kc = fabsf(cosf(rad_roll) * cosf(rad_pitch));
@@ -224,17 +222,4 @@ void IMU_Update_Loop(float tof_height_mm) {
     imu_data.yaw = atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
 
     Navigation_Update(map_ax, map_ay, map_az);
-}
-
-// [新增] 调试打印函数
-void IMU_Check_Data_Print(void) {
-    // 格式: R/P/Y (姿态) | Ax/Ay (世界加速度方向) | Z (高度)
-    // 方便放到串口绘图或者直接观察
-    printf("IMU: R:%5.1f P:%5.1f Y:%5.1f | Ax:%4.2f Ay:%4.2f | H:%5.1f\r\n", 
-           imu_data.roll, 
-           imu_data.pitch, 
-           imu_data.yaw,
-           imu_data.world_ax, // 重点观察：向前推是否为正
-           imu_data.world_ay, // 重点观察：向右推是否为正
-           imu_data.z);       // 重点观察：上抬是否增加
 }

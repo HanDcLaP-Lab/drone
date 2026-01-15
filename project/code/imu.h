@@ -11,7 +11,7 @@
 #define DT 0.001f        // 运行周期 1ms (1000Hz)
 #define GRAVITY_MSS 9.8f // 标准重力加速度
 // ================= Z轴融合参数 =================
-#define Z_CORRECT_POS_GAIN  0.5f   // 位置修正系数
+#define Z_CORRECT_POS_GAIN  0.3f   // 位置修正系数
 #define Z_CORRECT_VEL_GAIN  0.05f   // 速度修正系数
 
 #ifndef PI
@@ -35,10 +35,10 @@ typedef struct {
     float y;
     float z; // 仅 Z 轴有效
 
-    // --- 空间速度 (单位: m/s) ---
+    // --- 空间速度  ---
     float vx;
     float vy;
-    float vz; // 仅 Z 轴有效
+    float vz; // cm/s
 
     // --- 运动加速度 (单位: m/s^2) ---
     float world_ax; // 用于判断方向
@@ -46,8 +46,8 @@ typedef struct {
     float world_az;
     
     //初始数据
-    float tof_z; ///mm
-    float tof_vz; ///mm
+    float tof_z; //单位：mm
+    float tof_vz; //单位：mm
 
     // --- 状态标志 ---
     uint8_t is_calibrated; 
