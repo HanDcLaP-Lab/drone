@@ -227,7 +227,7 @@ void image_send(void){
         for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++)
         {
             // 如果是1则变为255(白)，如果是0保持0(黑)
-            image_copy[0][i] = cam_down.binarized_image[i] * 255; 
+            image_copy[0][i] = cam_down.raw_image[i]; 
         }
 
         // 发送图像

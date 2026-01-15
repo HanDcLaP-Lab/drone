@@ -241,10 +241,11 @@ void Flight_Hover_Control_Task(void) {
 
         float error_row = IMG_CENTER_Y - car_row;
         float error_col = car_col - IMG_CENTER_X;
+        if(cam_down.dot_num[0] > VALID_MIN_NUM) error_row = error_col = 0;
 
         // P 控制
-        float target_pitch_val = - error_row * VISUAL_POS_P_GAIN;
-        float target_roll_val = error_col * VISUAL_POS_P_GAIN;
+        float target_pitch_val = - (error_row * VISUAL_POS_GAIN + VISUAL_POS_DOUBLE_GAIN * fabs(error_row) * error_row);
+        float target_roll_val = error_col * VISUAL_POS_GAIN +  VISUAL_POS_DOUBLE_GAIN * fabs(error_col) * error_col;
 
         Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
     } else {

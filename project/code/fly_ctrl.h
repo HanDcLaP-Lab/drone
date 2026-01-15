@@ -11,7 +11,7 @@
 
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 40.0f  // 目标高度
-#define LAND_HEIGHT 15.0f       // 着陆高度
+#define LAND_HEIGHT 10.0f       // 着陆高度
 #define HOVER_THROTTLE 4300     // 基础悬停油门 (需根据电池电压调整)
 #define MAX_PWM 5500
 #define MIN_PWM 0
@@ -20,7 +20,8 @@
 #define CTRL_DT_CTANG 0.001   // 控制周期
 
 // 视觉控制增益
-#define VISUAL_POS_P_GAIN 1.0f  // 像素误差 -> 角度
+#define VISUAL_POS_GAIN 0.03f  // 像素误差 -> 角度 线性关系
+#define VISUAL_POS_DOUBLE_GAIN 0.01  // 像素误差 -> 角度 平方关系
 
 #define IMG_CENTER_X (MT9V03X_W / 2.0f)
 #define IMG_CENTER_Y (MT9V03X_H / 2.0f)

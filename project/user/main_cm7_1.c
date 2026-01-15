@@ -70,8 +70,8 @@ int main(void)
         M7_1_data_send(m7_1_data);
         SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
         
-        //image_cnt ++;
-        //if(image_cnt % 100 == 0) printf("%d" , image_cnt);                         
+        // image_cnt ++;
+        // if(image_cnt % 200 == 0) image_send();                        
 
     }
 }
