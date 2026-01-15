@@ -48,8 +48,7 @@ void pit0_ch0_isr() {
     imu660ra_get_gyro();
     dl1b_get_distance();
     if (dl1b_finsh_flag == 1) {
-        //imu_data.tof_z = dl1b_distance_mm;
-        imu_data.tof_z = 400;
+        imu_data.tof_z = dl1b_distance_mm;
         if(imu_data.tof_z >= 1400) imu_data.tof_z=1400;
         static float last_tof_z;
         imu_data.tof_vz = imu_data.tof_z - last_tof_z;
@@ -70,7 +69,13 @@ void pit0_ch0_isr() {
     motor_pwm_set();
     
     // 3. 打印测试 (使用结构体 imu_data)
-    if (pit0_cnt % 1000 == 0) {
+    if (pit0_cnt % 100 == 0) {
+        // wireless_uart_send_string("roll: ");
+        // wireless_uart_send_float(imu_data.roll);
+        // wireless_uart_send_string("W: ");
+        // wireless_uart_send_float(imu_data.groll);
+        // wireless_uart_send_string("out: ");
+        // wireless_uart_send_float(out);
         //     // 直接打印 imu_data 里的成员
         //     // 注意：Roll 显示加负号是为了符合你的右倾为正的习惯
         /*
@@ -88,7 +93,7 @@ void pit0_ch1_isr()
     pit_isr_flag_clear(PIT_CH1);
 
     // 调用封装好的悬停控制任务
-    Flight_Hover_Control_Task(); 
+    //Flight_Hover_Control_Task(); 
 }
 
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
@@ -97,12 +102,12 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
     
     //image_processing_loop();
     //  printf("%d" ,cam_down.light_number);
-    // image_send();
+    //image_send();
     //Simple_Hover_Control();
     //printf("%d" , cam_down.dot_num[0]);
     // printf("%d", dl1b_distance_mm);
     //Debug_Motor_Output_Print();
-    display_motor_output_display();//
+    display_motor_output_display();
     //printf("%d" , tof_cnt);
     //wireless_uart_send_string("AAA");
 }

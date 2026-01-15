@@ -246,6 +246,8 @@ uint8 imu660ra_init (void)
             break;
         }
         imu660ra_write_register(IMU660RA_PWR_CTRL, 0x0E);                       // 开启性能模式  使能陀螺仪、加速度、温度传感器
+        //imu660ra_write_register(IMU660RA_ACC_CONF, 0xAC); // 加速度改为 1600Hz
+        //imu660ra_write_register(IMU660RA_GYR_CONF, 0xAC); // 陀螺仪改为 1600Hz
         imu660ra_write_register(IMU660RA_ACC_CONF, 0xA7);                       // 加速度采集配置 性能模式 正常采集 50Hz  采样频率
         imu660ra_write_register(IMU660RA_GYR_CONF, 0xA9);                       // 陀螺仪采集配置 性能模式 正常采集 200Hz 采样频率
 

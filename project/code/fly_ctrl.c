@@ -7,7 +7,7 @@
 // =================== 全局变量定义 ===================
 Flight_Target_t flight_target = {0};
 Motor_Output_t motor_out = {0};
-
+float out = 0;
 // 定义 PID 对象
 static PID_t pid_height_vel;
 static PID_t pid_height_pos;
@@ -50,8 +50,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_pitch, 1.0f, 0.0f, 0.0f, 10, 40);
     PID_Init(&pid_yaw, 0.0f, 0.0f, 0.0f, 10, 0);
 
-    PID_Init(&pid_g_roll, 4.0f, 0.0f, 0.00f, 300, 800);
-    PID_Init(&pid_g_pitch, 4.0f, 0.0f, 0.00f, 300, 800);
+    PID_Init(&pid_g_roll, 2.5f, 0.0f, 0.08f, 300, 800);
+    PID_Init(&pid_g_pitch, 2.5f, 0.0f, 0.08f, 300, 800);
     PID_Init(&pid_g_yaw, 0.0f, 0.0f, 0.0f, 120, 400);
 }
 
@@ -143,7 +143,7 @@ void Flight_Control_Loop(void) {
     // Roll PID
     float roll_err = flight_target.target_g_roll - imu_data.groll;
     float out_roll = PID_Calculate(&pid_g_roll, roll_err, CTRL_DT_CTLOOP);
-
+    out = out_roll;
     // Pitch PID
     float pitch_err = flight_target.target_g_pitch - imu_data.gpitch;
     float out_pitch = PID_Calculate(&pid_g_pitch, pitch_err, CTRL_DT_CTLOOP);
@@ -229,7 +229,7 @@ void Flight_Hover_Control_Task(void) {
     cam_down.centers[0][0] = (uint32_t)m7_1_data[0];  // Row
     cam_down.centers[0][1] = (uint32_t)m7_1_data[1];  // Col
     cam_down.dot_num[0] = (uint32_t)m7_1_data[2];     // Area
-    if (cam_down.dot_num[0] > MIN_LIGHT_SIZE) {
+    if (cam_down.dot_num[0] > MIN_LIGHT_SIZE && cam_down.centers[0][0] > 0 && cam_down.centers[0][1] > 0) {
         cam_down.light_number = 1;
     } else {
         cam_down.light_number = 0;

@@ -66,11 +66,11 @@ int main(void) {
 
     display_init();
     camera_init();
-    Kalman_Init(&K_w_ax,1e-4f,0.01,0);
-    Kalman_Init(&K_w_ay,1e-4f,0.01,0);
-    Kalman_Init(&K_groll,1e-4f,0.01,0);
-    Kalman_Init(&K_gpitch,1e-4f,0.01,0);
-    Kalman_Init(&K_gyaw,1e-4f,0.01,0);
+    //Kalman_Init(&K_w_ax,1e-4f,0.01,0);
+    //Kalman_Init(&K_w_ay,1e-4f,0.01,0);
+    Kalman_Init(&K_groll,1e-3f,0.001,0);
+    Kalman_Init(&K_gpitch,1e-3f,0.001,0);
+    Kalman_Init(&K_gyaw,1e-3f,0.001,0);
 
     imu_init();
     tof_init();
@@ -81,8 +81,8 @@ int main(void) {
     
     //system_delay_ms(3000);
     pit_ms_init(PIT_NUM1, 1);
-    pit_ms_init(PIT_NUM2, 200);
-    system_delay_ms(5000);
+    pit_ms_init(PIT_NUM2, 1000);
+    system_delay_ms(1000);
     pit_ms_init(PIT_NUM0, 1);
     // 此处编写用户代码 例如外设初始化代码等
 

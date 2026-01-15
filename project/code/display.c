@@ -32,13 +32,20 @@ void display_motor_output_display()
     
     //imuÊý¾Ý
     ips200_show_string(0,16*7,"Ro:");
-    ips200_show_int(30,16*4 , (int)imu_data.roll, 4);
+    ips200_show_int(30,16*7 , (int)imu_data.roll, 4);
     ips200_show_string(80,16*7,"Pi:");
-    ips200_show_int(110,16*4 , (int)imu_data.pitch, 4);
+    ips200_show_int(110,16*7 , (int)imu_data.pitch, 4);
     ips200_show_string(0,16*8,"Ya:");
-    ips200_show_int(30,16*4 , (int)imu_data.pitch, 4);
+    ips200_show_int(30,16*8 , (int)imu_data.yaw, 4);
     ips200_show_string(80,16*8,"z:");
-    ips200_show_int(110,16*4 , (int)imu_data.pitch, 4);
+    ips200_show_int(110,16*8 , (int)imu_data.z, 4);
+
+    ips200_show_string(0,16*9,"GR:");
+    ips200_show_int(30,16*9 , (int)imu_data.groll, 4);
+    ips200_show_string(80,16*9,"GP:");
+    ips200_show_int(110,16*9 , (int)imu_data.gpitch, 4);
+    ips200_show_string(0,16*10,"GY:");
+    ips200_show_int(30,16*10 , (int)imu_data.gyaw, 4);
     
 }/*
 printf("IMU: R:%5.1f P:%5.1f Y:%5.1f | Ax:%4.2f Ay:%4.2f | H:%5.1f\r\n", 

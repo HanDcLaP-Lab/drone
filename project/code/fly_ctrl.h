@@ -12,7 +12,7 @@
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 40.0f  // 目标高度
 #define LAND_HEIGHT 15.0f       // 着陆高度
-#define HOVER_THROTTLE 4200     // 基础悬停油门 (需根据电池电压调整)
+#define HOVER_THROTTLE 4300     // 基础悬停油门 (需根据电池电压调整)
 #define MAX_PWM 5500
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 15.0f  // 最大倾角限制 (度) - 既然没速度环，这个限制很重要
@@ -52,7 +52,7 @@ typedef struct {
     uint8_t is_armed;
     STATE cur_state;
 } Flight_Target_t;
-
+extern float out ;
 // =================== 电机输出结构体 ===================
 typedef struct {
     int16_t rf;  // 右前
