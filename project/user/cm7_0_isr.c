@@ -48,7 +48,6 @@ void pit0_ch0_isr() {
     imu660ra_get_gyro();
     dl1b_get_distance();
     if (dl1b_finsh_flag == 1) {
-        dl1b_finsh_flag = 0;
         //imu_data.tof_z = dl1b_distance_mm;
         imu_data.tof_z = 400;
         if(imu_data.tof_z >= 1400) imu_data.tof_z=1400;
@@ -102,7 +101,6 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
     //Simple_Hover_Control();
     //printf("%d" , cam_down.dot_num[0]);
     // printf("%d", dl1b_distance_mm);
-    IMU_Check_Data_Print();
     //Debug_Motor_Output_Print();
     display_motor_output_display();//
     //printf("%d" , tof_cnt);
