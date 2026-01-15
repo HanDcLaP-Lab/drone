@@ -46,8 +46,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_height_pos, 0.8f, 0.0f, 0.0f, 0, 150);
     PID_Init(&pid_height_vel, 10.0f, 0.1f, 0.0f, 1000, 3000);
 
-    PID_Init(&pid_roll, 3.0f, 0.0f, 0.0f, 10, 40);
-    PID_Init(&pid_pitch, 3.0f, 0.0f, 0.0f, 10, 40);
+    PID_Init(&pid_roll, 1.0f, 0.0f, 0.0f, 10, 40);
+    PID_Init(&pid_pitch, 1.0f, 0.0f, 0.0f, 10, 40);
     PID_Init(&pid_yaw, 0.0f, 0.0f, 0.0f, 10, 0);
 
     PID_Init(&pid_g_roll, 4.0f, 0.0f, 0.00f, 300, 800);
@@ -182,6 +182,7 @@ void Flight_Control_Loop(void) {
 
 // 辅助：电机PWM设置
 void motor_pwm_set() {
+   
     if (flight_target.is_armed == 1) {
         pwm_set_duty(PWM_RF, (motor_out.rf * 2 / 5) + 4000);  // 假设你的电调协议需要这样转换
         pwm_set_duty(PWM_RB, (motor_out.rb * 2 / 5) + 4000);

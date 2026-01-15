@@ -77,7 +77,7 @@ int main(void) {
 
     motor_pwm_init();  /// pwm ‰≥ˆ≥ı ºªØ
     Flight_Control_Init();
-    system_delay_ms(5000);
+    //system_delay_ms(5000);
     
     //system_delay_ms(3000);
     pit_ms_init(PIT_NUM1, 1);
