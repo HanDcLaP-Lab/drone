@@ -183,27 +183,27 @@ void Flight_Control_Loop(void) {
 // 辅助：电机PWM设置
 void motor_pwm_set() {
     if (flight_target.is_armed == 1) {
-        pwm_set_duty(PWM_RF, (motor_out.rf / 20) + 500);  // 假设你的电调协议需要这样转换
-        pwm_set_duty(PWM_RB, (motor_out.rb / 20) + 500);
-        pwm_set_duty(PWM_LF, (motor_out.lf / 20) + 500);
-        pwm_set_duty(PWM_LB, (motor_out.lb / 20) + 500);
+        pwm_set_duty(PWM_RF, (motor_out.rf * 2 / 5) + 4000);  // 假设你的电调协议需要这样转换
+        pwm_set_duty(PWM_RB, (motor_out.rb * 2 / 5) + 4000);
+        pwm_set_duty(PWM_LF, (motor_out.lf * 2 / 5) + 4000);
+        pwm_set_duty(PWM_LB, (motor_out.lb * 2 / 5) + 4000);
     } else {
         motor_out.rf = 0;
         motor_out.rb = 0;
         motor_out.lf = 0;
         motor_out.lb = 0;
-        pwm_set_duty(PWM_RF, 500);
-        pwm_set_duty(PWM_RB, 500);
-        pwm_set_duty(PWM_LF, 500);
-        pwm_set_duty(PWM_LB, 500);
+        pwm_set_duty(PWM_RF, 4000);
+        pwm_set_duty(PWM_RB, 4000);
+        pwm_set_duty(PWM_LF, 4000);
+        pwm_set_duty(PWM_LB, 4000);
     }
 }
 
 void motor_pwm_init() {
-    pwm_init(PWM_LF, 50, 500);
-    pwm_init(PWM_LB, 50, 500);
-    pwm_init(PWM_RF, 50, 500);
-    pwm_init(PWM_RB, 50, 500);
+    pwm_init(PWM_LF, 400, 4000);
+    pwm_init(PWM_LB, 400, 4000);
+    pwm_init(PWM_RF, 400, 4000);
+    pwm_init(PWM_RB, 400, 4000);
 }
 
 // 建议放在 code/fly_ctrl.c 末尾
