@@ -8,10 +8,18 @@ IMU_Data_t imu_data = {0};
 static float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f; // 四元数
 static float exInt = 0.0f, eyInt = 0.0f, ezInt = 0.0f;   // 积分误差
 
-// 校准相关
+// 陀螺仪校准相关
 static float offset_gx = 0, offset_gy = 0, offset_gz = 0;
+// [新增] 加速度计校准相关 (Sensor坐标系)
+static float offset_raw_ay = 0; // Sensor Y轴零偏 (对应机身侧向)
+static float offset_raw_az = 0; // Sensor Z轴零偏 (对应机身前后)
+static float gravity_ref = 9.8f; // 真实的重力基准 (来自 Sensor X轴)
+
 static uint16_t calib_cnt = 0;
 
+// 融合参数 (建议调试时可微调)
+#define K_POS  0.3f   // 位置修正系数 (高度权重)
+#define K_VEL  0.7f   // 速度修正系数 (速度收敛快慢)
 
 // ================= 内部辅助函数 =================
 static float invSqrt(float x) {
@@ -25,7 +33,7 @@ static float invSqrt(float x) {
 }
 
 void imu_init(void){
-    while(1)///定时器0初始化
+    while(1)
     {
         if(imu660ra_init())
         {
@@ -50,7 +58,7 @@ void tof_init(void){
                 break;
 
             }
-        system_delay_ms(1000);                                                  // 闪灯表示异常
+        system_delay_ms(1000); 
     }
 }
 
@@ -121,64 +129,73 @@ static void Navigation_Update(float ax, float ay, float az) {
     float w_ay = 2*(q1q2 + q0q3)*ax + (1 - 2*(q1q1 + q3q3))*ay + 2*(q2q3 - q0q1)*az;
     float w_az = 2*(q1q3 - q0q2)*ax + 2*(q2q3 + q0q1)*ay + (1 - 2*(q1q1 + q2q2))*az;
 
-    // 3. 去除重力
-    w_az = w_az - GRAVITY_MSS;
+    // 3. 去除重力 (使用校准得到的真实基准值，而非宏定义)
+    w_az = w_az - gravity_ref;
 
-    // 4. 滤波与死区
-    if(fabsf(w_ax) < 0.1f) w_ax = 0; // 稍微增大死区
+    // 4. 滤波与死区 (Z轴死区稍大，防止静态积分漂移)
+    if(fabsf(w_ax) < 0.1f) w_ax = 0; 
     if(fabsf(w_ay) < 0.1f) w_ay = 0;
-    if(fabsf(w_az) < 0.2f) w_az = 0;
+    if(fabsf(w_az) < 0.25f) w_az = 0;
     
-
     // 更新到结构体 (仅用于观察方向，不用于位置控制)
     imu_data.world_ax = w_ax;
     imu_data.world_ay = w_ay;
     imu_data.world_az = w_az;
 
-    // ================== Z轴二阶互补滤波 (保留可靠部分) ==================
-    float acc_up_cms2 = w_az * 100.0f; 
+    // ================== Z轴二阶观测器融合 (核心修改) ==================
+    float acc_up_cms2 = w_az * 100.0f; // m/s^2 -> cm/s^2
     
-    // 预测
-    imu_data.z += imu_data.vz * DT + 0.5f * acc_up_cms2 * DT * DT;
+    // 1. 惯性导航预测 (先只靠加速度计推算)
+    // 速度 += 加速度 * dt
     imu_data.vz += acc_up_cms2 * DT;
-
-    // ToF 修正 
+    // 位置 += 速度 * dt
+    imu_data.z += imu_data.vz * DT + 0.5f * acc_up_cms2 * DT * DT;
+    
+    // 2. ToF 观测修正
     if (dl1b_finsh_flag == 1) {
         dl1b_finsh_flag = 0;
         
         uint16_t tof_z_mm = dl1b_distance_mm;
-        if (tof_z_mm > 1400) tof_z_mm = 1400;
+        // 物理限幅
+        if (tof_z_mm > 1500) tof_z_mm = 1500;
 
-        static uint16_t last_tof_z = 0;
-        static float tof_vz = 0.0f;
-
-        tof_vz = (float)(tof_z_mm - last_tof_z);
-        last_tof_z = tof_z_mm;
-        
-        if (tof_z_mm > 10 && tof_z_mm < 2000){
-          
+        // 有效范围判断
+        if (tof_z_mm > 10) {
+            
+            // 倾角补偿 (将斜边距离换算为垂直高度)
             float rad_roll = imu_data.roll * (PI / 180.0f);
             float rad_pitch = imu_data.pitch * (PI / 180.0f);
             float kc = fabsf(cosf(rad_roll) * cosf(rad_pitch));
+            
             float tof_height_cm = (tof_z_mm / 10.0f) * kc;
-            float tof_height_speed_cms = (tof_vz * 5.0f) * kc; // 注意单位换算
 
+            // --- 核心算法：二阶互补/观测器 ---
+            // 计算 "测量值" 与 "估计值" 的偏差
             float z_error = tof_height_cm - imu_data.z;
-            imu_data.z += z_error * Z_CORRECT_POS_GAIN;
 
-            float vz_error = tof_height_speed_cms - imu_data.vz;
-            imu_data.vz += vz_error * Z_CORRECT_VEL_GAIN;
+            // 修正位置 (Proportional term)
+            imu_data.z += z_error * K_POS;
+
+            // 修正速度 (Integral term / Velocity correction)
+            // 逻辑：如果位置一直偏低，说明速度估算偏小，需要补偿速度
+            imu_data.vz += z_error * K_VEL;
         }
+    } else {
+        // [新增] 阻尼逻辑：如果 ToF 丢失，让垂直速度缓慢归零，防止漂飞
+        imu_data.vz *= 0.999f; 
     }
 
-    // ================== 水平通道清零 (核心修改) ==================
+    // ================== 水平通道清零 ==================
     // 强制清零，避免数据漂移干扰判断
     imu_data.vx = 0;
     imu_data.vy = 0;
     imu_data.x = 0;
     imu_data.y = 0;
 }
+
 // ================= 对外接口函数 =================
+// [code/imu.c]
+
 void IMU_Update_Loop(void) {
   
     imu660ra_get_acc();
@@ -193,36 +210,67 @@ void IMU_Update_Loop(void) {
     float raw_ay = imu660ra_acc_transition(imu660ra_acc_y) * GRAVITY_MSS;
     float raw_az = imu660ra_acc_transition(imu660ra_acc_z) * GRAVITY_MSS;
 
-    // 校准
+    // ================= 校准逻辑 (包含加速度计) =================
     if (imu_data.is_calibrated == 0) {
         calib_cnt++;
+        
+        // 1. 累加陀螺仪
         offset_gx += raw_gx;
         offset_gy += raw_gy;
         offset_gz += raw_gz;
         
+        // 2. 累加加速度计 (假设静止平放)
+        offset_raw_ay += raw_ay; // 应该为0
+        offset_raw_az += raw_az; // 应该为0
+        
+        // 垂直轴不应为0，应为当地重力，我们累加它的绝对值或相反数
+        // 因为 map_az = -raw_ax，且 map_az 向上为正(9.8)，所以 raw_ax 应该约为 -9.8
+        // 我们记录这个"1G"的模长
+        gravity_ref += -raw_ax; 
+        
         if (calib_cnt >= 2500) {
+            // 计算平均值
             offset_gx /= 2500.0f;
             offset_gy /= 2500.0f;
             offset_gz /= 2500.0f;
+            
+            offset_raw_ay /= 2500.0f;
+            offset_raw_az /= 2500.0f;
+            gravity_ref   /= 2500.0f; // 得到实测的重力值
+
             imu_data.is_calibrated = 1;
             imu_data.z = 0.0f;
+            imu_data.vz = 0.0f; // 校准完成，速度清零
         }
         return; 
     }
 
+    // ================= 1. 去除零偏 =================
     raw_gx -= offset_gx;
     raw_gy -= offset_gy;
     raw_gz -= offset_gz;
 
-    float map_ax = -raw_az;  // 机头方向 (原代码是用 y，现改为 z，并取反以匹配前推方向)
-    float map_ay = -raw_ay;  // 机身右侧 (原代码是用 z，现改为 y)
-    float map_az = -raw_ax;  // 垂直方向 (保持不变，因为重力没问题)
+    // 加速度计去水平零偏
+    raw_ay -= offset_raw_ay;
+    raw_az -= offset_raw_az;
+    // 注意：垂直轴(raw_ax)不要减，它的基准(gravity_ref)在 Navigation_Update 里用
 
+    // ================= 2. 轴向映射 (这里补全了缺失的代码) =================
+    float map_ax = -raw_az;  // 机头
+    float map_ay = -raw_ay;  // 机身右侧
+    float map_az = -raw_ax;  // 垂直方向
 
-    float map_gx = -raw_gz;  // Roll (横滚) - 对应原代码的 Pitch 轴源，但赋予给 Roll
-    float map_gy = -raw_gy;  // Pitch (俯仰) - 对应原代码的 Roll 轴源，且取反以适配"低头为负"
-    float map_gz = -raw_gx;  // Yaw (航向) - 保持不变
+    //  之前漏掉了下面这三行陀螺仪映射定义
+    float map_gx = -raw_gz;  // Roll (横滚)
+    float map_gy = -raw_gy;  // Pitch (俯仰)
+    float map_gz = -raw_gx;  // Yaw (航向)
 
+    // 死区处理 (仅针对陀螺仪，防止 Yaw 漂移)
+    if (fabsf(map_gx) < 0.1f) map_gx = 0; 
+    if (fabsf(map_gy) < 0.1f) map_gy = 0;
+    if (map_gz > -0.1f && map_gz < 0.1f) map_gz = 0.0f; // Yaw 轴强力死区
+
+    // ================= 3. 滤波与解算 =================
     imu_data.groll = -Kalman_Update(&K_groll, map_gx);
     imu_data.gpitch = Kalman_Update(&K_gpitch, map_gy);
     imu_data.gyaw = Kalman_Update(&K_gyaw, map_gz);

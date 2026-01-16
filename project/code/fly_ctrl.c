@@ -150,7 +150,7 @@ void Flight_Control_Loop(void) {
 
     // Yaw PID (使用角度环)
     float yaw_err = flight_target.target_g_yaw - imu_data.gyaw;
-    float out_yaw = PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
+    float out_yaw =  -PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
     
     if (flight_target.is_armed == 1 && flight_target.cur_state != landing) {
         if (start_up_scale < 1.0f) {
