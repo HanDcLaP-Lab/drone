@@ -2,7 +2,7 @@
 
 #include "image.h"  // 包含 cam_down
 #include "imu.h"    // 包含 imu_data
-#include "pid.h"    // 假设你有这个头文件
+#include "pid.h"    
 
 // =================== 全局变量定义 ===================
 Flight_Target_t flight_target = {0};
@@ -63,6 +63,9 @@ void Flight_Unlock(void) {
     PID_Reset(&pid_roll);
     PID_Reset(&pid_pitch);
     PID_Reset(&pid_yaw);
+    PID_Reset(&pid_g_roll);
+    PID_Reset(&pid_g_pitch);
+    PID_Reset(&pid_g_yaw);
 
     // 锁定当前航向为目标航向，防止解锁即转圈
     flight_target.target_yaw = imu_data.yaw;

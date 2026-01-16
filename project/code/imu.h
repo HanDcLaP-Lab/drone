@@ -12,7 +12,7 @@
 #define GRAVITY_MSS 9.8f // 标准重力加速度
 // ================= Z轴融合参数 =================
 #define Z_CORRECT_POS_GAIN  0.3f   // 位置修正系数
-#define Z_CORRECT_VEL_GAIN  0.05f   // 速度修正系数
+#define Z_CORRECT_VEL_GAIN  0.3f   // 速度修正系数
 
 #ifndef PI
 #define PI 3.1415926535f
@@ -44,10 +44,6 @@ typedef struct {
     float world_ax; // 用于判断方向
     float world_ay;
     float world_az;
-    
-    //初始数据
-    float tof_z; //单位：mm
-    float tof_vz; //单位：mm
 
     // --- 状态标志 ---
     uint8_t is_calibrated; 
@@ -56,7 +52,7 @@ typedef struct {
 extern IMU_Data_t imu_data;
 
 // ================= 函数声明 =================
-void IMU_Update_Loop(float tof_height_mm);
+void IMU_Update_Loop(void);
 void imu_init(void);
 void tof_init(void);
 // [新增] 专门用于确认 IMU 方向和数据的打印函数

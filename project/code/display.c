@@ -46,6 +46,8 @@ void display_motor_output_display()
     ips200_show_int(110,16*9 , (int)imu_data.gpitch, 4);
     ips200_show_string(0,16*10,"GY:");
     ips200_show_int(30,16*10 , (int)imu_data.gyaw, 4);
+    ips200_show_string(80,16*10,"Vz:");
+    ips200_show_int(110,16*10 , (int)imu_data.vz, 4);
     
 }/*
 printf("IMU: R:%5.1f P:%5.1f Y:%5.1f | Ax:%4.2f Ay:%4.2f | H:%5.1f\r\n", 

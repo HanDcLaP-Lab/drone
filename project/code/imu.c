@@ -143,19 +143,32 @@ static void Navigation_Update(float ax, float ay, float az) {
     imu_data.vz += acc_up_cms2 * DT;
 
     // ToF 修正 
-    if (imu_data.tof_z > 10 && imu_data.tof_z < 2000 && dl1b_finsh_flag == 1) {
+    if (dl1b_finsh_flag == 1) {
         dl1b_finsh_flag = 0;
-        float rad_roll = imu_data.roll * (PI / 180.0f);
-        float rad_pitch = imu_data.pitch * (PI / 180.0f);
-        float kc = fabsf(cosf(rad_roll) * cosf(rad_pitch));
-        float tof_height_cm = (imu_data.tof_z / 10.0f) * kc;
-        float tof_height_speed_cms = (imu_data.tof_vz * 5.0f) * kc; // 注意单位换算
+        
+        uint16_t tof_z_mm = dl1b_distance_mm;
+        if (tof_z_mm > 1400) tof_z_mm = 1400;
 
-        float z_error = tof_height_cm - imu_data.z;
-        imu_data.z += z_error * Z_CORRECT_POS_GAIN;
+        static uint16_t last_tof_z = 0;
+        static float tof_vz = 0.0f;
 
-        float vz_error = tof_height_speed_cms - imu_data.vz;
-        imu_data.vz += vz_error * Z_CORRECT_VEL_GAIN;
+        tof_vz = (float)(tof_z_mm - last_tof_z);
+        last_tof_z = tof_z_mm;
+        
+        if (tof_z_mm > 10 && tof_z_mm < 2000){
+          
+            float rad_roll = imu_data.roll * (PI / 180.0f);
+            float rad_pitch = imu_data.pitch * (PI / 180.0f);
+            float kc = fabsf(cosf(rad_roll) * cosf(rad_pitch));
+            float tof_height_cm = (tof_z_mm / 10.0f) * kc;
+            float tof_height_speed_cms = (tof_vz * 5.0f) * kc; // 注意单位换算
+
+            float z_error = tof_height_cm - imu_data.z;
+            imu_data.z += z_error * Z_CORRECT_POS_GAIN;
+
+            float vz_error = tof_height_speed_cms - imu_data.vz;
+            imu_data.vz += vz_error * Z_CORRECT_VEL_GAIN;
+        }
     }
 
     // ================== 水平通道清零 (核心修改) ==================
@@ -166,7 +179,12 @@ static void Navigation_Update(float ax, float ay, float az) {
     imu_data.y = 0;
 }
 // ================= 对外接口函数 =================
-void IMU_Update_Loop(float tof_height_mm) {
+void IMU_Update_Loop(void) {
+  
+    imu660ra_get_acc();
+    imu660ra_get_gyro();
+    dl1b_get_distance();
+    
     float raw_gx = imu660ra_gyro_transition(imu660ra_gyro_x);
     float raw_gy = imu660ra_gyro_transition(imu660ra_gyro_y);
     float raw_gz = imu660ra_gyro_transition(imu660ra_gyro_z);
@@ -187,7 +205,7 @@ void IMU_Update_Loop(float tof_height_mm) {
             offset_gy /= 2500.0f;
             offset_gz /= 2500.0f;
             imu_data.is_calibrated = 1;
-            imu_data.z = tof_height_mm / 10.0f;
+            imu_data.z = 0.0f;
         }
         return; 
     }
