@@ -200,8 +200,7 @@ void IMU_Update_Loop(float tof_height_mm) {
     float map_ay = -raw_ay;  // 机身右侧 (原代码是用 z，现改为 y)
     float map_az = -raw_ax;  // 垂直方向 (保持不变，因为重力没问题)
 
-    // [陀螺仪映射]
-    // 目标：前倾 -> Pitch 变负；右倾 -> Roll 变正
+
     float map_gx = -raw_gz;  // Roll (横滚) - 对应原代码的 Pitch 轴源，但赋予给 Roll
     float map_gy = -raw_gy;  // Pitch (俯仰) - 对应原代码的 Roll 轴源，且取反以适配"低头为负"
     float map_gz = -raw_gx;  // Yaw (航向) - 保持不变

@@ -70,19 +70,6 @@ void pit0_ch0_isr() {
     
     // 3. 打印测试 (使用结构体 imu_data)
     if (pit0_cnt % 100 == 0) {
-        // wireless_uart_send_string("roll: ");
-        // wireless_uart_send_float(imu_data.roll);
-        // wireless_uart_send_string("W: ");
-        // wireless_uart_send_float(imu_data.groll);
-        // wireless_uart_send_string("out: ");
-        // wireless_uart_send_float(out);
-        //     // 直接打印 imu_data 里的成员
-        //     // 注意：Roll 显示加负号是为了符合你的右倾为正的习惯
-        /*
-        printf("\r\n [Pose] R=%.1f P=%.1f Y=%.1f |%.1f %.1f\r\n",
-                imu_data.roll, imu_data.pitch, imu_data.yaw,
-                imu_data.vz,imu_data.z);*/
-                //printf("%d " , pit0_cnt);
                 
     }
     
@@ -93,20 +80,12 @@ void pit0_ch1_isr()
     pit_isr_flag_clear(PIT_CH1);
 
     // 调用封装好的悬停控制任务
-    //Flight_Hover_Control_Task(); 
+    Flight_Hover_Control_Task(); 
 }
 
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
-    
-    //image_processing_loop();
-    //  printf("%d" ,cam_down.light_number);
-    //image_send();
-    //Simple_Hover_Control();
-    //printf("%d" , cam_down.dot_num[0]);
-    // printf("%d", dl1b_distance_mm);
-    //Debug_Motor_Output_Print();
     display_motor_output_display();
     //printf("%d" , tof_cnt);
     //wireless_uart_send_string("AAA");

@@ -37,4 +37,4 @@ extern CameraObject cam_down;
 void camera_init(void);           // 初始化
 void image_processing_loop(void); // 图像处理主循环
 void image_send(void);  //发送图像
-#endif /* CODE_IMAGE_H_ */
+#endif 

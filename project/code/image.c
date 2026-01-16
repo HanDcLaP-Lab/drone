@@ -36,8 +36,7 @@ void camera_init(void) {
 
 // --- 3. 内部辅助函数 ---
 
-// 坐标合法性检查
-// 检查：1.是否在有效区域(去除边缘) 2.是否未访问 3.是否是亮点
+
 static uint8_t is_valid_pixel(CameraObject *cam, uint16_t r, uint16_t c, uint8_t *visited) {
     uint32_t index = r * cam->width + c;
     
@@ -190,9 +189,6 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
             if (valid_idx < MAX_LIGHTS) {
                 cam->centers[valid_idx][0] = sum_r[i] / cam->dot_num[i]; // Row (Y)
                 cam->centers[valid_idx][1] = sum_c[i] / cam->dot_num[i]; // Col (X)
-                // 此时 dot_num[i] 还是对应的，需要搬运过来
-                // 注意：原代码逻辑这里 dot_num 索引是 i (label-1)，但输出索引是 valid_idx
-                // 所以要把 count 值赋给 dot_num[valid_idx]
                 cam->dot_num[valid_idx] = cam->dot_num[i]; 
                 
                 valid_idx++;

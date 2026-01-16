@@ -10,9 +10,9 @@
 #define PWM_RB (TCPWM_CH58_P17_3)
 
 // =================== 飞行参数配置 ===================
-#define TARGET_HEIGHT_CM 40.0f  // 目标高度
+#define TARGET_HEIGHT_CM 60.0f  // 目标高度
 #define LAND_HEIGHT 10.0f       // 着陆高度
-#define HOVER_THROTTLE 4300     // 基础悬停油门 (需根据电池电压调整)
+#define HOVER_THROTTLE 4500     // 基础悬停油门 (需根据电池电压调整)
 #define MAX_PWM 5500
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 15.0f  // 最大倾角限制 (度) - 既然没速度环，这个限制很重要
@@ -84,5 +84,6 @@ void M7_1_data_send(float* M7_1_data);
  * @note 内部处理视觉补偿、姿态设定及 PID 计算
  */
 void Flight_Hover_Control_Task(void);
-
+// [code/fly_ctrl.h] 在 "函数声明" 区域添加
+void Fly_Param_Update(uint8_t ch, float val);
 #endif

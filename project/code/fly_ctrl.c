@@ -1,8 +1,5 @@
 #include "fly_ctrl.h"
 
-#include "image.h"  // 包含 cam_down
-#include "imu.h"    // 包含 imu_data
-#include "pid.h"    // 假设你有这个头文件
 
 // =================== 全局变量定义 ===================
 Flight_Target_t flight_target = {0};
@@ -42,17 +39,17 @@ void Flight_Control_Init(void) {
     flight_target.height = 0;
 
     // ----------- 初始化 PID 参数 -----------
-    // 高度环 (参数需根据动力微调)
+    // 高度环 
     PID_Init(&pid_height_pos, 0.8f, 0.0f, 0.0f, 0, 150);
     PID_Init(&pid_height_vel, 10.0f, 0.1f, 0.0f, 1000, 3000);
-
+    //角度环
     PID_Init(&pid_roll, 1.0f, 0.0f, 0.0f, 10, 40);
     PID_Init(&pid_pitch, 1.0f, 0.0f, 0.0f, 10, 40);
-    PID_Init(&pid_yaw, 0.0f, 0.0f, 0.0f, 10, 0);
-
+    PID_Init(&pid_yaw, 1.0f, 0.0f, 0.0f, 10, 40);
+    //角速度环
     PID_Init(&pid_g_roll, 2.5f, 0.0f, 0.08f, 300, 800);
     PID_Init(&pid_g_pitch, 2.5f, 0.0f, 0.08f, 300, 800);
-    PID_Init(&pid_g_yaw, 0.0f, 0.0f, 0.0f, 120, 400);
+    PID_Init(&pid_g_yaw, 2.0f, 0.0f, 0.08f, 120, 400);
 }
 
 void Flight_Unlock(void) {
@@ -81,7 +78,7 @@ void Flight_Lock(void) {
 void Set_Target_Attitude(float roll, float pitch, float yaw) {
     flight_target.target_roll = Constrain_Float(roll, -MAX_TILT_ANGLE, MAX_TILT_ANGLE);
     flight_target.target_pitch = Constrain_Float(pitch, -MAX_TILT_ANGLE, MAX_TILT_ANGLE);
-    flight_target.target_yaw = yaw;  // Yaw 通常不限幅，是绝对角度
+    flight_target.target_yaw = yaw;  
 }
 
 
@@ -99,12 +96,12 @@ void Flight_Control_Angle(void) {
     flight_target.target_g_pitch = target_rate_pitch_body;
     flight_target.target_g_yaw = target_rate_yaw_body;
 }
-// 飞行控制主循环 (建议 500Hz 或 1000Hz 调用)
 void Flight_Control_Loop(void) {
     // 1. 状态机处理
     if (flight_target.cur_state == pre_landing && imu_data.z < LAND_HEIGHT + 2)
         flight_target.cur_state = landing;
 
+    static float start_up_scale = 0.0f;
     switch (flight_target.cur_state) {
         case normal:
             flight_target.target_height = TARGET_HEIGHT_CM;
@@ -113,8 +110,9 @@ void Flight_Control_Loop(void) {
             flight_target.target_height = LAND_HEIGHT;
             break;
         case landing:
-            Flight_Lock();
-            return;
+            if(start_up_scale > 0)
+                start_up_scale -= 0.001;
+            break;
         default:
             break;
     }
@@ -138,7 +136,6 @@ void Flight_Control_Loop(void) {
     // base_throttle = (int16_t)Constrain_Float(base_throttle, MIN_PWM, MAX_PWM);
 
     // ================= 3. 姿态控制 (核心) =================
-    // 这里的目标已经是由视觉或上层逻辑直接给出的角度
 
     // Roll PID
     float roll_err = flight_target.target_g_roll - imu_data.groll;
@@ -151,8 +148,8 @@ void Flight_Control_Loop(void) {
     // Yaw PID (使用角度环)
     float yaw_err = flight_target.target_g_yaw - imu_data.gyaw;
     float out_yaw = PID_Calculate(&pid_yaw, yaw_err, CTRL_DT_CTLOOP);
-    static float start_up_scale = 0.0f;
-    if (flight_target.is_armed == 1) {
+    
+    if (flight_target.is_armed == 1 && flight_target.cur_state != landing) {
         if (start_up_scale < 1.0f) {
             start_up_scale += 0.0005f;  // 约2秒加满 (1ms周期)
         }
@@ -256,6 +253,44 @@ void Flight_Hover_Control_Task(void) {
     if (imu_data.is_calibrated && flight_target.is_armed == 2) {
         Flight_Unlock();
     }
-
     Flight_Control_Angle();
+}
+
+
+
+// 无线调参映射函数
+// ch: 通道号 (1~8), val: 上位机发送的值
+void Fly_Param_Update(uint8_t ch, float val) {
+    switch(ch) {
+        // === 第一组：角速度环 (最常用) ===
+        case 1: // 通道1：同时设置 Roll 和 Pitch 的 P (Kp)
+            pid_g_roll.kp = val;
+            pid_g_pitch.kp = val;
+            break;
+        case 2: // 通道2：同时设置 Roll 和 Pitch 的 D (Kd)
+            pid_g_roll.kd = val;
+            pid_g_pitch.kd = val;
+            break;
+            
+        // === 第二组：角度环 ===
+        case 3: // 通道3：角度环 P
+            pid_roll.kp = val;
+            pid_pitch.kp = val;
+            break;
+            
+        // === 第三组：Yaw轴 ===
+        case 4: // 通道4：Yaw轴速度环 P
+            pid_g_yaw.kp = val;
+            break;
+        case 5: // 通道5：Yaw轴速度环 D
+            pid_g_yaw.kd = val;
+            break;
+
+        // === 其他参数 ===
+        case 6: // 通道6：例如设置视觉增益
+             // VISUAL_POS_GAIN = val; // 如果需要调宏定义参数，需要改为全局变量
+             break;
+             
+        default: break;
+    }
 }
