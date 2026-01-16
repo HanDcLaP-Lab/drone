@@ -40,8 +40,8 @@ void Flight_Control_Init(void) {
 
     // ----------- 初始化 PID 参数 -----------
     // 高度环 
-    PID_Init(&pid_height_pos, 0.8f, 0.0f, 0.0f, 0, 150);
-    PID_Init(&pid_height_vel, 10.0f, 0.1f, 0.0f, 1000, 3000);
+    PID_Init(&pid_height_pos, 0.4f, 0.0f, 0.0f, 0, 30);
+    PID_Init(&pid_height_vel, 12.0f, 0.002f, 0.0f, 500, 1000);
     //角度环
     Nonline_PID_Init(&pid_roll,  1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
     Nonline_PID_Init(&pid_pitch, 1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
@@ -184,10 +184,14 @@ void Flight_Control_Loop(void) {
 void motor_pwm_set() {
    
     if (flight_target.is_armed == 1) {
-        pwm_set_duty(PWM_RF, (motor_out.rf * 2 / 5) + 4000);  // 假设你的电调协议需要这样转换
-        pwm_set_duty(PWM_RB, (motor_out.rb * 2 / 5) + 4000);
-        pwm_set_duty(PWM_LF, (motor_out.lf * 2 / 5) + 4000);
-        pwm_set_duty(PWM_LB, (motor_out.lb * 2 / 5) + 4000);
+         pwm_set_duty(PWM_RF, (motor_out.rf * 2 / 5) + 4000);  // 假设你的电调协议需要这样转换
+         pwm_set_duty(PWM_RB, (motor_out.rb * 2 / 5) + 4000);
+         pwm_set_duty(PWM_LF, (motor_out.lf * 2 / 5) + 4000);
+         pwm_set_duty(PWM_LB, (motor_out.lb * 2 / 5) + 4000);
+        //  pwm_set_duty(PWM_RF, (4500 * 2 / 5) + 4000);  // 假设你的电调协议需要这样转换
+        //  pwm_set_duty(PWM_RB, (4500 * 2 / 5) + 4000);
+        //  pwm_set_duty(PWM_LF, (4500 * 2 / 5) + 4000);
+        //  pwm_set_duty(PWM_LB, (4500 * 2 / 5) + 4000);
     } else {
         motor_out.rf = 0;
         motor_out.rb = 0;
@@ -245,7 +249,7 @@ void Flight_Hover_Control_Task(void) {
 
         // P 控制
         float target_pitch_val = - (error_row * VISUAL_POS_GAIN + VISUAL_POS_DOUBLE_GAIN * fabs(error_row) * error_row);
-        float target_roll_val = error_col * VISUAL_POS_GAIN +  VISUAL_POS_DOUBLE_GAIN * fabs(error_col) * error_col;
+        float target_roll_val =  (error_col * VISUAL_POS_GAIN +  VISUAL_POS_DOUBLE_GAIN * fabs(error_col) * error_col);
 
         Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
     } else {

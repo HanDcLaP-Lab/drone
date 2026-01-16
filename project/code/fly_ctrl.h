@@ -20,8 +20,8 @@
 #define CTRL_DT_CTANG 0.001   // 控制周期
 
 // 视觉控制增益
-#define VISUAL_POS_GAIN 0.03f  // 像素误差 -> 角度 线性关系
-#define VISUAL_POS_DOUBLE_GAIN 0.01  // 像素误差 -> 角度 平方关系
+#define VISUAL_POS_GAIN 0.06f  // 像素误差 -> 角度 线性关系
+#define VISUAL_POS_DOUBLE_GAIN 0.004  // 像素误差 -> 角度 平方关系
 
 #define IMG_CENTER_X (MT9V03X_W / 2.0f)
 #define IMG_CENTER_Y (MT9V03X_H / 2.0f)
