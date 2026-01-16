@@ -12,7 +12,7 @@ void PID_Init(PID_t *pid, float kp, float ki, float kd, float max_i, float out_m
     pid->prev_error = 0.0f;
 }
 
-void Nonline_PID_Init(Nonline_PID_t *pid, float kp, float ki, float kd,float kp2, float max_i, float out_max) {
+void Nonline_PID_Init(Nonline_PID_t *pid, float kp, float ki, float kd, float kp2, float max_i, float out_max) {
     pid->kp = kp;
     pid->ki = ki;
     pid->kd = kd;

@@ -8,9 +8,9 @@ float out = 0;
 // 定义 PID 对象
 static PID_t pid_height_vel;
 static PID_t pid_height_pos;
-static PID_t pid_roll;
-static PID_t pid_pitch;
-static PID_t pid_yaw;
+static Nonline_PID_t pid_roll;
+static Nonline_PID_t pid_pitch;
+static Nonline_PID_t pid_yaw;
 static PID_t pid_g_roll;
 static PID_t pid_g_pitch;
 static PID_t pid_g_yaw;
@@ -43,9 +43,9 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_height_pos, 0.8f, 0.0f, 0.0f, 0, 150);
     PID_Init(&pid_height_vel, 10.0f, 0.1f, 0.0f, 1000, 3000);
     //角度环
-    PID_Init(&pid_roll, 1.0f, 0.0f, 0.0f, 10, 40);
-    PID_Init(&pid_pitch, 1.0f, 0.0f, 0.0f, 10, 40);
-    PID_Init(&pid_yaw, 1.0f, 0.0f, 0.0f, 10, 40);
+    Nonline_PID_Init(&pid_roll,  1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
+    Nonline_PID_Init(&pid_pitch, 1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
+    Nonline_PID_Init(&pid_yaw,   1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
     //角速度环
     PID_Init(&pid_g_roll, 2.5f, 0.0f, 0.08f, 300, 800);
     PID_Init(&pid_g_pitch, 2.5f, 0.0f, 0.08f, 300, 800);
@@ -57,9 +57,9 @@ void Flight_Unlock(void) {
     // 解锁瞬间重置积分，防止暴冲
     PID_Reset(&pid_height_vel);
     PID_Reset(&pid_height_pos);
-    PID_Reset(&pid_roll);
-    PID_Reset(&pid_pitch);
-    PID_Reset(&pid_yaw);
+    Nonline_PID_Reset(&pid_roll);
+    Nonline_PID_Reset(&pid_pitch);
+    Nonline_PID_Reset(&pid_yaw);
     PID_Reset(&pid_g_roll);
     PID_Reset(&pid_g_pitch);
     PID_Reset(&pid_g_yaw);
@@ -92,9 +92,9 @@ void Flight_Control_Angle(void) {
     float yaw_error = Get_Angle_Error(flight_target.target_yaw, imu_data.yaw);
 
     // 2. PID 计算 (输出即视为机体角速度目标，基于小角度假设)
-    float target_rate_roll_body = PID_Calculate(&pid_roll, roll_error, CTRL_DT_CTANG);
-    float target_rate_pitch_body = PID_Calculate(&pid_pitch, pitch_error, CTRL_DT_CTANG);
-    float target_rate_yaw_body = PID_Calculate(&pid_yaw, yaw_error, CTRL_DT_CTANG);
+    float target_rate_roll_body = Nonline_PID_Calculate(&pid_roll, roll_error, CTRL_DT_CTANG);
+    float target_rate_pitch_body = Nonline_PID_Calculate(&pid_pitch, pitch_error, CTRL_DT_CTANG);
+    float target_rate_yaw_body = Nonline_PID_Calculate(&pid_yaw, yaw_error, CTRL_DT_CTANG);
     flight_target.target_g_roll = target_rate_roll_body;
     flight_target.target_g_pitch = target_rate_pitch_body;
     flight_target.target_g_yaw = target_rate_yaw_body;
@@ -150,7 +150,7 @@ void Flight_Control_Loop(void) {
 
     // Yaw PID (使用角度环)
     float yaw_err = flight_target.target_g_yaw - imu_data.gyaw;
-    float out_yaw = PID_Calculate(&pid_yaw, yaw_err, CTRL_DT_CTLOOP);
+    float out_yaw = PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
     
     if (flight_target.is_armed == 1 && flight_target.cur_state != landing) {
         if (start_up_scale < 1.0f) {
