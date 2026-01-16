@@ -114,7 +114,7 @@ void Flight_Control_Loop(void) {
             break;
         case landing:
             if(start_up_scale > 0)
-                start_up_scale -= 0.001;
+                start_up_scale -= 0.0005;
             break;
         default:
             break;

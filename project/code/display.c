@@ -37,9 +37,11 @@ void display_motor_output_display()
     ips200_show_int(110,16*7 , (int)imu_data.pitch, 4);
     ips200_show_string(0,16*8,"Ya:");
     ips200_show_int(30,16*8 , (int)imu_data.yaw, 4);
-    // ips200_show_string(80,16*8,"z:");
-    // ips200_show_int(110,16*8 , (int)imu_data.z, 4);
-
+    ips200_show_string(80,16*8,"z:");
+    ips200_show_int(110,16*8 , (int)imu_data.z, 4);
+    
+    ips200_show_string(80,16*10,"vz:");
+    ips200_show_int(110,16*10 , (int)imu_data.vz, 4);
     // ips200_show_string(0,16*9,"GR:");
     // ips200_show_int(30,16*9 , (int)imu_data.groll, 4);
     // ips200_show_string(80,16*9,"GP:");

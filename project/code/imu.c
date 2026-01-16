@@ -18,8 +18,8 @@ static float gravity_ref = 9.8f; // 真实的重力基准 (来自 Sensor X轴)
 static uint16_t calib_cnt = 0;
 
 // 融合参数 (建议调试时可微调)
-#define K_POS  0.3f   // 位置修正系数 (高度权重)
-#define K_VEL  0.7f   // 速度修正系数 (速度收敛快慢)
+#define K_POS  0.4f   // 位置修正系数 (高度权重)
+#define K_VEL  0.8f   // 速度修正系数 (速度收敛快慢)
 
 // ================= 内部辅助函数 =================
 static float invSqrt(float x) {
