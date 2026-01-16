@@ -1,3 +1,5 @@
+
+
 /*********************************************************************************************************************
 * CYT4BB Opensourec Library 即（ CYT4BB 开源库）是一个基于官方 SDK 接口的第三方开源库
 * Copyright (c) 2022 SEEKFREE 逐飞科技
@@ -44,7 +46,7 @@
 float m7_1_data[DATA_LENGTH] = {0};                        // 定义 M7_1 演示数据数组 浮点数类型
 
 
-int16_t image_cnt = 0;
+int32_t image_cnt = 0;
 
 int main(void)
 {
@@ -57,8 +59,8 @@ int main(void)
         M7_1_data_send(m7_1_data);
         SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
         
-        // image_cnt ++;
-        // if(image_cnt % 200 == 0) image_send();                        
+         image_cnt ++;
+        if(image_cnt % 200 == 0) image_send();                        
 
     }
 }

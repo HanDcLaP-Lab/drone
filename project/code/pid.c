@@ -74,7 +74,7 @@ float PID_Calculate(PID_t *pid, float error, float dt) {
 float Nonline_PID_Calculate(Nonline_PID_t *pid, float error, float dt) {
     // 1. P项计算
     float p_out = pid->kp * error;
-    float p2_out = pid->kp2 * error * error;
+    float p2_out = pid->kp2 * error * fabs(error);
 
     // 2. I项计算
     pid->integral += error * dt;

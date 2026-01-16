@@ -10,10 +10,6 @@ static float exInt = 0.0f, eyInt = 0.0f, ezInt = 0.0f;   // 积分误差
 
 // 陀螺仪校准相关
 static float offset_gx = 0, offset_gy = 0, offset_gz = 0;
-// [新增] 加速度计校准相关 (Sensor坐标系)
-static float offset_raw_ay = 0; // Sensor Y轴零偏 (对应机身侧向)
-static float offset_raw_az = 0; // Sensor Z轴零偏 (对应机身前后)
-static float gravity_ref = 9.8f; // 真实的重力基准 (来自 Sensor X轴)
 
 static uint16_t calib_cnt = 0;
 
@@ -129,8 +125,8 @@ static void Navigation_Update(float ax, float ay, float az) {
     float w_ay = 2*(q1q2 + q0q3)*ax + (1 - 2*(q1q1 + q3q3))*ay + 2*(q2q3 - q0q1)*az;
     float w_az = 2*(q1q3 - q0q2)*ax + 2*(q2q3 + q0q1)*ay + (1 - 2*(q1q1 + q2q2))*az;
 
-    // 3. 去除重力 (使用校准得到的真实基准值，而非宏定义)
-    w_az = w_az - gravity_ref;
+    // 3. 去除重力 
+    w_az = w_az - GRAVITY_MSS;
 
     // 4. 滤波与死区 (Z轴死区稍大，防止静态积分漂移)
     if(fabsf(w_ax) < 0.1f) w_ax = 0; 
@@ -194,7 +190,6 @@ static void Navigation_Update(float ax, float ay, float az) {
 }
 
 // ================= 对外接口函数 =================
-// [code/imu.c]
 
 void IMU_Update_Loop(void) {
   
@@ -214,29 +209,16 @@ void IMU_Update_Loop(void) {
     if (imu_data.is_calibrated == 0) {
         calib_cnt++;
         
-        // 1. 累加陀螺仪
+        // 累加陀螺仪
         offset_gx += raw_gx;
         offset_gy += raw_gy;
         offset_gz += raw_gz;
-        
-        // 2. 累加加速度计 (假设静止平放)
-        offset_raw_ay += raw_ay; // 应该为0
-        offset_raw_az += raw_az; // 应该为0
-        
-        // 垂直轴不应为0，应为当地重力，我们累加它的绝对值或相反数
-        // 因为 map_az = -raw_ax，且 map_az 向上为正(9.8)，所以 raw_ax 应该约为 -9.8
-        // 我们记录这个"1G"的模长
-        gravity_ref += -raw_ax; 
         
         if (calib_cnt >= 2500) {
             // 计算平均值
             offset_gx /= 2500.0f;
             offset_gy /= 2500.0f;
             offset_gz /= 2500.0f;
-            
-            offset_raw_ay /= 2500.0f;
-            offset_raw_az /= 2500.0f;
-            gravity_ref   /= 2500.0f; // 得到实测的重力值
 
             imu_data.is_calibrated = 1;
             imu_data.z = 0.0f;
@@ -249,10 +231,6 @@ void IMU_Update_Loop(void) {
     raw_gx -= offset_gx;
     raw_gy -= offset_gy;
     raw_gz -= offset_gz;
-
-    // 加速度计去水平零偏
-    raw_ay -= offset_raw_ay;
-    raw_az -= offset_raw_az;
     // 注意：垂直轴(raw_ax)不要减，它的基准(gravity_ref)在 Navigation_Update 里用
 
     // ================= 2. 轴向映射 (这里补全了缺失的代码) =================
@@ -268,7 +246,7 @@ void IMU_Update_Loop(void) {
     // 死区处理 (仅针对陀螺仪，防止 Yaw 漂移)
     if (fabsf(map_gx) < 0.1f) map_gx = 0; 
     if (fabsf(map_gy) < 0.1f) map_gy = 0;
-    if (map_gz > -0.1f && map_gz < 0.1f) map_gz = 0.0f; // Yaw 轴强力死区
+    if (fabsf(map_gz) < 0.1f) map_gz = 0;
 
     // ================= 3. 滤波与解算 =================
     imu_data.groll = -Kalman_Update(&K_groll, map_gx);
