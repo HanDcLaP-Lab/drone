@@ -81,7 +81,7 @@ int main(void) {
     
     //system_delay_ms(3000);
     pit_ms_init(PIT_NUM1, 1);
-    pit_ms_init(PIT_NUM2, 1000);
+    pit_ms_init(PIT_NUM2, 100);
     system_delay_ms(1000);
     pit_ms_init(PIT_NUM0, 1);
     // 此处编写用户代码 例如外设初始化代码等

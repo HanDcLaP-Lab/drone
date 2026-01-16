@@ -38,30 +38,19 @@
 
 uint32_t pit0_cnt = 0;
 uint16_t target = 0;
-int16_t tof_cnt = 0;
 // **************************** PIT中断函数 (1ms一次) ****************************
 void pit0_ch0_isr() {
     pit_isr_flag_clear(PIT_CH0);
     pit0_cnt++;
     // 1. 读取传感器硬件数据 (必须先读，IMU_Update_Loop 依赖这些全局变量)
-    imu660ra_get_acc();
-    imu660ra_get_gyro();
-    dl1b_get_distance();
-    if (dl1b_finsh_flag == 1) {
-        imu_data.tof_z = dl1b_distance_mm;
-        if(imu_data.tof_z >= 1400) imu_data.tof_z=1400;
-        static float last_tof_z;
-        imu_data.tof_vz = imu_data.tof_z - last_tof_z;
-        last_tof_z = imu_data.tof_z;
-        tof_cnt ++;
-    }
-
-    // 2. 一键更新所有数据 (算法全封装在里面了)
-    IMU_Update_Loop(imu_data.tof_z);
+    
+    
+    // 2. 一键更新所有数据
+    IMU_Update_Loop();
     
     //飞控计算
     if (imu_data.is_calibrated && flight_target.is_armed == 2) {
-        Flight_Unlock();  // 【警告】调试时请注释掉这行，防止上电即飞
+        Flight_Unlock();  
     }
 
     Flight_Control_Loop(); 
