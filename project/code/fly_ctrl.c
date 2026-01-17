@@ -1,16 +1,21 @@
 #include "fly_ctrl.h"
 
-
 // =================== 全局变量定义 ===================
 Flight_Target_t flight_target = {0};
 Motor_Output_t motor_out = {0};
 float out = 0;
+float comp_col = 0;
+float comp_row = 0;
 // 定义 PID 对象
 static PID_t pid_height_vel;
 static PID_t pid_height_pos;
 static Nonline_PID_t pid_roll;
 static Nonline_PID_t pid_pitch;
 static Nonline_PID_t pid_yaw;
+
+static Nonline_PID_t pid_image_x;
+static Nonline_PID_t pid_image_y;
+
 static PID_t pid_g_roll;
 static PID_t pid_g_pitch;
 static PID_t pid_g_yaw;
@@ -39,17 +44,20 @@ void Flight_Control_Init(void) {
     flight_target.height = 0;
 
     // ----------- 初始化 PID 参数 -----------
-    // 高度环 
-    PID_Init(&pid_height_pos, 0.4f, 0.0f, 0.0f, 0, 30);
-    PID_Init(&pid_height_vel, 12.0f, 0.002f, 0.0f, 500, 1000);
-    //角度环
-    Nonline_PID_Init(&pid_roll,  1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
+    // 高度环
+    PID_Init(&pid_height_pos, 0.4f, 0.0f, 0.0f, 0, 15);
+    PID_Init(&pid_height_vel, 10.0f, 0.001f, 0.01f, 80, 250);
+    // 角度环
+    Nonline_PID_Init(&pid_roll, 1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
     Nonline_PID_Init(&pid_pitch, 1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
-    Nonline_PID_Init(&pid_yaw,   1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
-    //角速度环
-    PID_Init(&pid_g_roll, 2.5f, 0.0f, 0.08f, 300, 800);
-    PID_Init(&pid_g_pitch, 2.5f, 0.0f, 0.08f, 300, 800);
-    PID_Init(&pid_g_yaw, 2.0f, 0.0f, 0.08f, 120, 400);
+    Nonline_PID_Init(&pid_yaw, 1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
+    // 角速度环
+    PID_Init(&pid_g_roll, 12.0f, 0.0f, 0.2f, 300, 800);
+    PID_Init(&pid_g_pitch, 12.0f, 0.0f, 0.2f, 300, 800);
+    PID_Init(&pid_g_yaw, 6.0f, 0.0f, 0.12f, 120, 400);
+    // 视觉部分
+    Nonline_PID_Init(&pid_image_x, 0.04f, 0.0f, 0.001f, 0.0009f, 1, 15);
+    Nonline_PID_Init(&pid_image_y, 0.04f, 0.0f, 0.001f, 0.0009f, 1, 15);
 }
 
 void Flight_Unlock(void) {
@@ -81,9 +89,8 @@ void Flight_Lock(void) {
 void Set_Target_Attitude(float roll, float pitch, float yaw) {
     flight_target.target_roll = Constrain_Float(roll, -MAX_TILT_ANGLE, MAX_TILT_ANGLE);
     flight_target.target_pitch = Constrain_Float(pitch, -MAX_TILT_ANGLE, MAX_TILT_ANGLE);
-    flight_target.target_yaw = yaw;  
+    flight_target.target_yaw = yaw;
 }
-
 
 void Flight_Control_Angle(void) {
     // 1. 计算误差 (绝对系)
@@ -113,7 +120,7 @@ void Flight_Control_Loop(void) {
             flight_target.target_height = LAND_HEIGHT;
             break;
         case landing:
-            if(start_up_scale > 0)
+            if (start_up_scale > 0)
                 start_up_scale -= 0.0005;
             break;
         default:
@@ -150,8 +157,8 @@ void Flight_Control_Loop(void) {
 
     // Yaw PID (使用角度环)
     float yaw_err = flight_target.target_g_yaw - imu_data.gyaw;
-    float out_yaw =  -PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
-    
+    float out_yaw = -PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
+
     if (flight_target.is_armed == 1 && flight_target.cur_state != landing) {
         if (start_up_scale < 1.0f) {
             start_up_scale += 0.0005f;  // 约2秒加满 (1ms周期)
@@ -182,12 +189,11 @@ void Flight_Control_Loop(void) {
 
 // 辅助：电机PWM设置
 void motor_pwm_set() {
-   
     if (flight_target.is_armed == 1) {
-         pwm_set_duty(PWM_RF, (motor_out.rf * 2 / 5) + 4000);  // 假设你的电调协议需要这样转换
-         pwm_set_duty(PWM_RB, (motor_out.rb * 2 / 5) + 4000);
-         pwm_set_duty(PWM_LF, (motor_out.lf * 2 / 5) + 4000);
-         pwm_set_duty(PWM_LB, (motor_out.lb * 2 / 5) + 4000);
+        pwm_set_duty(PWM_RF, (motor_out.rf * 2 / 5) + 4000);  // 假设你的电调协议需要这样转换
+        pwm_set_duty(PWM_RB, (motor_out.rb * 2 / 5) + 4000);
+        pwm_set_duty(PWM_LF, (motor_out.lf * 2 / 5) + 4000);
+        pwm_set_duty(PWM_LB, (motor_out.lb * 2 / 5) + 4000);
         //  pwm_set_duty(PWM_RF, (4500 * 2 / 5) + 4000);  // 假设你的电调协议需要这样转换
         //  pwm_set_duty(PWM_RB, (4500 * 2 / 5) + 4000);
         //  pwm_set_duty(PWM_LF, (4500 * 2 / 5) + 4000);
@@ -212,8 +218,6 @@ void motor_pwm_init() {
 }
 
 // 建议放在 code/fly_ctrl.c 末尾
-
-
 
 void M7_1_data_send(float* M7_1_data) {
     M7_1_data[0] = (float)cam_down.centers[0][0];
@@ -240,19 +244,24 @@ void Flight_Hover_Control_Task(void) {
     }
     if (cam_down.light_number >= 1) {
         // 直接计算像素误差
-        float car_row = (float)cam_down.centers[0][0];
-        float car_col = (float)cam_down.centers[0][1];
+        float car_row = (float)Kalman_Update(&K_w_ay, cam_down.centers[0][0]);
+        float car_col = (float)Kalman_Update(&K_w_ax, cam_down.centers[0][1]);
 
-        float error_row = IMG_CENTER_Y - car_row;
-        float error_col = car_col - IMG_CENTER_X;
-        if(cam_down.dot_num[0] > VALID_MIN_NUM) error_row = error_col = 0;
+        comp_row = car_row - (imu_data.pitch * ANGLE_COMP_COEF);
+
+        comp_col = car_col - (imu_data.roll * ANGLE_COMP_COEF);
+        float error_row = comp_row - IMG_CENTER_Y;
+        float error_col = comp_col - IMG_CENTER_X;
+        // if(cam_down.dot_num[0] > VALID_MIN_NUM) error_row = error_col = 0;
 
         // P 控制
-        float target_pitch_val = - (error_row * VISUAL_POS_GAIN + VISUAL_POS_DOUBLE_GAIN * fabs(error_row) * error_row);
-        float target_roll_val =  (error_col * VISUAL_POS_GAIN +  VISUAL_POS_DOUBLE_GAIN * fabs(error_col) * error_col);
+        float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, CTRL_DT_CTANG);
+        float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, CTRL_DT_CTANG);
 
         Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
     } else {
+        comp_row = IMG_CENTER_Y;
+        comp_col = IMG_CENTER_X;
         Set_Target_Attitude(0, 0, flight_target.target_yaw);
     }
 
@@ -263,41 +272,40 @@ void Flight_Hover_Control_Task(void) {
     Flight_Control_Angle();
 }
 
-
-
 // 无线调参映射函数
 // ch: 通道号 (1~8), val: 上位机发送的值
 void Fly_Param_Update(uint8_t ch, float val) {
-    switch(ch) {
+    switch (ch) {
         // === 第一组：角速度环 (最常用) ===
-        case 1: // 通道1：同时设置 Roll 和 Pitch 的 P (Kp)
+        case 1:  // 通道1：同时设置 Roll 和 Pitch 的 P (Kp)
             pid_g_roll.kp = val;
             pid_g_pitch.kp = val;
             break;
-        case 2: // 通道2：同时设置 Roll 和 Pitch 的 D (Kd)
+        case 2:  // 通道2：同时设置 Roll 和 Pitch 的 D (Kd)
             pid_g_roll.kd = val;
             pid_g_pitch.kd = val;
             break;
-            
+
         // === 第二组：角度环 ===
-        case 3: // 通道3：角度环 P
+        case 3:  // 通道3：角度环 P
             pid_roll.kp = val;
             pid_pitch.kp = val;
             break;
-            
+
         // === 第三组：Yaw轴 ===
-        case 4: // 通道4：Yaw轴速度环 P
+        case 4:  // 通道4：Yaw轴速度环 P
             pid_g_yaw.kp = val;
             break;
-        case 5: // 通道5：Yaw轴速度环 D
+        case 5:  // 通道5：Yaw轴速度环 D
             pid_g_yaw.kd = val;
             break;
 
         // === 其他参数 ===
-        case 6: // 通道6：例如设置视觉增益
-             // VISUAL_POS_GAIN = val; // 如果需要调宏定义参数，需要改为全局变量
-             break;
-             
-        default: break;
+        case 6:  // 通道6：例如设置视觉增益
+            // VISUAL_POS_GAIN = val; // 如果需要调宏定义参数，需要改为全局变量
+            break;
+
+        default:
+            break;
     }
 }

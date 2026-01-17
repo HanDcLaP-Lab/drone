@@ -10,23 +10,26 @@
 #define PWM_RB (TCPWM_CH58_P17_3)
 
 // =================== 飞行参数配置 ===================
-#define TARGET_HEIGHT_CM 60.0f  // 目标高度
+#define TARGET_HEIGHT_CM 70.0f  // 目标高度
 #define LAND_HEIGHT 10.0f       // 着陆高度
-#define HOVER_THROTTLE 4500     // 基础悬停油门 (需根据电池电压调整)
+#define HOVER_THROTTLE 4330     // 基础悬停油门 (需根据电池电压调整)
 #define MAX_PWM 5500
 #define MIN_PWM 0
-#define MAX_TILT_ANGLE 15.0f  // 最大倾角限制 (度) - 既然没速度环，这个限制很重要
+#define MAX_TILT_ANGLE 7.0f  // 最大倾角限制 (度) - 既然没速度环，这个限制很重要
 #define CTRL_DT_CTLOOP 0.001  // 控制周期
 #define CTRL_DT_CTANG 0.001   // 控制周期
 
 // 视觉控制增益
-#define VISUAL_POS_GAIN 0.06f  // 像素误差 -> 角度 线性关系
-#define VISUAL_POS_DOUBLE_GAIN 0.004  // 像素误差 -> 角度 平方关系
+#define VISUAL_POS_GAIN 0.01f  // 像素误差 -> 角度 线性关系
+#define VISUAL_POS_DOUBLE_GAIN 0.0015  // 像素误差 -> 角度 平方关系
+#define ANGLE_COMP_COEF 1.20f  //位姿对像素的补偿
 
 #define IMG_CENTER_X (MT9V03X_W / 2.0f)
 #define IMG_CENTER_Y (MT9V03X_H / 2.0f)
 
 #define VALID_MIN_NUM 300
+extern float comp_row;
+extern float comp_col;
 
 //--------------------飞行状态----------------------//
 typedef enum {
