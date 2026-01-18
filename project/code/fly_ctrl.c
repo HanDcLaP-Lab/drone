@@ -159,13 +159,11 @@ void Flight_Control_Loop(void) {
     float yaw_err = flight_target.target_g_yaw - imu_data.gyaw;
     float out_yaw = -PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
 
-    if (flight_target.is_armed == 1 && flight_target.cur_state != landing) {
+    if (flight_target.is_armed == 1 && flight_target.cur_state != landing && flight_target.cur_state != pre_landing) {
         if (start_up_scale < 1.0f) {
             start_up_scale += 0.0005f;  // 约2秒加满 (1ms周期)
         }
-    } else {
-        start_up_scale = 0.0f;
-    }
+    } 
 
     // 应用到电机输出
     motor_out.lf = (int16_t)(base_throttle * start_up_scale + (out_pitch + out_roll + out_yaw) * start_up_scale);
