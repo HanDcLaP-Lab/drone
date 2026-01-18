@@ -91,12 +91,12 @@ static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, floa
     // 6. 积分误差
     exInt += ex * KI * DT;
     eyInt += ey * KI * DT;
-    ezInt += ez * KI * DT;
+    //ezInt += ez * KI * DT;
 
     // 7. 修正角速度
     gx += KP * ex + exInt;
     gy += KP * ey + eyInt;
-    gz += KP * ez + ezInt;
+    gz += 0;
 
     // 8. 四元数更新
     float q0_last = q0, q1_last = q1, q2_last = q2, q3_last = q3;
@@ -129,9 +129,9 @@ static void Navigation_Update(float ax, float ay, float az) {
     w_az = w_az - GRAVITY_MSS;
 
     // 4. 滤波与死区 (Z轴死区稍大，防止静态积分漂移)
-    if(fabsf(w_ax) < 0.1f) w_ax = 0; 
-    if(fabsf(w_ay) < 0.1f) w_ay = 0;
-    if(fabsf(w_az) < 0.25f) w_az = 0;
+    if(fabsf(w_ax) < 0.01f) w_ax = 0; 
+    if(fabsf(w_ay) < 0.01f) w_ay = 0;
+    if(fabsf(w_az) < 0.1f) w_az = 0;
     
     // 更新到结构体 (仅用于观察方向，不用于位置控制)
     imu_data.world_ax = w_ax;
@@ -244,9 +244,9 @@ void IMU_Update_Loop(void) {
     float map_gz = -raw_gx;  // Yaw (航向)
 
     // 死区处理 (仅针对陀螺仪，防止 Yaw 漂移)
-    if (fabsf(map_gx) < 0.1f) map_gx = 0; 
-    if (fabsf(map_gy) < 0.1f) map_gy = 0;
-    if (fabsf(map_gz) < 0.1f) map_gz = 0;
+    //if (fabsf(map_gx) < 0.1f) map_gx = 0; 
+    //if (fabsf(map_gy) < 0.1f) map_gy = 0;
+    if (fabsf(map_gz) < VALID_G_MIN) map_gz = 0;
 
     // ================= 3. 滤波与解算 =================
     imu_data.groll = -Kalman_Update(&K_groll, map_gx);
@@ -256,7 +256,7 @@ void IMU_Update_Loop(void) {
     Mahony_Update(map_gx, map_gy, map_gz, map_ax, map_ay, map_az);
     
     // 欧拉角转换
-    imu_data.roll = -atan2f(2.0f * (q0 * q1 + q2 * q3), 1.0f + 2.0f * (q1 * q1 + q2 * q2)) * 180.0f / PI;
+    imu_data.roll = -atan2f(2.0f * (q0 * q1 + q2 * q3), 1.0f - 2.0f * (q1 * q1 + q2 * q2)) * 180.0f / PI;
     
     float sinp = 2.0f * (q0 * q2 - q3 * q1);
     if (fabsf(sinp) >= 1) imu_data.pitch = copysignf(90.0f, sinp);

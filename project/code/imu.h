@@ -6,10 +6,11 @@
 #include <stdint.h>
 
 // ================= 配置参数 =================
-#define KP 6.0f          // 互补滤波比例增益
+#define KP 3.0f          // 互补滤波比例增益
 #define KI 0.001f        // 互补滤波积分增益
 #define DT 0.001f        // 运行周期 1ms (1000Hz)
 #define GRAVITY_MSS 9.8f // 标准重力加速度
+#define VALID_G_MIN 0.2f
 // ================= Z轴融合参数 =================
 #define Z_CORRECT_POS_GAIN  0.3f   // 位置修正系数
 #define Z_CORRECT_VEL_GAIN  0.3f   // 速度修正系数
@@ -56,6 +57,6 @@ void IMU_Update_Loop(void);
 void imu_init(void);
 void tof_init(void);
 // [新增] 专门用于确认 IMU 方向和数据的打印函数
+//void IMU_Check_Data_Print(void);
 void IMU_Check_Data_Print(void);
-
 #endif
