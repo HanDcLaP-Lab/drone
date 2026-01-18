@@ -129,9 +129,9 @@ static void Navigation_Update(float ax, float ay, float az) {
     w_az = w_az - GRAVITY_MSS;
 
     // 4. 滤波与死区 (Z轴死区稍大，防止静态积分漂移)
-    if(fabsf(w_ax) < 0.1f) w_ax = 0; 
-    if(fabsf(w_ay) < 0.1f) w_ay = 0;
-    if(fabsf(w_az) < 0.25f) w_az = 0;
+    if(fabsf(w_ax) < 0.01f) w_ax = 0; 
+    if(fabsf(w_ay) < 0.01f) w_ay = 0;
+    if(fabsf(w_az) < 0.1f) w_az = 0;
     
     // 更新到结构体 (仅用于观察方向，不用于位置控制)
     imu_data.world_ax = w_ax;
@@ -244,9 +244,9 @@ void IMU_Update_Loop(void) {
     float map_gz = -raw_gx;  // Yaw (航向)
 
     // 死区处理 (仅针对陀螺仪，防止 Yaw 漂移)
-    if (fabsf(map_gx) < 0.1f) map_gx = 0; 
-    if (fabsf(map_gy) < 0.1f) map_gy = 0;
-    if (fabsf(map_gz) < 0.1f) map_gz = 0;
+    // if (fabsf(map_gx) < 0.1f) map_gx = 0; 
+    // if (fabsf(map_gy) < 0.1f) map_gy = 0;
+    // if (fabsf(map_gz) < 0.1f) map_gz = 0;
 
     // ================= 3. 滤波与解算 =================
     imu_data.groll = -Kalman_Update(&K_groll, map_gx);

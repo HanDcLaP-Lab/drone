@@ -58,8 +58,9 @@ void pit0_ch0_isr() {
     motor_pwm_set();
     
     // 3. 打印测试 (使用结构体 imu_data)
-    if (pit0_cnt % 100 == 0) {
-                
+    if (pit0_cnt % 400 == 0) {
+                //printf("hello!");
+      //ips200_show_int(0,16*12,pit0_cnt/400, 4);
     }
     
 }
