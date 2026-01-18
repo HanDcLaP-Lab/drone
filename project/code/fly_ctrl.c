@@ -45,19 +45,19 @@ void Flight_Control_Init(void) {
 
     // ----------- 初始化 PID 参数 -----------
     // 高度环
-    PID_Init(&pid_height_pos, 0.4f, 0.0f, 0.0f, 0, 15);
-    PID_Init(&pid_height_vel, 10.0f, 0.001f, 0.01f, 80, 250);
+    PID_Init(&pid_height_pos, 0.5f, 0.15f, 0.0f, 3, 15);
+    PID_Init(&pid_height_vel, 12.0f, 0.0f, 0.2f, 80, 250);
     // 角度环
-    Nonline_PID_Init(&pid_roll, 1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
-    Nonline_PID_Init(&pid_pitch, 1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
+    Nonline_PID_Init(&pid_roll, 1.0f, 0.8f, 0.0f, 0.0f, 10, 40);
+    Nonline_PID_Init(&pid_pitch, 1.0f, 0.8f, 0.0f, 0.0f, 10, 40);
     Nonline_PID_Init(&pid_yaw, 1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
     // 角速度环
-    PID_Init(&pid_g_roll, 12.0f, 0.0f, 0.2f, 300, 800);
-    PID_Init(&pid_g_pitch, 12.0f, 0.0f, 0.2f, 300, 800);
+    PID_Init(&pid_g_roll, 15.0f, 0.0f, 0.3f, 300, 800);
+    PID_Init(&pid_g_pitch, 15.0f, 0.0f, 0.3f, 300, 800);
     PID_Init(&pid_g_yaw, 6.0f, 0.0f, 0.12f, 120, 400);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.04f, 0.0f, 0.001f, 0.0009f, 1, 15);
-    Nonline_PID_Init(&pid_image_y, 0.04f, 0.0f, 0.001f, 0.0009f, 1, 15);
+    Nonline_PID_Init(&pid_image_x, 0.06f, 0.0f, 0.001f, 0.0009f, 1, 15);
+    Nonline_PID_Init(&pid_image_y, 0.06f, 0.0f, 0.001f, 0.0009f, 1, 15);
 }
 
 void Flight_Unlock(void) {
@@ -145,7 +145,7 @@ void Flight_Control_Loop(void) {
     int16_t base_throttle = HOVER_THROTTLE + (int16_t)throttle_adj;
     // base_throttle = (int16_t)Constrain_Float(base_throttle, MIN_PWM, MAX_PWM);
 
-    // ================= 3. 姿态控制 (核心) =================
+    // ================= 3. 姿态控制 =================
 
     // Roll PID
     float roll_err = flight_target.target_g_roll - imu_data.groll;
@@ -217,7 +217,6 @@ void motor_pwm_init() {
     pwm_init(PWM_RB, 400, 4000);
 }
 
-// 建议放在 code/fly_ctrl.c 末尾
 
 void M7_1_data_send(float* M7_1_data) {
     M7_1_data[0] = (float)cam_down.centers[0][0];
@@ -252,9 +251,11 @@ void Flight_Hover_Control_Task(void) {
         comp_col = car_col - (imu_data.roll * ANGLE_COMP_COEF);
         float error_row = comp_row - IMG_CENTER_Y;
         float error_col = comp_col - IMG_CENTER_X;
+        //if(fabs(error_col) < ACCEPT_ERROR) error_col = 0;
+        //if(fabs(error_row) < ACCEPT_ERROR) error_row = 0;
         // if(cam_down.dot_num[0] > VALID_MIN_NUM) error_row = error_col = 0;
 
-        // P 控制
+        // PID 控制
         float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, CTRL_DT_CTANG);
         float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, CTRL_DT_CTANG);
 
@@ -263,9 +264,9 @@ void Flight_Hover_Control_Task(void) {
         comp_row = IMG_CENTER_Y;
         comp_col = IMG_CENTER_X;
         Set_Target_Attitude(0, 0, flight_target.target_yaw);
-    }
+    }                                                                                                                                                        
 
-    // 3. 自动解锁与控制循环 (保持不变)
+    // 3. 自动解锁与控制循环 
     if (imu_data.is_calibrated && flight_target.is_armed == 2) {
         Flight_Unlock();
     }

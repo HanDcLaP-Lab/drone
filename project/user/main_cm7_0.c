@@ -65,9 +65,8 @@ int main(void) {
     seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
 
     display_init();
-    camera_init();
-    //Kalman_Init(&K_w_ax,1e-4f,0.01,0);
-    //Kalman_Init(&K_w_ay,1e-4f,0.01,0);
+    Kalman_Init(&K_w_ax,1e-3f,0.01,0);
+    Kalman_Init(&K_w_ay,1e-3f,0.01,0);
     Kalman_Init(&K_groll,1e-3f,0.001,0);
     Kalman_Init(&K_gpitch,1e-3f,0.001,0);
     Kalman_Init(&K_gyaw,1e-3f,0.001,0);
@@ -81,7 +80,7 @@ int main(void) {
     
     //system_delay_ms(3000);
     pit_ms_init(PIT_NUM1, 1);
-    pit_ms_init(PIT_NUM2, 100);
+    pit_ms_init(PIT_NUM2, 1000);
     system_delay_ms(1000);
     pit_ms_init(PIT_NUM0, 1);
     // 此处编写用户代码 例如外设初始化代码等
@@ -90,25 +89,25 @@ int main(void) {
 
     // 在 user/main_cm7_0.c 的 while(true) 循环中
     while (true) {
-        seekfree_assistant_data_analysis();
+        // seekfree_assistant_data_analysis();
 
-        // 2. 检查是否有参数更新 (遍历所有通道)
-        for (int i = 0; i < SEEKFREE_ASSISTANT_SET_PARAMETR_COUNT; i++) {
-            // 如果第 i 个通道有数据更新标志
-            if (seekfree_assistant_parameter_update_flag[i]) {
-                // 清除标志位
-                seekfree_assistant_parameter_update_flag[i] = 0;
+        // // 2. 检查是否有参数更新 (遍历所有通道)
+        // for (int i = 0; i < SEEKFREE_ASSISTANT_SET_PARAMETR_COUNT; i++) {
+        //     // 如果第 i 个通道有数据更新标志
+        //     if (seekfree_assistant_parameter_update_flag[i]) {
+        //         // 清除标志位
+        //         seekfree_assistant_parameter_update_flag[i] = 0;
                 
-                // 将参数应用到 PID (通道号 = 索引 + 1)
-                // seekfree_assistant_parameter[i] 是接收到的浮点数值
-                Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]); 
+        //         // 将参数应用到 PID (通道号 = 索引 + 1)
+        //         // seekfree_assistant_parameter[i] 是接收到的浮点数值
+        //         Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]); 
                 
-                // 可选：通过无线串口回传确认，告诉上位机收到并更新了
-                // wireless_uart_send_string("Param Updated\r\n");
-            }
-        }
+        //         // 可选：通过无线串口回传确认，告诉上位机收到并更新了
+        //         // wireless_uart_send_string("Param Updated\r\n");
+        //     }
+        // }
 
-        system_delay_ms(10); // 稍微延时，给 CPU 喘息
+        system_delay_ms(100); // 稍微延时，给 CPU 喘息
 
     }
 }

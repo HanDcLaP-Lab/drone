@@ -20,9 +20,9 @@ void display_motor_output_display()
     ips200_show_int(110,16*3,motor_out.rb, 4);
     
   
-    ips200_show_string(0,16*4,"P_kp:");
+    ips200_show_string(0,16*4,"y:");
     ips200_show_int(30,16*4 , cam_down.centers[0][0], 4);
-    ips200_show_string(80,16*4,"P_kd:");
+    ips200_show_string(80,16*4,"x:");
     ips200_show_int(110,16*4 , cam_down.centers[0][1], 4);
     
     ips200_show_string(0,16*5,"t_p:");
