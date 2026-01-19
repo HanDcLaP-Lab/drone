@@ -12,7 +12,7 @@ static float exInt = 0.0f, eyInt = 0.0f, ezInt = 0.0f;   // 积分误差
 static float offset_gx = 0, offset_gy = 0, offset_gz = 0;
 
 static uint16_t calib_cnt = 0;
-
+#define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
 // 融合参数 (建议调试时可微调)
 #define K_POS  0.4f   // 位置修正系数 (高度权重)
 #define K_VEL  0.8f   // 速度修正系数 (速度收敛快慢)
@@ -57,48 +57,79 @@ void tof_init(void){
         system_delay_ms(1000); 
     }
 }
-
 static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, float az) {
     float norm;
     float vx, vy, vz;
     float ex, ey, ez;
 
-    // 1. 计算加速度模长
-    float accel_magnitude = sqrtf(ax*ax + ay*ay + az*az);
+    // 1. 计算加速度模长 (用于计算偏差)
+    // 假设传入的 ax,ay,az 单位是 m/s^2 (根据您代码中的 GRAVITY_MSS 宏)
+    // 如果传入的是归一化值(1.0g)，请将 9.8f 改为 1.0f
+    float acc_norm = sqrtf(ax * ax + ay * ay + az * az);
 
     // 2. 角度转弧度
     gx *= (PI / 180.0f);
     gy *= (PI / 180.0f);
     gz *= (PI / 180.0f);
 
-    // 3. 加速度归一化
-    if (accel_magnitude < 0.1f) return; 
-    float inv_norm = 1.0f / accel_magnitude;
+    // ==============================================================================
+    // 【核心逻辑：连续误差补偿】 (Adaptive Gain)
+    // 我们无法算出干扰向量的方向，但能算出干扰的"烈度"。
+    // 利用这个烈度，动态调整修正力度。
+    // ==============================================================================
+    float acc_weight = 1.0f;
+    float error_magnitude = fabsf(acc_norm - GRAVITY_MSS); // 计算与重力(9.8)的偏差绝对值
+
+    // 补偿曲线设计：
+    // 偏差 < 0.5 (约0.05g): 认为是噪声，权重 1.0 (完全信任)
+    // 偏差 > 2.5 (约0.25g): 认为是显著运动干扰，权重 0.0 (完全屏蔽)
+    // 中间区域 : 使用线性插值进行平滑补偿，绝非简单的死区跳变
+    if (error_magnitude > 0.8f) {
+        acc_weight = 0.0f; 
+    } else if (error_magnitude > 0.4f) {
+        // 线性衰减公式：随着误差变大，权重线性下降
+        acc_weight = 1.0f - (error_magnitude - 0.4f) / (0.8f - 0.4f);
+    }
+    // 结果：acc_weight 是一个 0.0 ~ 1.0 之间的连续系数
+
+    // 3. 加速度归一化 (Mahony 必须步骤)
+    if (acc_norm < 0.1f) return; 
+    float inv_norm = 1.0f / acc_norm;
     ax *= inv_norm;
     ay *= inv_norm;
     az *= inv_norm;
 
-    // 4. 估计重力方向
+    // 4. 估计重力方向 (基于当前四元数推算)
     vx = 2.0f * (q1 * q3 - q0 * q2);
     vy = 2.0f * (q0 * q1 + q2 * q3);
     vz = q0 * q0 - q1 * q1 - q2 * q2 + q3 * q3;
 
-    // 5. 误差计算 (叉积)
+    // 5. 误差计算 (叉积: 测量向量 x 估计向量)
     ex = (ay * vz - az * vy);
     ey = (az * vx - ax * vz);
     ez = (ax * vy - ay * vx);
 
-    // 6. 积分误差
-    exInt += ex * KI * DT;
-    eyInt += ey * KI * DT;
-    //ezInt += ez * KI * DT;
+    // 6. 积分误差 (Integral Feedback)
+    // 【关键补偿】：当运动剧烈(权重低)时，必须停止积分！
+    // 否则错误的加速度会被"记忆"到陀螺仪零偏中，导致停下来后Yaw还在飘
+    if (acc_weight > 0.1f) { 
+        exInt += ex * KI * DT * acc_weight;
+        eyInt += ey * KI * DT * acc_weight;
+        // ezInt += ez * KI * DT; // Z轴(Yaw)本身就不该有加速度积分修正
+    }
+    
+    // 7. 修正角速度 (Proportional Feedback)
+    // 将计算出的 acc_weight 乘入 KP
+    // 这样做的物理含义是：当存在非重力加速度时，我们"相应地"降低对加速度计的信任
+    // 这是一个动态调节过程，不是死区。
+    gx += KP * acc_weight * ex + exInt;
+    gy += KP * acc_weight * ey + eyInt;
+    
+    // Z轴处理：Yaw 轴绝对不能接受加速度计的直接修正 (会引入严重的离心力漂移)
+    // 之前的 gz += 0 是完全正确的。Yaw 只能靠陀螺仪积分。
+    gz += 0; 
 
-    // 7. 修正角速度
-    gx += KP * ex + exInt;
-    gy += KP * ey + eyInt;
-    gz += 0;
-
-    // 8. 四元数更新
+    // 8. 四元数更新 (毕卡算法)
     float q0_last = q0, q1_last = q1, q2_last = q2, q3_last = q3;
     q0 += (-q1_last * gx - q2_last * gy - q3_last * gz) * (0.5f * DT);
     q1 += ( q0_last * gx + q2_last * gz - q3_last * gy) * (0.5f * DT);
@@ -112,7 +143,6 @@ static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, floa
     q2 *= norm;
     q3 *= norm;
 }
-
 
 static void Navigation_Update(float ax, float ay, float az) {
     // 1. 预计算四元数乘积

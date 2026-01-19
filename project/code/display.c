@@ -20,9 +20,9 @@ void display_motor_output_display()
     ips200_show_int(160,16*3,motor_out.rb, 4);
     
   
-    ips200_show_string(0,16*4,"P_kp:");
+    ips200_show_string(0,16*4,"y:");
     ips200_show_int(40,16*4 , cam_down.centers[0][0], 4);
-    ips200_show_string(120,16*4,"P_kd:");
+    ips200_show_string(120,16*4,"x:");
     ips200_show_int(160,16*4 , cam_down.centers[0][1], 4);
     
     ips200_show_string(0,16*5,"t_p:");
@@ -40,8 +40,8 @@ void display_motor_output_display()
     ips200_show_string(120,16*8,"z:");
     ips200_show_float(160,16*8 , imu_data.z, 3,2);
     
-    ips200_show_string(120,16*10,"vz:");
-    ips200_show_float(160,16*10 , imu_data.vz, 3,2);
+    // ips200_show_string(120,16*10,"yaw:");
+    // ips200_show_float(160,16*10 , imu_data.yaw, 3,2);
     // ips200_show_string(0,16*9,"GR:");
     // ips200_show_int(40,16*9 , (int)imu_data.groll, 4);
     // ips200_show_string(120,16*9,"GP:");

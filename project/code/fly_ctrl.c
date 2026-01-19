@@ -56,8 +56,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_pitch, 15.0f, 0.0f, 0.3f, 300, 800);
     PID_Init(&pid_g_yaw, 6.0f, 0.0f, 0.12f, 120, 400);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.06f, 0.0f, 0.001f, 0.0009f, 1, 15);
-    Nonline_PID_Init(&pid_image_y, 0.06f, 0.0f, 0.001f, 0.0009f, 1, 15);
+    Nonline_PID_Init(&pid_image_x, 0.04f, 0.0f, 0.001f, 0.0009f, 1, 15);
+    Nonline_PID_Init(&pid_image_y, 0.04f, 0.0f, 0.001f, 0.0009f, 1, 15);
 }
 
 void Flight_Unlock(void) {
