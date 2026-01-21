@@ -48,16 +48,16 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_height_pos, 0.5f, 0.15f, 0.0f, 3, 15);
     PID_Init(&pid_height_vel, 12.0f, 0.0f, 0.2f, 80, 250);
     // 角度环
-    Nonline_PID_Init(&pid_roll, 1.0f, 0.8f, 0.0f, 0.0f, 10, 40);
-    Nonline_PID_Init(&pid_pitch, 1.0f, 0.8f, 0.0f, 0.0f, 10, 40);
-    Nonline_PID_Init(&pid_yaw, 1.0f, 0.0f, 0.0f, 0.0f, 10, 40);
+    Nonline_PID_Init(&pid_roll, 1.8f, 0.6f, 0.0f, 0.0f, 2.5, 15);
+    Nonline_PID_Init(&pid_pitch, 1.8f, 0.6f, 0.0f, 0.0f, 2.5, 15);
+    Nonline_PID_Init(&pid_yaw, 1.0f, 0.0f, 0.0f, 0.0f, 5, 15);
     // 角速度环
     PID_Init(&pid_g_roll, 15.0f, 0.0f, 0.3f, 300, 800);
     PID_Init(&pid_g_pitch, 15.0f, 0.0f, 0.3f, 300, 800);
     PID_Init(&pid_g_yaw, 6.0f, 0.0f, 0.12f, 120, 400);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.04f, 0.0f, 0.001f, 0.0009f, 1, 15);
-    Nonline_PID_Init(&pid_image_y, 0.04f, 0.0f, 0.001f, 0.0009f, 1, 15);
+    Nonline_PID_Init(&pid_image_x, 0.03f, 0.0f, 0.00008f, 0.0005f, 1, 15);
+    Nonline_PID_Init(&pid_image_y, 0.03f, 0.0f, 0.00008f, 0.0005f, 1, 15);
 }
 
 void Flight_Unlock(void) {
@@ -121,7 +121,7 @@ void Flight_Control_Loop(void) {
             break;
         case landing:
             if (start_up_scale > 0)
-                start_up_scale -= 0.0005;
+                start_up_scale -= 0.002;
             break;
         default:
             break;
@@ -249,8 +249,8 @@ void Flight_Hover_Control_Task(void) {
         comp_col = car_col - (imu_data.roll * ANGLE_COMP_COEF);
         float error_row = comp_row - IMG_CENTER_Y;
         float error_col = comp_col - IMG_CENTER_X;
-        //if(fabs(error_col) < ACCEPT_ERROR) error_col = 0;
-        //if(fabs(error_row) < ACCEPT_ERROR) error_row = 0;
+        if(fabs(error_col) < ACCEPT_ERROR) error_col = 0;
+        if(fabs(error_row) < ACCEPT_ERROR) error_row = 0;
         // if(cam_down.dot_num[0] > VALID_MIN_NUM) error_row = error_col = 0;
 
         // PID 控制

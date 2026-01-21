@@ -264,14 +264,14 @@ void IMU_Update_Loop(void) {
     // 注意：垂直轴(raw_ax)不要减，它的基准(gravity_ref)在 Navigation_Update 里用
 
     // ================= 2. 轴向映射 (这里补全了缺失的代码) =================
-    float map_ax = -raw_az;  // 机头
+    float map_ax = raw_az;  // 机头
     float map_ay = -raw_ay;  // 机身右侧
     float map_az = -raw_ax;  // 垂直方向
 
     //  之前漏掉了下面这三行陀螺仪映射定义
-    float map_gx = -raw_gz;  // Roll (横滚)
+    float map_gx = raw_gz;  // Roll (横滚)
     float map_gy = -raw_gy;  // Pitch (俯仰)
-    float map_gz = -raw_gx;  // Yaw (航向)
+    float map_gz = raw_gx;  // Yaw (航向)
 
     // 死区处理 (仅针对陀螺仪，防止 Yaw 漂移)
     //if (fabsf(map_gx) < 0.1f) map_gx = 0; 
@@ -279,9 +279,9 @@ void IMU_Update_Loop(void) {
     if (fabsf(map_gz) < VALID_G_MIN) map_gz = 0;
 
     // ================= 3. 滤波与解算 =================
-    imu_data.groll = -Kalman_Update(&K_groll, map_gx);
+    imu_data.groll = -Kalman_Update(&K_groll, -map_gx);
     imu_data.gpitch = Kalman_Update(&K_gpitch, map_gy);
-    imu_data.gyaw = Kalman_Update(&K_gyaw, map_gz);
+    imu_data.gyaw = Kalman_Update(&K_gyaw, -map_gz);
     
     Mahony_Update(map_gx, map_gy, map_gz, map_ax, map_ay, map_az);
     
@@ -290,9 +290,9 @@ void IMU_Update_Loop(void) {
     
     float sinp = 2.0f * (q0 * q2 - q3 * q1);
     if (fabsf(sinp) >= 1) imu_data.pitch = copysignf(90.0f, sinp);
-    else imu_data.pitch = asinf(sinp) * 180.0f / PI;
+    else imu_data.pitch =  - asinf(sinp) * 180.0f / PI;
     
-    imu_data.yaw = atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
+    imu_data.yaw = - atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
 
     Navigation_Update(map_ax, map_ay, map_az);
 }
