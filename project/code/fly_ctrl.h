@@ -12,7 +12,7 @@
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 40.0f  // 目标高度
 #define LAND_HEIGHT 10.0f       // 着陆高度
-#define HOVER_THROTTLE 4330     // 基础悬停油门 
+#define HOVER_THROTTLE 4300     // 基础悬停油门 
 #define MAX_PWM 5500
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 3.0f  // 最大倾角限制 (度) 
@@ -67,6 +67,7 @@ typedef struct {
 // =================== 全局变量 ===================
 extern Flight_Target_t flight_target;
 extern Motor_Output_t motor_out;
+
 
 // =================== 函数声明 ===================
 void Flight_Control_Init(void);

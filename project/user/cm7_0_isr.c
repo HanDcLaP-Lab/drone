@@ -70,15 +70,22 @@ void pit0_ch1_isr()
     pit_isr_flag_clear(PIT_CH1);
 
     // 调用封装好的悬停控制任务
-    Flight_Hover_Control_Task(); 
+    //Flight_Hover_Control_Task(); 
 }
 
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
     display_motor_output_display();
-    //printf("%d" , tof_cnt);
-    //wireless_uart_send_string("AAA");
+
+    wireless_uart_send_float(flight_target.target_roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_pitch);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.pitch);
+    wireless_uart_send_string("\n");
 }
 
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数

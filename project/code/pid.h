@@ -32,6 +32,19 @@ typedef struct {
     float integral;     // 积分累加值
     float prev_error;   // 上一次误差 (用于计算微分)
 } Nonline_PID_t;
+
+extern PID_t pid_height_vel;
+extern PID_t pid_height_pos;
+extern Nonline_PID_t pid_roll;
+extern Nonline_PID_t pid_pitch;
+extern Nonline_PID_t pid_yaw;
+
+extern Nonline_PID_t pid_image_x;
+extern Nonline_PID_t pid_image_y;
+
+extern PID_t pid_g_roll;
+extern PID_t pid_g_pitch;
+extern PID_t pid_g_yaw;
 // =================== 函数声明 ===================
 
 /**

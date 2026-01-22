@@ -53,15 +53,15 @@ int main(void)
     clock_init(SYSTEM_CLOCK_250M); 	// 时钟配置及系统初始化<务必保留>
     debug_info_init();                  // 调试串口信息初始化
 
-    camera_init();
+    //camera_init();
     while(true)
     {          
-        image_processing_loop();
-        M7_1_data_send(m7_1_data);
-        SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
+        // image_processing_loop();
+        // M7_1_data_send(m7_1_data);
+        // SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
         
-         image_cnt ++;
-        if(image_cnt % 200 == 0) image_send();                        
+        //  image_cnt ++;
+        // if(image_cnt % 200 == 0) image_send();                        
 
     }
 }

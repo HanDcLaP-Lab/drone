@@ -200,14 +200,14 @@ void wireless_uart_callback (void)
     {
         
         // --- 新增逻辑 ---
-        if(wireless_uart_data == 'r') {
-            wireless_uart_send_string("land\r\n");
-            flight_target.cur_state = pre_landing; 
-        }
-        else if(wireless_uart_data == 's') {
-            wireless_uart_send_string("emergency stop\r\n");
-            flight_target.cur_state = landing;
-        }
+        // if(wireless_uart_data == 'r') {
+        //     wireless_uart_send_string("land\r\n");
+        //     flight_target.cur_state = pre_landing; 
+        // }
+        // else if(wireless_uart_data == 's') {
+        //     wireless_uart_send_string("emergency stop\r\n");
+        //     flight_target.cur_state = landing;
+        // }
         // --- 新增逻辑 ---
         
         fifo_write_buffer(&wireless_uart_fifo, &wireless_uart_data, 1);
