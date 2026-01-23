@@ -219,21 +219,21 @@ void motor_pwm_init() {
 }
 
 
-void M7_1_data_send(float* M7_1_data) {
+void M7_1_data_send(float* M7_1_data, float* uart_data) {
     M7_1_data[0] = (float)cam_down.centers[0][0];
     M7_1_data[1] = (float)cam_down.centers[0][1];
     M7_1_data[2] = (float)cam_down.dot_num[0];
-    M7_1_data[3] = (float)cam_down.centers[1][0];
-    M7_1_data[4] = (float)cam_down.centers[1][1];
-    M7_1_data[5] = (float)cam_down.dot_num[1];
+    uart_data[0] = (float)cam_down.centers[1][0];
+    uart_data[1] = (float)cam_down.centers[1][1];
+    uart_data[2] = (float)cam_down.dot_num[1];
 
     if (cam_down.light_number == 0) {
-        M7_1_data[2] = M7_1_data[5] = 0;
+        M7_1_data[2] = uart_data[2] = 0;
     }
 }
 
 void Flight_Hover_Control_Task(void) {
-    SCB_CleanInvalidateDCache_by_Addr((void*)&m7_1_data, sizeof(float) * 6);
+    SCB_CleanInvalidateDCache_by_Addr((void*)&m7_1_data, sizeof(float) * DATA_LENGTH);
     cam_down.centers[0][0] = (uint32_t)m7_1_data[0];  // Row
     cam_down.centers[0][1] = (uint32_t)m7_1_data[1];  // Col
     cam_down.dot_num[0] = (uint32_t)m7_1_data[2];     // Area

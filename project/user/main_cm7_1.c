@@ -37,13 +37,17 @@
 
 #include "zf_common_headfile.h"
 
+#define TEST_UART        UART_4 
+#define TEST_BAUDRATE    115200 
+#define TEST_TX_PIN      UART4_TX_P14_1 
+#define TEST_RX_PIN      UART4_RX_P14_0  
 //----------------------------多核通讯-----------------------------//
 
-#define DATA_LENGTH               (6)                                           // 数组数据长度
+#define DATA_LENGTH               (3)                                           // 数组数据长度
 
 #pragma location = 0x28001000                                                   // 将下面这个数组定义到指定的RAM地址，便于其他核心直接访问(开源库默认在 0x28001000 地址保留了8kb的空间用于数据交互)
                                                                                 // 此处为0x28001014的原因是前面放了一个M0的数组
-float m7_1_data[DATA_LENGTH] = {0};                        // 定义 M7_1 演示数据数组 浮点数类型
+float m7_1_data[DATA_LENGTH] = {0}, uart_data[DATA_LENGTH] = {0};                        // 定义 M7_1 演示数据数组 浮点数类型
 
 
 int32_t image_cnt = 0;
@@ -53,13 +57,16 @@ int main(void)
     clock_init(SYSTEM_CLOCK_250M); 	// 时钟配置及系统初始化<务必保留>
     debug_info_init();                  // 调试串口信息初始化
 
-    //camera_init();
+    uart_init(TEST_UART, TEST_BAUDRATE, TEST_TX_PIN, TEST_RX_PIN);
+    camera_init();
     while(true)
     {          
-        // image_processing_loop();
-        // M7_1_data_send(m7_1_data);
-        // SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
+        image_processing_loop();
+        M7_1_data_send(m7_1_data,uart_data);
+        SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
         
+        //UART发送
+        uart_write_buffer(TEST_UART, uart_data, sizeof(uart_data));
         //  image_cnt ++;
         // if(image_cnt % 200 == 0) image_send();                        
 

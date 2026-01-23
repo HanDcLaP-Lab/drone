@@ -27,6 +27,8 @@
 
 #define VALID_MIN_NUM 300
 #define ACCEPT_ERROR 6.0f
+//视觉传输
+#define DATA_LENGTH (3)
 extern float comp_row;
 extern float comp_col;
 
@@ -81,7 +83,7 @@ void motor_pwm_set(void);
 void motor_pwm_init(void);
 
 // 视觉/上层逻辑
-void M7_1_data_send(float* M7_1_data);
+void M7_1_data_send(float* M7_1_data,float* uart_data);
 /**
  * @brief 自动悬停控制逻辑封装
  * @note 内部处理视觉补偿、姿态设定及 PID 计算
