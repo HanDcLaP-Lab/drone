@@ -195,10 +195,6 @@ void motor_pwm_set() {
         pwm_set_duty(PWM_RB, (motor_out.rb * 2 / 5) + 4000);
         pwm_set_duty(PWM_LF, (motor_out.lf * 2 / 5) + 4000);
         pwm_set_duty(PWM_LB, (motor_out.lb * 2 / 5) + 4000);
-        //  pwm_set_duty(PWM_RF, (4500 * 2 / 5) + 4000);  // 假设你的电调协议需要这样转换
-        //  pwm_set_duty(PWM_RB, (4500 * 2 / 5) + 4000);
-        //  pwm_set_duty(PWM_LF, (4500 * 2 / 5) + 4000);
-        //  pwm_set_duty(PWM_LB, (4500 * 2 / 5) + 4000);
     } else {
         motor_out.rf = 0;
         motor_out.rb = 0;
