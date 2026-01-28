@@ -1,8 +1,8 @@
-// ³õÊ¼»¯º¯Êý
+// åˆå§‹åŒ–å‡½æ•°
 #include "kalman_filter.h"
 #include "zf_common_headfile.h"
 
-KalmanFilter1 K_w_ax,K_w_ay,K_groll,K_gpitch,K_gyaw,K_ax,K_ay,K_az; // ¿¨¶ûÂü¶¨Òå
+KalmanFilter1 K_w_ax,K_w_ay,K_groll,K_gpitch,K_gyaw,K_ax,K_ay,K_az; // å¡å°”æ›¼å®šä¹‰
 void Kalman_Init(KalmanFilter1* kf, float q, float r, float initial_value) {
     kf->q = q;
     kf->r = r;
@@ -12,11 +12,11 @@ void Kalman_Init(KalmanFilter1* kf, float q, float r, float initial_value) {
 }
 
 
-// ¿¨¶ûÂüÂË²¨¸üÐÂº¯Êý
+// å¡å°”æ›¼æ»¤æ³¢æ›´æ–°å‡½æ•°
 float Kalman_Update(KalmanFilter1* kf, float measurement) {
-    kf->p = kf->p + kf->q;                          // Ô¤²â
-    kf->k = kf->p / (kf->p + kf->r);                // ¸üÐÂ¿¨¶ûÂüÔöÒæ
-    kf->x = kf->x + kf->k * (measurement - kf->x);  // ¸üÐÂ¹À¼ÆÖµ
-    kf->p = (1 - kf->k) * kf->p;                    // ¸üÐÂÎó²îÐ­·½²î
+    kf->p = kf->p + kf->q;                          // é¢„æµ‹
+    kf->k = kf->p / (kf->p + kf->r);                // æ›´æ–°å¡å°”æ›¼å¢žç›Š
+    kf->x = kf->x + kf->k * (measurement - kf->x);  // æ›´æ–°ä¼°è®¡å€¼
+    kf->p = (1 - kf->k) * kf->p;                    // æ›´æ–°è¯¯å·®åæ–¹å·®
     return kf->x;
 }

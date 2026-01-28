@@ -2,11 +2,11 @@
 #define _KALMAN_FILTER_H
 
 typedef struct {
-    float x;  // ×´Ì¬±äÁ¿£¨¹À¼ÆµÄËÙ¶È/Âö³åÊı£©
-    float p;  // ¹À¼ÆĞ­·½²î
-    float q;  // ¹ı³ÌÔëÉùĞ­·½²î£¨ÏµÍ³Ä£ĞÍµÄ²»È·¶¨ĞÔ£©
-    float r;  // ²âÁ¿ÔëÉùĞ­·½²î£¨´«¸ĞÆ÷ÔëÉù£©
-    float k;  // ¿¨¶ûÂüÔöÒæ
+    float x;  // çŠ¶æ€å˜é‡ï¼ˆä¼°è®¡çš„é€Ÿåº¦/è„‰å†²æ•°ï¼‰
+    float p;  // ä¼°è®¡åæ–¹å·®
+    float q;  // è¿‡ç¨‹å™ªå£°åæ–¹å·®ï¼ˆç³»ç»Ÿæ¨¡å‹çš„ä¸ç¡®å®šæ€§ï¼‰
+    float r;  // æµ‹é‡å™ªå£°åæ–¹å·®ï¼ˆä¼ æ„Ÿå™¨å™ªå£°ï¼‰
+    float k;  // å¡å°”æ›¼å¢ç›Š
 } KalmanFilter1;
 
 void Kalman_Init(KalmanFilter1* kf, float q, float r, float initial_value);

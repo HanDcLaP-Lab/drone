@@ -9,7 +9,7 @@ void display_init()
 }
 void display_motor_output_display()
 {
-  //电机输出
+  //鐢垫満杈撳嚭
     ips200_show_string(0,16*2,"lf:");
     ips200_show_int(40,16*2,motor_out.lf, 4);
     ips200_show_string(120,16*2,"rf:");
@@ -30,7 +30,7 @@ void display_motor_output_display()
     ips200_show_string(120,16*5,"t_r:");
     ips200_show_float(160,16*5 , flight_target.target_roll, 3,2);
 
-    // //imu数据
+    // //imu鏁版嵁
     ips200_show_string(0,16*7,"Ro:");
     ips200_show_float(40,16*7 , imu_data.roll, 3,2);
     ips200_show_string(120,16*7,"Pi:");

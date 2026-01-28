@@ -8,5 +8,5 @@
 #define IPS200_TYPE     (IPS200_TYPE_SPI)       
 
 void display_init();
-void display_motor_output_display();
+void display_motor_output_display(); 
 #endif
