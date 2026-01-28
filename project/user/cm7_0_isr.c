@@ -42,9 +42,7 @@ uint16_t target = 0;
 void pit0_ch0_isr() {
     pit_isr_flag_clear(PIT_CH0);
     pit0_cnt++;
-    if (imu_data.is_calibrated && flight_target.is_armed == 2) {
-        Flight_Unlock();  
-    }
+    // 自动解锁逻辑已移至 Flight_Control_Loop -> Flight_State_Update 中
     IMU_Update_Loop();
 
     Flight_Control_Loop(); 
@@ -64,9 +62,9 @@ void pit0_ch1_isr()
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
-    //display_motor_output_display();
 
-    wireless_uart_output_imu();
+    display_motor_output_display();
+    //wireless_uart_output_imu();
 }
 
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数

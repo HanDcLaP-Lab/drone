@@ -267,11 +267,10 @@ void IMU_Update_Loop(void) {
             float avg_ay = (float)(sum_ay / 2500.0);
             float avg_az = (float)(sum_az / 2500.0);
 
-            // 映射到机体坐标系 (需与下方 Loop 中的映射保持一致)
-            // map_ax = raw_az, map_ay = -raw_ay, map_az = -raw_ax
-            float init_ax = avg_az;
-            float init_ay = -avg_ay;
-            float init_az = -avg_ax;
+            // 映射到机体坐标系 (使用宏定义保持一致)
+            float init_ax = IMU_MAP_AX(avg_ax, avg_ay, avg_az);
+            float init_ay = IMU_MAP_AY(avg_ax, avg_ay, avg_az);
+            float init_az = IMU_MAP_AZ(avg_ax, avg_ay, avg_az);
 
             // 计算初始欧拉角 (假设初始Yaw为0)
             float init_roll = atan2f(init_ay, init_az);
@@ -306,13 +305,14 @@ void IMU_Update_Loop(void) {
     // 注意：垂直轴(raw_ax)不要减，它的基准(gravity_ref)在 Navigation_Update 里用
 
     // ================= 2. 轴向映射 (这里补全了缺失的代码) =================
-    float map_ax = raw_az;  // 机头
-    float map_ay = -raw_ay;  // 机身右侧
-    float map_az = -raw_ax;  // 垂直方向
+    // 使用宏定义进行映射，提高可维护性
+    float map_ax = IMU_MAP_AX(raw_ax, raw_ay, raw_az);
+    float map_ay = IMU_MAP_AY(raw_ax, raw_ay, raw_az);
+    float map_az = IMU_MAP_AZ(raw_ax, raw_ay, raw_az);
 
-    float map_gx = -raw_gz;  // Roll (横滚)
-    float map_gy = raw_gy;  // Pitch (俯仰)
-    float map_gz = -raw_gx;  // Yaw (航向)
+    float map_gx = IMU_MAP_GX(raw_gx, raw_gy, raw_gz);
+    float map_gy = IMU_MAP_GY(raw_gx, raw_gy, raw_gz);
+    float map_gz = IMU_MAP_GZ(raw_gx, raw_gy, raw_gz);
 
     // 死区处理 (仅针对陀螺仪，防止 Yaw 漂移)
     //if (fabsf(map_gx) < 0.1f) map_gx = 0; 
@@ -326,11 +326,12 @@ void IMU_Update_Loop(void) {
     Mahony_Update(map_gx, map_gy, map_gz, map_ax, map_ay, map_az);
     
     // 欧拉角转换
-    imu_data.roll = -atan2f(2.0f * (q0 * q1 + q2 * q3), 1.0f - 2.0f * (q1 * q1 + q2 * q2)) * 180.0f / PI;
+    // 修正为标准欧拉角公式 (NED坐标系)
+    imu_data.roll = atan2f(2.0f * (q0 * q1 + q2 * q3), 1.0f - 2.0f * (q1 * q1 + q2 * q2)) * 180.0f / PI;
     
     float sinp = 2.0f * (q0 * q2 - q3 * q1);
     if (fabsf(sinp) >= 1) imu_data.pitch = copysignf(90.0f, sinp);
-    else imu_data.pitch =  - asinf(sinp) * 180.0f / PI;
+    else imu_data.pitch = asinf(sinp) * 180.0f / PI;
 
     // ================= 4. 应用安装误差补偿 =================
     imu_data.roll  -= IMU_MOUNT_ADJUST_ROLL;

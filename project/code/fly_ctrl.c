@@ -40,8 +40,9 @@ static float Get_Angle_Error(float target, float current) {
 
 void Flight_Control_Init(void) {
     flight_target.cur_state = normal;
-    flight_target.is_armed = 2;  // 2: 锁定, 0: 待机, 1: 解锁
+    flight_target.is_armed = 2;  // 0: 锁定, 1: 解锁, 2: 等待校准后解锁
     flight_target.height = 0;
+    start_up_scale = 0.0f;
 
     // ----------- 初始化 PID 参数 -----------
     // 高度环
@@ -106,68 +107,98 @@ void Flight_Control_Angle(void) {
     flight_target.target_g_pitch = target_rate_pitch_body;
     flight_target.target_g_yaw = target_rate_yaw_body;
 }
-void Flight_Control_Loop(void) {
-    // 1. 状态机处理
-    Flight_Control_Angle();
 
-    if (flight_target.cur_state == pre_landing && imu_data.z < LAND_HEIGHT + 2)
+// =================== 内部功能模块 (Static) ===================
+
+/**
+ * @brief 飞行状态机更新
+ * 处理自动解锁、飞行模式切换、目标高度设定
+ */
+static void Flight_State_Update(void) {
+    // 1. 自动解锁逻辑 (等待IMU校准完成后自动解锁)
+    if (flight_target.is_armed == 2) {
+        if (imu_data.is_calibrated) {
+            Flight_Unlock();
+        }
+        // 若未校准，保持 is_armed=2，电机输出为0
+    }
+
+    // 2. 降落检测逻辑
+    if (flight_target.cur_state == pre_landing && imu_data.z < LAND_HEIGHT + 2) {
         flight_target.cur_state = landing;
+    }
 
-    
+    // 3. 根据状态设定目标高度及特殊行为
     switch (flight_target.cur_state) {
         case normal:
             flight_target.target_height = TARGET_HEIGHT_CM;
+            if (flight_target.is_armed == 1) {
+                if (start_up_scale < 1.0f) {
+                    start_up_scale += 0.0005f;  // 约2秒加满 (1ms周期)
+                }
+            }
             break;
         case pre_landing:
             flight_target.target_height = LAND_HEIGHT;
             break;
         case landing:
-            if (start_up_scale > 0)
-                start_up_scale -= 0.002;
+            // 降落阶段逐渐减小油门比例
+            if (start_up_scale > 0) {
+                start_up_scale -= 0.002f;
+            }
             break;
         default:
             break;
     }
+}
 
-    if (flight_target.is_armed == 0) {
-        Flight_Lock();
-        return;
-    }
-
-    // ================= 2. 高度控制 =================
+/**
+ * @brief 高度环控制 (串级PID: 位置 -> 速度 -> 油门)
+ * @return 基础油门值 (base_throttle)
+ */
+static int16_t Flight_Control_Height(void) {
     // 平滑目标高度
     flight_target.height = flight_target.height * 0.999f + flight_target.target_height * 0.001f;
 
+    // 位置环
     float height_error = flight_target.height - imu_data.z;
     float target_climb_rate = PID_Calculate(&pid_height_pos, height_error, CTRL_DT_CTLOOP);
 
+    // 速度环
     float climb_rate_error = target_climb_rate - imu_data.vz;
     float throttle_adj = PID_Calculate(&pid_height_vel, climb_rate_error, CTRL_DT_CTLOOP);
 
-    int16_t base_throttle = HOVER_THROTTLE + (int16_t)throttle_adj;
-    // base_throttle = (int16_t)Constrain_Float(base_throttle, MIN_PWM, MAX_PWM);
+    return HOVER_THROTTLE + (int16_t)throttle_adj;
+}
 
-    // ================= 3. 姿态控制 =================
-
+/**
+ * @brief 角速度环控制 (PID)
+ * @param out_roll/pitch/yaw 输出的控制量指针
+ */
+static void Flight_Control_Rate(float *out_roll, float *out_pitch, float *out_yaw) {
     // Roll PID
     float roll_err = flight_target.target_g_roll - imu_data.groll;
-    float out_roll = PID_Calculate(&pid_g_roll, roll_err, CTRL_DT_CTLOOP);
+    *out_roll = PID_Calculate(&pid_g_roll, roll_err, CTRL_DT_CTLOOP);
+    
     // Pitch PID
     float pitch_err = flight_target.target_g_pitch - imu_data.gpitch;
-    float out_pitch = PID_Calculate(&pid_g_pitch, pitch_err, CTRL_DT_CTLOOP);
+    *out_pitch = PID_Calculate(&pid_g_pitch, pitch_err, CTRL_DT_CTLOOP);
 
-    // Yaw PID (使用角度环)
+    // Yaw PID
     float yaw_err = flight_target.target_g_yaw - imu_data.gyaw;
-    float out_yaw = -PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
+    *out_yaw = -PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
+}
 
-    if (flight_target.is_armed == 1 && flight_target.cur_state != landing && flight_target.cur_state != pre_landing) {
-        if (start_up_scale < 1.0f) {
-            start_up_scale += 0.0005f;  // 约2秒加满 (1ms周期)
-        }
-    } 
+/**
+ * @brief 电机混控与输出
+ * @param base_throttle 基础油门
+ * @param out_roll/pitch/yaw 三轴控制量
+ */
+static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pitch, float out_yaw) {
 
-    // 应用到电机输出
-    motor_out.lf = (int16_t)(base_throttle * start_up_scale + (out_pitch + out_roll + out_yaw) * start_up_scale);
+    // 混控算法 (X型四旋翼)
+    // LF (左前, CW): Base + Pitch + Roll + Yaw
+    motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll + out_yaw) * start_up_scale);
 
     // RF (右前, CCW): Base + Pitch - Roll - Yaw
     motor_out.rf = (int16_t)((base_throttle + out_pitch - out_roll - out_yaw) * start_up_scale);
@@ -178,12 +209,38 @@ void Flight_Control_Loop(void) {
     // RB (右后, CW): Base - Pitch - Roll + Yaw
     motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll + out_yaw) * start_up_scale);
 
-    // ================= 5. 输出限幅 =================
+    // 输出限幅
     int16_t* motors = (int16_t*)&motor_out;
     for (int i = 0; i < 4; i++) {
         if (motors[i] > MAX_PWM) motors[i] = MAX_PWM;
         if (motors[i] < MIN_PWM) motors[i] = MIN_PWM;
     }
+}
+
+// =================== 主控制循环 ===================
+void Flight_Control_Loop(void) {
+    // 1. 状态机更新 (包含自动解锁、模式切换、目标高度设定)
+    Flight_State_Update();
+
+    // 2. 角度环控制 (计算期望角速度)
+    Flight_Control_Angle();
+
+    // 3. 锁定检查
+    if (flight_target.is_armed == 0) {
+        Flight_Lock();
+        return;
+    }
+    // 注意: is_armed == 2 (等待校准) 时也会继续执行，但 start_up_scale 为 0，电机不转，安全。
+
+    // 4. 高度环控制 (计算基础油门)
+    int16_t base_throttle = Flight_Control_Height();
+
+    // 5. 角速度环控制 (计算姿态修正量)
+    float out_roll, out_pitch, out_yaw;
+    Flight_Control_Rate(&out_roll, &out_pitch, &out_yaw);
+
+    // 6. 电机混控与输出
+    Flight_Motor_Mix(base_throttle, out_roll, out_pitch, out_yaw);
 }
 
 // 辅助：电机PWM设置
@@ -313,9 +370,13 @@ void Fly_Param_Update(uint8_t ch, float val) {
                 flight_target.cur_state = pre_landing; 
             }else if(val == 2){
                 wireless_uart_send_string("emergency stop\r\n");
-                flight_target.cur_state = landing;
+                Flight_Lock();
             }else if(val == 0){
-                Flight_Unlock();
+                if (imu_data.is_calibrated) {
+                    Flight_Unlock();
+                } else {
+                    flight_target.is_armed = 2; // 进入等待校准状态
+                }
                 flight_target.cur_state = normal;
                 start_up_scale = 0;
             }
