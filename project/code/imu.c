@@ -14,6 +14,7 @@ static double sum_gx = 0, sum_gy = 0, sum_gz = 0;
 static double sum_ax = 0, sum_ay = 0, sum_az = 0;
 
 static uint16_t calib_cnt = 0;
+static uint16_t tof_timeout_cnt = 0; // ToF超时计数器
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
 
 // ================= 内部辅助函数 =================
@@ -160,7 +161,7 @@ static void Navigation_Update(float ax, float ay, float az) {
     // 4. 滤波与死区 (Z轴死区稍大，防止静态积分漂移)
     if(fabsf(w_ax) < 0.01f) w_ax = 0; 
     if(fabsf(w_ay) < 0.01f) w_ay = 0;
-    if(fabsf(w_az) < 0.1f) w_az = 0;
+    if(fabsf(w_az) < 0.05f) w_az = 0;
     
     // 更新到结构体 (仅用于观察方向，不用于位置控制)
     imu_data.world_ax = w_ax;
@@ -179,6 +180,7 @@ static void Navigation_Update(float ax, float ay, float az) {
     // 2. ToF 观测修正
     if (dl1b_finsh_flag == 1) {
         dl1b_finsh_flag = 0;
+        tof_timeout_cnt = 0; // 重置超时计数
         
         uint16_t tof_z_mm = dl1b_distance_mm;
         // 物理限幅
@@ -206,8 +208,12 @@ static void Navigation_Update(float ax, float ay, float az) {
             imu_data.vz += z_error * Z_CORRECT_VEL_GAIN;
         }
     } else {
-        // [新增] 阻尼逻辑：如果 ToF 丢失，让垂直速度缓慢归零，防止漂飞
-        imu_data.vz *= 0.999f; 
+        // [修正] 仅在 ToF 数据超时(如 >100ms)时才进行阻尼，防止正常间隔内的速度衰减
+        tof_timeout_cnt++;
+        if (tof_timeout_cnt > 100) { // 100ms 无数据视为丢失
+            imu_data.vz *= 0.98f; 
+            if(tof_timeout_cnt > 200) tof_timeout_cnt = 200; // 防止溢出
+        }
     }
 
     // ================== 水平通道清零 ==================
@@ -247,7 +253,6 @@ void IMU_Update_Loop(void) {
     if (imu_data.is_calibrated == 0) {
         calib_cnt++;
         
-        // [修改] 使用double累加，并同时累加加速度计用于初始姿态解算
         sum_gx += raw_gx;
         sum_gy += raw_gy;
         sum_gz += raw_gz;
@@ -305,7 +310,6 @@ void IMU_Update_Loop(void) {
     // 注意：垂直轴(raw_ax)不要减，它的基准(gravity_ref)在 Navigation_Update 里用
 
     // ================= 2. 轴向映射 (这里补全了缺失的代码) =================
-    // 使用宏定义进行映射，提高可维护性
     float map_ax = IMU_MAP_AX(raw_ax, raw_ay, raw_az);
     float map_ay = IMU_MAP_AY(raw_ax, raw_ay, raw_az);
     float map_az = IMU_MAP_AZ(raw_ax, raw_ay, raw_az);

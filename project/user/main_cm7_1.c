@@ -61,15 +61,20 @@ int main(void)
     camera_init();
     while(true)
     {          
-        image_processing_loop();
-        M7_1_data_send(m7_1_data,uart_data);
-        SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
-        
-        //UART发送
-        uart_write_buffer(TEST_UART, uart_data, sizeof(uart_data));
-        //  image_cnt ++;
-        // if(image_cnt % 200 == 0) image_send();                        
+        // 等待摄像头采集完成 (同步物理帧率，50Hz)
+        if (mt9v03x_finish_flag)
+        {
+            mt9v03x_finish_flag = 0;
+            
+            image_processing_loop();
+            M7_1_data_send(m7_1_data,uart_data);
 
+            // 跨核通讯
+            SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
+            
+            //UART
+            uart_write_buffer(TEST_UART, uart_data, sizeof(uart_data));
+        }
     }
 }
 

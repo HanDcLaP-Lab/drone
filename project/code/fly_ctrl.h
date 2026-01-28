@@ -17,7 +17,7 @@
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 3.0f  // 最大倾角限制 (度) 
 #define CTRL_DT_CTLOOP 0.001  // 控制周期
-#define CTRL_DT_CTANG 0.001   // 控制周期
+#define CTRL_DT_CTANG 0.02   // 控制周期
 
 // 视觉控制增益
 #define ANGLE_COMP_COEF 1.40f  //位姿对像素的补偿

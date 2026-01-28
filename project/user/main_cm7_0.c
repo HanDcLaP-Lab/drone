@@ -84,14 +84,13 @@ int main(void) {
     motor_pwm_init();  /// pwm输出初始化
     Flight_Control_Init();
 
-    pit_ms_init(PIT_NUM1, 1);
-    pit_ms_init(PIT_NUM2, 200);
+    pit_ms_init(PIT_NUM1, 20); // 图像处理中断 20ms
+    pit_ms_init(PIT_NUM2, 200); // 输出中断 200ms
     system_delay_ms(1000);
-    pit_ms_init(PIT_NUM0, 1);
+    pit_ms_init(PIT_NUM0, 1); // 飞控主循环中断 1ms
 
     // 此处编写用户代码 例如外设初始化代码等
 
-    // 在 user/main_cm7_0.c 的 while(true) 循环中
     while (true) {
         seekfree_assistant_data_analysis();
 
