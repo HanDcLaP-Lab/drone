@@ -9,13 +9,12 @@ static float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f; // 四元数
 static float exInt = 0.0f, eyInt = 0.0f, ezInt = 0.0f;   // 积分误差
 
 // 陀螺仪校准相关
-static float offset_gx = 0, offset_gy = 0, offset_gz = 0;
+static double offset_gx = 0, offset_gy = 0, offset_gz = 0;
+static double sum_gx = 0, sum_gy = 0, sum_gz = 0;
+static double sum_ax = 0, sum_ay = 0, sum_az = 0;
 
 static uint16_t calib_cnt = 0;
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
-// 融合参数 (建议调试时可微调)
-#define K_POS  0.4f   // 位置修正系数 (高度权重)
-#define K_VEL  0.8f   // 速度修正系数 (速度收敛快慢)
 
 // ================= 内部辅助函数 =================
 static float invSqrt(float x) {
@@ -200,11 +199,11 @@ static void Navigation_Update(float ax, float ay, float az) {
             float z_error = tof_height_cm - imu_data.z;
 
             // 修正位置 (Proportional term)
-            imu_data.z += z_error * K_POS;
+            imu_data.z += z_error * Z_CORRECT_POS_GAIN;
 
             // 修正速度 (Integral term / Velocity correction)
             // 逻辑：如果位置一直偏低，说明速度估算偏小，需要补偿速度
-            imu_data.vz += z_error * K_VEL;
+            imu_data.vz += z_error * Z_CORRECT_VEL_GAIN;
         }
     } else {
         // [新增] 阻尼逻辑：如果 ToF 丢失，让垂直速度缓慢归零，防止漂飞
@@ -235,20 +234,63 @@ void IMU_Update_Loop(void) {
     float raw_ay = imu660ra_acc_transition(imu660ra_acc_y) * GRAVITY_MSS;
     float raw_az = imu660ra_acc_transition(imu660ra_acc_z) * GRAVITY_MSS;
 
+    // ================= 加速度计卡尔曼滤波 =================
+    raw_ax = Kalman_Update(&K_ax, raw_ax);
+    raw_ay = Kalman_Update(&K_ay, raw_ay);
+    raw_az = Kalman_Update(&K_az, raw_az);
+
+    raw_gx = Kalman_Update(&K_groll, raw_gx);
+    raw_gy = Kalman_Update(&K_gpitch, raw_gy);
+    raw_gz = Kalman_Update(&K_gyaw, raw_gz);
+
     // ================= 校准逻辑 (包含加速度计) =================
     if (imu_data.is_calibrated == 0) {
         calib_cnt++;
         
-        // 累加陀螺仪
-        offset_gx += raw_gx;
-        offset_gy += raw_gy;
-        offset_gz += raw_gz;
+        // [修改] 使用double累加，并同时累加加速度计用于初始姿态解算
+        sum_gx += raw_gx;
+        sum_gy += raw_gy;
+        sum_gz += raw_gz;
+        sum_ax += raw_ax;
+        sum_ay += raw_ay;
+        sum_az += raw_az;
         
         if (calib_cnt >= 2500) {
             // 计算平均值
-            offset_gx /= 2500.0f;
-            offset_gy /= 2500.0f;
-            offset_gz /= 2500.0f;
+            offset_gx = (float)(sum_gx / 2500.0);
+            offset_gy = (float)(sum_gy / 2500.0);
+            offset_gz = (float)(sum_gz / 2500.0);
+
+            // [新增] 核心改进：基于平均加速度计算初始姿态四元数
+            // 解决"任意静止姿态启动"的问题
+            float avg_ax = (float)(sum_ax / 2500.0);
+            float avg_ay = (float)(sum_ay / 2500.0);
+            float avg_az = (float)(sum_az / 2500.0);
+
+            // 映射到机体坐标系 (需与下方 Loop 中的映射保持一致)
+            // map_ax = raw_az, map_ay = -raw_ay, map_az = -raw_ax
+            float init_ax = avg_az;
+            float init_ay = -avg_ay;
+            float init_az = -avg_ax;
+
+            // 计算初始欧拉角 (假设初始Yaw为0)
+            float init_roll = atan2f(init_ay, init_az);
+            float init_pitch = atan2f(-init_ax, sqrtf(init_ay*init_ay + init_az*init_az));
+            float init_yaw = 0.0f;
+
+            // 欧拉角转四元数
+            float c1 = cosf(init_yaw / 2); float s1 = sinf(init_yaw / 2);
+            float c2 = cosf(init_pitch / 2); float s2 = sinf(init_pitch / 2);
+            float c3 = cosf(init_roll / 2); float s3 = sinf(init_roll / 2);
+
+            q0 = c1*c2*c3 + s1*s2*s3;
+            q1 = c1*c2*s3 - s1*s2*c3;
+            q2 = c1*s2*c3 + s1*c2*s3;
+            q3 = s1*c2*c3 - c1*s2*s3;
+            
+            // 归一化
+            float norm = sqrtf(q0*q0 + q1*q1 + q2*q2 + q3*q3);
+            q0 /= norm; q1 /= norm; q2 /= norm; q3 /= norm;
 
             imu_data.is_calibrated = 1;
             imu_data.z = 0.0f;
@@ -268,21 +310,19 @@ void IMU_Update_Loop(void) {
     float map_ay = -raw_ay;  // 机身右侧
     float map_az = -raw_ax;  // 垂直方向
 
-    //  之前漏掉了下面这三行陀螺仪映射定义
-    float map_gx = raw_gz;  // Roll (横滚)
-    float map_gy = -raw_gy;  // Pitch (俯仰)
-    float map_gz = raw_gx;  // Yaw (航向)
+    float map_gx = -raw_gz;  // Roll (横滚)
+    float map_gy = raw_gy;  // Pitch (俯仰)
+    float map_gz = -raw_gx;  // Yaw (航向)
 
     // 死区处理 (仅针对陀螺仪，防止 Yaw 漂移)
     //if (fabsf(map_gx) < 0.1f) map_gx = 0; 
     //if (fabsf(map_gy) < 0.1f) map_gy = 0;
     if (fabsf(map_gz) < VALID_G_MIN) map_gz = 0;
 
-    // ================= 3. 滤波与解算 =================
-    imu_data.groll = -Kalman_Update(&K_groll, -map_gx);
-    imu_data.gpitch = Kalman_Update(&K_gpitch, map_gy);
-    imu_data.gyaw = Kalman_Update(&K_gyaw, -map_gz);
-    
+    imu_data.groll = map_gx;
+    imu_data.gpitch = map_gy;
+    imu_data.gyaw = map_gz;
+
     Mahony_Update(map_gx, map_gy, map_gz, map_ax, map_ay, map_az);
     
     // 欧拉角转换
@@ -291,6 +331,10 @@ void IMU_Update_Loop(void) {
     float sinp = 2.0f * (q0 * q2 - q3 * q1);
     if (fabsf(sinp) >= 1) imu_data.pitch = copysignf(90.0f, sinp);
     else imu_data.pitch =  - asinf(sinp) * 180.0f / PI;
+
+    // ================= 4. 应用安装误差补偿 =================
+    imu_data.roll  -= IMU_MOUNT_ADJUST_ROLL;
+    imu_data.pitch -= IMU_MOUNT_ADJUST_PITCH;
     
     imu_data.yaw = - atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
 

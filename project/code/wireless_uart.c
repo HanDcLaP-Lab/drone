@@ -40,3 +40,25 @@ void wireless_uart_send_float(float send_a)
     snprintf(buf, sizeof(buf), "%.2f",send_a);
     wireless_uart_send_string(buf);
 }
+
+void wireless_uart_output_status(void){
+    wireless_uart_send_float(flight_target.target_roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_pitch);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.pitch);
+    wireless_uart_send_string("\n");
+}
+
+void wireless_uart_output_imu(void){
+    wireless_uart_send_float(imu_data.roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.pitch);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.yaw);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.z);
+    wireless_uart_send_string("\n");
+}

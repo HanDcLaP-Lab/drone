@@ -6,11 +6,16 @@
 #include <stdint.h>
 
 // ================= 配置参数 =================
-#define KP 3.0f          // 互补滤波比例增益
-#define KI 0.001f        // 互补滤波积分增益
+#define KP 0.93f          // 互补滤波比例增益
+#define KI 0.0015f        // 互补滤波积分增益
 #define DT 0.001f        // 运行周期 1ms (1000Hz)
-#define GRAVITY_MSS 9.8f // 标准重力加速度
+#define GRAVITY_MSS 9.789f // 标准重力加速度
 #define VALID_G_MIN 0.2f
+
+// ================= 硬件安装误差补偿 (度) =================
+#define IMU_MOUNT_ADJUST_ROLL   0.0f //直接填写水平放置的读数
+#define IMU_MOUNT_ADJUST_PITCH  0.0f
+
 // ================= Z轴融合参数 =================
 #define Z_CORRECT_POS_GAIN  0.3f   // 位置修正系数
 #define Z_CORRECT_VEL_GAIN  0.3f   // 速度修正系数

@@ -3,7 +3,6 @@
 // =================== 全局变量定义 ===================
 Flight_Target_t flight_target = {0};
 Motor_Output_t motor_out = {0};
-float out = 0;
 float comp_col = 0;
 float comp_row = 0;
 // 定义 PID 对象
@@ -153,7 +152,6 @@ void Flight_Control_Loop(void) {
     // Roll PID
     float roll_err = flight_target.target_g_roll - imu_data.groll;
     float out_roll = PID_Calculate(&pid_g_roll, roll_err, CTRL_DT_CTLOOP);
-    out = out_roll;
     // Pitch PID
     float pitch_err = flight_target.target_g_pitch - imu_data.gpitch;
     float out_pitch = PID_Calculate(&pid_g_pitch, pitch_err, CTRL_DT_CTLOOP);
@@ -262,11 +260,6 @@ void Flight_Hover_Control_Task(void) {
         comp_col = IMG_CENTER_X;
         Set_Target_Attitude(0, 0, flight_target.target_yaw);
     }                                                                                                                                                        
-
-    // 3. 自动解锁与控制循环 
-    if (imu_data.is_calibrated && flight_target.is_armed == 2) {
-        Flight_Unlock();
-    }
     
 }
 

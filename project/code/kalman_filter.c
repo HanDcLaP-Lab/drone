@@ -2,7 +2,7 @@
 #include "kalman_filter.h"
 #include "zf_common_headfile.h"
 
-KalmanFilter1 K_w_ax,K_w_ay,K_groll,K_gpitch,K_gyaw;  // 卡尔曼定义
+KalmanFilter1 K_w_ax,K_w_ay,K_groll,K_gpitch,K_gyaw,K_ax,K_ay,K_az; // 卡尔曼定义
 void Kalman_Init(KalmanFilter1* kf, float q, float r, float initial_value) {
     kf->q = q;
     kf->r = r;

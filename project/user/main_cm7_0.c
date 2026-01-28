@@ -59,31 +59,35 @@ __root __no_init volatile float m7_1_data[DATA_LENGTH];
 int main(void) {
     clock_init(SYSTEM_CLOCK_250M);  // 时钟配置及系统初始化<务必保留>
     debug_init();                   // 调试串口信息初始化
+
+    // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(1500);
-    gpio_init(LED1, GPO, GPIO_HIGH, GPO_PUSH_PULL);
+
     wireless_uart_init_();
     seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
-
-    display_init();
+    
     Kalman_Init(&K_w_ax,1e-3f,0.01,0);
     Kalman_Init(&K_w_ay,1e-3f,0.01,0);
     Kalman_Init(&K_groll,1e-3f,0.001,0);
     Kalman_Init(&K_gpitch,1e-3f,0.001,0);
     Kalman_Init(&K_gyaw,1e-3f,0.001,0);
+    
+    // 加速度计滤波初始化 (Q=0.001, R=0.1 强滤波以抑制震动)
+    Kalman_Init(&K_ax, 0.001f, 0.1f, 0);
+    Kalman_Init(&K_ay, 0.001f, 0.1f, 0);
+    Kalman_Init(&K_az, 0.001f, 0.1f, 9.8f); // Z轴初始设为重力
 
+    gpio_init(LED1, GPO, GPIO_HIGH, GPO_PUSH_PULL);
+    display_init();
     imu_init();
     tof_init();
-
     motor_pwm_init();  /// pwm输出初始化
     Flight_Control_Init();
-    //system_delay_ms(5000);
-    
-    //system_delay_ms(3000);
+
     pit_ms_init(PIT_NUM1, 1);
     pit_ms_init(PIT_NUM2, 200);
     system_delay_ms(1000);
     pit_ms_init(PIT_NUM0, 1);
-    // 此处编写用户代码 例如外设初始化代码等
 
     // 此处编写用户代码 例如外设初始化代码等
 

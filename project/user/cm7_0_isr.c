@@ -42,50 +42,31 @@ uint16_t target = 0;
 void pit0_ch0_isr() {
     pit_isr_flag_clear(PIT_CH0);
     pit0_cnt++;
-    // 1. 读取传感器硬件数据 (必须先读，IMU_Update_Loop 依赖这些全局变量)
-    
-    
-    // 2. 一键更新所有数据
-    IMU_Update_Loop();
-    
-    //飞控计算
     if (imu_data.is_calibrated && flight_target.is_armed == 2) {
         Flight_Unlock();  
     }
+    IMU_Update_Loop();
 
     Flight_Control_Loop(); 
                         
     motor_pwm_set();
-    
-    // 3. 打印测试 (使用结构体 imu_data)
-    if (pit0_cnt % 400 == 0) {
-                //printf("hello!");
-      //ips200_show_int(0,16*12,pit0_cnt/400, 4);
-    }
-    
+
 }
 
 void pit0_ch1_isr() 
 {
     pit_isr_flag_clear(PIT_CH1);
 
-    // 调用封装好的悬停控制任务
+    // 悬停控制任务
     Flight_Hover_Control_Task(); 
 }
 
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
-    display_motor_output_display();
+    //display_motor_output_display();
 
-    wireless_uart_send_float(flight_target.target_roll);
-    wireless_uart_send_string(",");
-    wireless_uart_send_float(imu_data.roll);
-    wireless_uart_send_string(",");
-    wireless_uart_send_float(flight_target.target_pitch);
-    wireless_uart_send_string(",");
-    wireless_uart_send_float(imu_data.pitch);
-    wireless_uart_send_string("\n");
+    wireless_uart_output_imu();
 }
 
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数

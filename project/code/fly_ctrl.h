@@ -42,13 +42,13 @@ typedef enum {
 // =================== 控制目标结构体 ===================
 typedef struct {
     // --- 姿态目标 (直接控制量) ---
-    float target_roll;   // 期望横滚角 (度)
-    float target_pitch;  // 期望俯仰角 (度)
+    float target_roll;   // 期望横滚角 (度) [由视觉/悬停任务设定]
+    float target_pitch;  // 期望俯仰角 (度) [由视觉/悬停任务设定]
     float target_yaw;    // 期望偏航角 (度)
     // --- 姿态目标(串级控制量)
-    float target_g_roll;  //期望角速度 （度 / 秒）
-    float target_g_pitch; //期望角速度 （度 / 秒）
-    float target_g_yaw; //期望角速度 （度 / 秒）
+    float target_g_roll;  //期望角速度 （度 / 秒）[由角度环PID计算得出]
+    float target_g_pitch; //期望角速度 （度 / 秒）[由角度环PID计算得出]
+    float target_g_yaw;   //期望角速度 （度 / 秒）[由角度环PID计算得出]
 
     // --- 高度目标 ---
     float height;         // 内部平滑后的当前高度目标
@@ -57,7 +57,7 @@ typedef struct {
     uint8_t is_armed;
     STATE cur_state;
 } Flight_Target_t;
-extern float out ;
+
 // =================== 电机输出结构体 ===================
 typedef struct {
     int16_t rf;  // 右前
