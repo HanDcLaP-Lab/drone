@@ -46,16 +46,16 @@ void Flight_Control_Init(void) {
 
     // ----------- 初始化 PID 参数 -----------
     // 高度环
-    PID_Init(&pid_height_pos, 0.0f, 0.0f, 0.0f, 0, 0);
-    PID_Init(&pid_height_vel, 0.0f, 0.0f, 0.0f, 0, 0);
-    // 角度环
-    Nonline_PID_Init(&pid_roll, 1.8f, 0.6f, 0.0f, 0.0f, 2.5, 15);
-    Nonline_PID_Init(&pid_pitch, 1.8f, 0.6f, 0.0f, 0.0f, 2.5, 15);
-    Nonline_PID_Init(&pid_yaw, 1.0f, 0.0f, 0.0f, 0.0f, 5, 15);
-    // 角速度环
-    PID_Init(&pid_g_roll, 15.0f, 0.0f, 0.3f, 300, 1200);
-    PID_Init(&pid_g_pitch, 15.0f, 0.0f, 0.3f, 300, 1200);
-    PID_Init(&pid_g_yaw, 6.0f, 0.0f, 0.12f, 120, 0);
+    PID_Init(&pid_height_pos, 0.5f, 0.15f, 0.0f, 3, 0);
+    PID_Init(&pid_height_vel, 12.0f, 0.0f, 0.2f, 80, 0);
+    // 角度环a
+    Nonline_PID_Init(&pid_roll, 8.45f, 0.95f, 0.0f, 0.0f, 2.5, 35);
+    Nonline_PID_Init(&pid_pitch, 8.45f, 0.95f, 0.0f, 0.0f, 2.5, 35);
+    Nonline_PID_Init(&pid_yaw, 4.0f, 0.4f, 0.0f, 0.0f, 5, 15);
+    // 角速度环g
+    PID_Init(&pid_g_roll, 26.7f, 0.0f, 0.36f, 300, 2500);
+    PID_Init(&pid_g_pitch, 26.7f, 0.0f, 0.36f, 300, 2500);
+    PID_Init(&pid_g_yaw, 13.0f, 0.0f, 0.18f, 120, 600);
     // 视觉部分
     Nonline_PID_Init(&pid_image_x, 0.03f, 0.0f, 0.00008f, 0.0005f, 1, 15);
     Nonline_PID_Init(&pid_image_y, 0.03f, 0.0f, 0.00008f, 0.0005f, 1, 15);
@@ -186,7 +186,7 @@ static void Flight_Control_Rate(float *out_roll, float *out_pitch, float *out_ya
 
     // Yaw PID
     float yaw_err = flight_target.target_g_yaw - imu_data.gyaw;
-    *out_yaw = -PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
+    *out_yaw = PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
 }
 
 /**
@@ -246,7 +246,7 @@ void Flight_Control_Loop(void) {
 // 辅助：电机PWM设置
 void motor_pwm_set() {
     if (flight_target.is_armed == 1) {
-        pwm_set_duty(PWM_RF, (motor_out.rf * 2 / 5) + 4000);  // 假设你的电调协议需要这样转换
+        pwm_set_duty(PWM_RF, (motor_out.rf * 2 / 5) + 4000);
         pwm_set_duty(PWM_RB, (motor_out.rb * 2 / 5) + 4000);
         pwm_set_duty(PWM_LF, (motor_out.lf * 2 / 5) + 4000);
         pwm_set_duty(PWM_LB, (motor_out.lb * 2 / 5) + 4000);

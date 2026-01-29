@@ -68,9 +68,9 @@ int main(void) {
     
     Kalman_Init(&K_w_ax,1e-3f,0.01,0);
     Kalman_Init(&K_w_ay,1e-3f,0.01,0);
-    Kalman_Init(&K_groll,1e-3f,0.001,0);
-    Kalman_Init(&K_gpitch,1e-3f,0.001,0);
-    Kalman_Init(&K_gyaw,1e-3f,0.001,0);
+    Kalman_Init(&K_groll,1e-3f,0.1,0);
+    Kalman_Init(&K_gpitch,1e-3f,0.1,0);
+    Kalman_Init(&K_gyaw,1e-3f,0.1,0);
     
     // 加速度计滤波初始化 (Q=0.001, R=0.1 强滤波以抑制震动)
     Kalman_Init(&K_ax, 0.001f, 0.1f, 0);
@@ -85,7 +85,7 @@ int main(void) {
     Flight_Control_Init();
 
     pit_ms_init(PIT_NUM1, 20); // 图像处理中断 20ms
-    pit_ms_init(PIT_NUM2, 200); // 输出中断 200ms
+    pit_ms_init(PIT_NUM2, 400); // 输出中断 200ms
     system_delay_ms(1000);
     pit_ms_init(PIT_NUM0, 1); // 飞控主循环中断 1ms
 
