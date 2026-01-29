@@ -47,18 +47,18 @@ void Flight_Control_Init(void) {
     // ----------- 初始化 PID 参数 -----------
     // 高度环
     PID_Init(&pid_height_pos, 0.5f, 0.15f, 0.0f, 3, 0);
-    PID_Init(&pid_height_vel, 12.0f, 0.0f, 0.2f, 80, 0);
+    PID_Init(&pid_height_vel, 24.0f, 0.0f, 0.2f, 80, 0);
     // 角度环a
-    Nonline_PID_Init(&pid_roll, 8.45f, 0.95f, 0.0f, 0.0f, 2.5, 35);
-    Nonline_PID_Init(&pid_pitch, 8.45f, 0.95f, 0.0f, 0.0f, 2.5, 35);
-    Nonline_PID_Init(&pid_yaw, 4.0f, 0.4f, 0.0f, 0.0f, 5, 15);
+    Nonline_PID_Init(&pid_roll, 3.0f, 0.95f, 0.0f, 0.05f, 2.5, 35);
+    Nonline_PID_Init(&pid_pitch, 3.0f, 0.95f, 0.0f, 0.05f, 2.5, 35);
+    Nonline_PID_Init(&pid_yaw, 1.5f, 0.4f, 0.0f, 0.025f, 5, 15);
     // 角速度环g
-    PID_Init(&pid_g_roll, 26.7f, 0.0f, 0.36f, 300, 2500);
-    PID_Init(&pid_g_pitch, 26.7f, 0.0f, 0.36f, 300, 2500);
-    PID_Init(&pid_g_yaw, 13.0f, 0.0f, 0.18f, 120, 600);
+    PID_Init(&pid_g_roll, 30.0f, 0.0f, 0.36f, 300, 2500);
+    PID_Init(&pid_g_pitch, 30.0f, 0.0f, 0.36f, 300, 2500);
+    PID_Init(&pid_g_yaw, 15.0f, 0.0f, 0.18f, 120, 600);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.03f, 0.0f, 0.00008f, 0.0005f, 1, 15);
-    Nonline_PID_Init(&pid_image_y, 0.03f, 0.0f, 0.00008f, 0.0005f, 1, 15);
+    Nonline_PID_Init(&pid_image_x, 0.03f, 0.0f, 0.0005f, 0.0005f, 1, 15);
+    Nonline_PID_Init(&pid_image_y, 0.03f, 0.0f, 0.0005f, 0.0005f, 1, 15);
 }
 
 void Flight_Unlock(void) {
@@ -72,6 +72,8 @@ void Flight_Unlock(void) {
     PID_Reset(&pid_g_roll);
     PID_Reset(&pid_g_pitch);
     PID_Reset(&pid_g_yaw);
+    Nonline_PID_Reset(&pid_image_x); // [新增] 重置视觉PID，防止积分累积
+    Nonline_PID_Reset(&pid_image_y);
 
     // 锁定当前航向为目标航向，防止解锁即转圈
     flight_target.target_yaw = imu_data.yaw;
@@ -91,21 +93,6 @@ void Set_Target_Attitude(float roll, float pitch, float yaw) {
     flight_target.target_roll = Constrain_Float(roll, -MAX_TILT_ANGLE, MAX_TILT_ANGLE);
     flight_target.target_pitch = Constrain_Float(pitch, -MAX_TILT_ANGLE, MAX_TILT_ANGLE);
     flight_target.target_yaw = yaw;
-}
-
-void Flight_Control_Angle(void) {
-    // 1. 计算误差 (绝对系)
-    float roll_error = flight_target.target_roll - imu_data.roll;
-    float pitch_error = flight_target.target_pitch - imu_data.pitch;
-    float yaw_error = Get_Angle_Error(flight_target.target_yaw, imu_data.yaw);
-
-    // 2. PID 计算 (输出即视为机体角速度目标，基于小角度假设)
-    float target_rate_roll_body = Nonline_PID_Calculate(&pid_roll, roll_error, CTRL_DT_CTANG);
-    float target_rate_pitch_body = Nonline_PID_Calculate(&pid_pitch, pitch_error, CTRL_DT_CTANG);
-    float target_rate_yaw_body = Nonline_PID_Calculate(&pid_yaw, yaw_error, CTRL_DT_CTANG);
-    flight_target.target_g_roll = target_rate_roll_body;
-    flight_target.target_g_pitch = target_rate_pitch_body;
-    flight_target.target_g_yaw = target_rate_yaw_body;
 }
 
 // =================== 内部功能模块 (Static) ===================
@@ -150,6 +137,18 @@ static void Flight_State_Update(void) {
         default:
             break;
     }
+}
+
+void Flight_Control_Angle(void) {
+    // 1. 计算误差 (绝对系)
+    float roll_error = flight_target.target_roll - imu_data.roll;
+    float pitch_error = flight_target.target_pitch - imu_data.pitch;
+    float yaw_error = Get_Angle_Error(flight_target.target_yaw, imu_data.yaw);
+
+    // 2. PID 计算 (输出即视为机体角速度目标，基于小角度假设)
+    flight_target.target_g_roll = Nonline_PID_Calculate(&pid_roll, roll_error, CTRL_DT_CTLOOP);
+    flight_target.target_g_pitch = Nonline_PID_Calculate(&pid_pitch, pitch_error, CTRL_DT_CTLOOP);
+    flight_target.target_g_yaw = Nonline_PID_Calculate(&pid_yaw, yaw_error, CTRL_DT_CTLOOP);
 }
 
 /**
@@ -197,20 +196,20 @@ static void Flight_Control_Rate(float *out_roll, float *out_pitch, float *out_ya
 static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pitch, float out_yaw) {
 
     // 混控算法 (X型四旋翼)
-    // LF (左前, CW): Base + Pitch + Roll + Yaw
-    motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll + out_yaw) * start_up_scale);
+    // LF (左前, CW): Base + Pitch + Roll - Yaw
+    motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll - out_yaw) * start_up_scale);
 
-    // RF (右前, CCW): Base + Pitch - Roll - Yaw
-    motor_out.rf = (int16_t)((base_throttle + out_pitch - out_roll - out_yaw) * start_up_scale);
+    // RF (右前, CCW): Base + Pitch - Roll + Yaw
+    motor_out.rf = (int16_t)((base_throttle + out_pitch - out_roll + out_yaw) * start_up_scale);
 
-    // LB (左后, CCW): Base - Pitch + Roll - Yaw
-    motor_out.lb = (int16_t)((base_throttle - out_pitch + out_roll - out_yaw) * start_up_scale);
+    // LB (左后, CCW): Base - Pitch + Roll + Yaw
+    motor_out.lb = (int16_t)((base_throttle - out_pitch + out_roll + out_yaw) * start_up_scale);
 
-    // RB (右后, CW): Base - Pitch - Roll + Yaw
-    motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll + out_yaw) * start_up_scale);
+    // RB (右后, CW): Base - Pitch - Roll - Yaw
+    motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll - out_yaw) * start_up_scale);
 
     // 输出限幅
-    int16_t* motors = (int16_t*)&motor_out;
+    int16_t* motors = (int16_t*)&motor_out.rf;
     for (int i = 0; i < 4; i++) {
         if (motors[i] > MAX_PWM) motors[i] = MAX_PWM;
         if (motors[i] < MIN_PWM) motors[i] = MIN_PWM;
@@ -225,22 +224,21 @@ void Flight_Control_Loop(void) {
     // 2. 角度环控制 (计算期望角速度)
     Flight_Control_Angle();
 
-    // 3. 锁定检查
+    // 3. 角速度环控制 (计算姿态修正量)
+    Flight_Control_Rate(&motor_out.roll, &motor_out.pitch, &motor_out.yaw);
+
+    // 4. 锁定检查
     if (flight_target.is_armed == 0) {
         Flight_Lock();
         return;
     }
     // 注意: is_armed == 2 (等待校准) 时也会继续执行，但 start_up_scale 为 0，电机不转，安全。
 
-    // 4. 高度环控制 (计算基础油门)
+    // 5. 高度环控制 (计算基础油门)
     int16_t base_throttle = Flight_Control_Height();
 
-    // 5. 角速度环控制 (计算姿态修正量)
-    float out_roll, out_pitch, out_yaw;
-    Flight_Control_Rate(&out_roll, &out_pitch, &out_yaw);
-
     // 6. 电机混控与输出
-    Flight_Motor_Mix(base_throttle, out_roll, out_pitch, out_yaw);
+    Flight_Motor_Mix(base_throttle, motor_out.roll, motor_out.pitch, motor_out.yaw);
 }
 
 // 辅助：电机PWM设置

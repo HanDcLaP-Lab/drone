@@ -41,7 +41,7 @@ void wireless_uart_send_float(float send_a)
     wireless_uart_send_string(buf);
 }
 
-void wireless_uart_output_status(void){
+void wireless_uart_output_status(void){   //打印目标倾角和实际倾角
     wireless_uart_send_float(flight_target.target_roll);
     wireless_uart_send_string(",");
     wireless_uart_send_float(imu_data.roll);
@@ -52,7 +52,7 @@ void wireless_uart_output_status(void){
     wireless_uart_send_string("\n");
 }
 
-void wireless_uart_output_imu(void){
+void wireless_uart_output_imu(void){   //打印imu数据
     wireless_uart_send_float(imu_data.roll);
     wireless_uart_send_string(",");
     wireless_uart_send_float(imu_data.pitch);
@@ -60,5 +60,16 @@ void wireless_uart_output_imu(void){
     wireless_uart_send_float(imu_data.yaw);
     wireless_uart_send_string(",");
     wireless_uart_send_float(imu_data.z);
+    wireless_uart_send_string("\n");
+}
+
+void wireless_uart_output_pid(void){    //打印pid数据
+    wireless_uart_send_float(flight_target.target_g_roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_g_pitch);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(motor_out.roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(motor_out.pitch);
     wireless_uart_send_string("\n");
 }

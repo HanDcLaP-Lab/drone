@@ -58,13 +58,17 @@ typedef struct {
     STATE cur_state;
 } Flight_Target_t;
 
-// =================== 电机输出结构体 ===================
+// ===================== 输出结构体 =====================
 typedef struct {
+    float roll; //由roll带来的最终输出量
+    float pitch;
+    float yaw;
+
     int16_t rf;  // 右前
     int16_t rb;  // 右后
     int16_t lb;  // 左后
     int16_t lf;  // 左前
-} Motor_Output_t;
+} Motor_Output_t;  //此项于fly_ctrl.c初始化为0
 
 // =================== 全局变量 ===================
 extern Flight_Target_t flight_target;

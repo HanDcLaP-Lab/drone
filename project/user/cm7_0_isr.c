@@ -64,7 +64,9 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
     pit_isr_flag_clear(PIT_CH2);
 
     display_motor_output_display();
-    wireless_uart_output_status();
+    //wireless_uart_output_status();
+    //wireless_uart_output_pid();
+    wireless_uart_output_imu();
 }
 
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数

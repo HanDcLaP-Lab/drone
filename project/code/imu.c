@@ -323,9 +323,9 @@ void IMU_Update_Loop(void) {
     //if (fabsf(map_gy) < 0.1f) map_gy = 0;
     if (fabsf(map_gz) < VALID_G_MIN) map_gz = 0;
 
-    imu_data.groll = map_gx;
+    imu_data.groll  = map_gx;
     imu_data.gpitch = map_gy;
-    imu_data.gyaw = map_gz;
+    imu_data.gyaw   = map_gz;
 
     Mahony_Update(map_gx, map_gy, map_gz, map_ax, map_ay, map_az);
     
@@ -341,7 +341,7 @@ void IMU_Update_Loop(void) {
     imu_data.roll  -= IMU_MOUNT_ADJUST_ROLL;
     imu_data.pitch -= IMU_MOUNT_ADJUST_PITCH;
     
-    imu_data.yaw = - atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
+    imu_data.yaw = atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
 
     Navigation_Update(map_ax, map_ay, map_az);
 }
