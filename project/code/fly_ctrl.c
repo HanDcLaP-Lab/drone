@@ -49,13 +49,13 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_height_pos, 0.5f, 0.15f, 0.0f, 3, 0);
     PID_Init(&pid_height_vel, 24.0f, 0.0f, 0.2f, 80, 0);
     // 角度环a
-    Nonline_PID_Init(&pid_roll, 3.0f, 0.95f, 0.0f, 0.05f, 2.5, 35);
-    Nonline_PID_Init(&pid_pitch, 3.0f, 0.95f, 0.0f, 0.05f, 2.5, 35);
-    Nonline_PID_Init(&pid_yaw, 1.5f, 0.4f, 0.0f, 0.025f, 5, 15);
+    Nonline_PID_Init(&pid_roll, 4.27f, 0.26f, 0.0f, 0.05f, 5, 35);
+    Nonline_PID_Init(&pid_pitch, 4.27f, 0.26f, 0.0f, 0.05f, 5, 35);
+    Nonline_PID_Init(&pid_yaw, 2.1f, 0.26f, 0.0f, 0.025f, 5, 35);
     // 角速度环g
-    PID_Init(&pid_g_roll, 30.0f, 0.0f, 0.36f, 300, 2500);
-    PID_Init(&pid_g_pitch, 30.0f, 0.0f, 0.36f, 300, 2500);
-    PID_Init(&pid_g_yaw, 15.0f, 0.0f, 0.18f, 120, 600);
+    PID_Init(&pid_g_roll, 26.0f, 0.0f, 0.38f, 300, 2500);
+    PID_Init(&pid_g_pitch, 26.0f, 0.0f, 0.38f, 300, 2500);
+    PID_Init(&pid_g_yaw, 13.0f, 0.0f, 0.19f, 120, 600);
     // 视觉部分
     Nonline_PID_Init(&pid_image_x, 0.03f, 0.0f, 0.0005f, 0.0005f, 1, 15);
     Nonline_PID_Init(&pid_image_y, 0.03f, 0.0f, 0.0005f, 0.0005f, 1, 15);
@@ -197,16 +197,16 @@ static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pi
 
     // 混控算法 (X型四旋翼)
     // LF (左前, CW): Base + Pitch + Roll - Yaw
-    motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll - out_yaw) * start_up_scale);
+    motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll + out_yaw) * start_up_scale);
 
     // RF (右前, CCW): Base + Pitch - Roll + Yaw
-    motor_out.rf = (int16_t)((base_throttle + out_pitch - out_roll + out_yaw) * start_up_scale);
+    motor_out.rf = (int16_t)((base_throttle + out_pitch - out_roll - out_yaw) * start_up_scale);
 
     // LB (左后, CCW): Base - Pitch + Roll + Yaw
-    motor_out.lb = (int16_t)((base_throttle - out_pitch + out_roll + out_yaw) * start_up_scale);
+    motor_out.lb = (int16_t)((base_throttle - out_pitch + out_roll - out_yaw) * start_up_scale);
 
     // RB (右后, CW): Base - Pitch - Roll - Yaw
-    motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll - out_yaw) * start_up_scale);
+    motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll + out_yaw) * start_up_scale);
 
     // 输出限幅
     int16_t* motors = (int16_t*)&motor_out.rf;

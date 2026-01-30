@@ -1,3 +1,4 @@
+#include "fly_ctrl.h"
 #include "zf_common_headfile.h"
 
 uint8 data_buffer[32];
@@ -37,7 +38,7 @@ void wireless_uart_send_int(int32_t send_a)
 }
 void wireless_uart_send_float(float send_a)
 {
-    snprintf(buf, sizeof(buf), "%.2f",send_a);
+    snprintf(buf, sizeof(buf), "%.1f",send_a);
     wireless_uart_send_string(buf);
 }
 
@@ -71,5 +72,20 @@ void wireless_uart_output_pid(void){    //打印pid数据
     wireless_uart_send_float(motor_out.roll);
     wireless_uart_send_string(",");
     wireless_uart_send_float(motor_out.pitch);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.pitch);
+    wireless_uart_send_string("\n");
+}
+
+void wireless_uart_yaw(void){
+    wireless_uart_send_float(imu_data.yaw);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_yaw);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_g_yaw);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(motor_out.yaw);
     wireless_uart_send_string("\n");
 }
