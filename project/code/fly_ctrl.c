@@ -49,9 +49,9 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_height_pos, 0.5f, 0.15f, 0.0f, 3, 0);
     PID_Init(&pid_height_vel, 24.0f, 0.0f, 0.2f, 80, 0);
     // 角度环a
-    Nonline_PID_Init(&pid_roll, 4.27f, 0.26f, 0.0f, 0.05f, 5, 35);
-    Nonline_PID_Init(&pid_pitch, 4.27f, 0.26f, 0.0f, 0.05f, 5, 35);
-    Nonline_PID_Init(&pid_yaw, 2.1f, 0.26f, 0.0f, 0.025f, 5, 35);
+    Nonline_PID_Init(&pid_roll, 4.27f, 0.26f, 0.0f, 0.05f, 6, 70);
+    Nonline_PID_Init(&pid_pitch, 4.27f, 0.26f, 0.0f, 0.05f, 6, 70);
+    Nonline_PID_Init(&pid_yaw, 2.1f, 0.26f, 0.0f, 0.025f, 6, 70);
     // 角速度环g
     PID_Init(&pid_g_roll, 26.0f, 0.0f, 0.38f, 300, 2500);
     PID_Init(&pid_g_pitch, 26.0f, 0.0f, 0.38f, 300, 2500);

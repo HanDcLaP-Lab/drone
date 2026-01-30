@@ -50,6 +50,14 @@ void wireless_uart_output_status(void){   //打印目标倾角和实际倾角
     wireless_uart_send_float(flight_target.target_pitch);
     wireless_uart_send_string(",");
     wireless_uart_send_float(imu_data.pitch);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_g_roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.groll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_g_pitch);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.gpitch);
     wireless_uart_send_string("\n");
 }
 
