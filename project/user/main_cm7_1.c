@@ -65,7 +65,6 @@ int main(void)
         if (mt9v03x_finish_flag)
         {
             mt9v03x_finish_flag = 0;
-            
             image_processing_loop();
             M7_1_data_send(m7_1_data,uart_data);
 
