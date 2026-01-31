@@ -85,7 +85,7 @@ int main(void) {
     Flight_Control_Init();
 
     pit_ms_init(PIT_NUM1, 20); // 图像处理中断 20ms
-    pit_ms_init(PIT_NUM2, 400); // 输出中断 200ms
+    pit_ms_init(PIT_NUM2, 400); // 输出中断 400ms
     system_delay_ms(1000);
     pit_ms_init(PIT_NUM0, 1); // 飞控主循环中断 1ms
 

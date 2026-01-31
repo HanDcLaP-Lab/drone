@@ -20,17 +20,17 @@
 
 // 陀螺仪映射 (机体角速度)
 // 规则: 符合右手定则直接映射，轴向相反则取负
-#define IMU_MAP_GX(x, y, z)  (z)       // Roll  = Gz
-#define IMU_MAP_GY(x, y, z)  (-(y))    // Pitch = -Gy
-#define IMU_MAP_GZ(x, y, z)  (x)       // Yaw   = Gx
+#define IMU_MAP_GX(x, y, z)  (x)       // Roll  = Gz
+#define IMU_MAP_GY(x, y, z)  (y)    // Pitch = -Gy
+#define IMU_MAP_GZ(x, y, z)  (z)       // Yaw   = Gx
 
 // 加速度计映射 (重力向量, 即 -1 * 机体加速度)
 // 注意: Mahony算法需要重力向量方向(指向地心)
 // 规则: 重力向量 = -1 * 加速度计读数 (因为加速度计测量的是支撑力)
 // 推导: G_body = R_sensor_to_body * (-Acc_sensor)
-#define IMU_MAP_AX(x, y, z)  (-(z))    // Ax_g = -Az (Z轴指向前)
-#define IMU_MAP_AY(x, y, z)  (y)       // Ay_g = -(-Ay) = Ay (Y轴指向左, 两次取反抵消)
-#define IMU_MAP_AZ(x, y, z)  (-(x))    // Az_g = -Ax (X轴指向下)
+#define IMU_MAP_AX(x, y, z)  (-(x))
+#define IMU_MAP_AY(x, y, z)  (-(y))
+#define IMU_MAP_AZ(x, y, z)  (-(z))
 
 // ================= 硬件安装误差补偿 (度) =================
 #define IMU_MOUNT_ADJUST_ROLL   0.0f //直接填写水平放置的读数
