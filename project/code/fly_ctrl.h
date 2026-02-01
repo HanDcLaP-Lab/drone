@@ -15,12 +15,14 @@
 #define HOVER_THROTTLE 3550    // 基础悬停油门 
 #define MAX_PWM 5800
 #define MIN_PWM 0
-#define MAX_TILT_ANGLE 3.0f  // 最大倾角限制 (度) 
+#define MAX_TILT_ANGLE 10.0f  // 最大倾角限制 (度) 
 #define CTRL_DT_CTLOOP 0.001  // 控制周期
 #define CTRL_DT_CTANG 0.02   // 控制周期
 
 // 视觉控制增益
-#define ANGLE_COMP_COEF 1.40f  //位姿对像素的补偿
+// [优化] 针对170度广角镜头，降低位姿补偿系数 (原1.40 -> 0.90)
+// 广角镜头单位角度对应的像素位移较小，过大的系数会导致过度补偿引起绕圈震荡
+#define ANGLE_COMP_COEF 0.90f  //位姿对像素的补偿
 
 #define IMG_CENTER_X (MT9V03X_W / 2.0f)
 #define IMG_CENTER_Y (MT9V03X_H / 2.0f)

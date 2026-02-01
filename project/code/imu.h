@@ -33,8 +33,8 @@
 #define IMU_MAP_AZ(x, y, z)  (-(z))
 
 // ================= 硬件安装误差补偿 (度) =================
-#define IMU_MOUNT_ADJUST_ROLL   0.0f //直接填写水平放置的读数
-#define IMU_MOUNT_ADJUST_PITCH  0.0f
+#define IMU_MOUNT_ADJUST_ROLL   -1.39f //直接填写水平飞行的读数
+#define IMU_MOUNT_ADJUST_PITCH  1.94f
 
 // ================= Z轴融合参数 =================
 #define Z_CORRECT_POS_GAIN  0.3f   // 位置修正系数

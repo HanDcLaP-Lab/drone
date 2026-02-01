@@ -57,8 +57,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_pitch, 11.0f, 0.0f, 0.22f, 300, 2500);
     PID_Init(&pid_g_yaw, 5.5f, 0.0f, 0.11f, 120, 600);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.03f, 0.0f, 0.0005f, 0.0005f, 1, 15);
-    Nonline_PID_Init(&pid_image_y, 0.03f, 0.0f, 0.0005f, 0.0005f, 1, 15);
+    Nonline_PID_Init(&pid_image_x, 0.12f, 0.0f, 0.002f, 0.002f, 1, 15);
+    Nonline_PID_Init(&pid_image_y, 0.12f, 0.0f, 0.002f, 0.002f, 1, 15);
 }
 
 void Flight_Unlock(void) {
@@ -269,11 +269,11 @@ void motor_pwm_init() {
 
 
 void M7_1_data_send(float* M7_1_data, float* uart_data) {
-    M7_1_data[0] = (float)cam_down.centers[0][0];
-    M7_1_data[1] = (float)cam_down.centers[0][1];
+    M7_1_data[0] = cam_down.centers[0][0]; // [修改] 源数据已是float，直接赋值
+    M7_1_data[1] = cam_down.centers[0][1];
     M7_1_data[2] = (float)cam_down.dot_num[0];
-    uart_data[0] = (float)cam_down.centers[1][0];
-    uart_data[1] = (float)cam_down.centers[1][1];
+    uart_data[0] = cam_down.centers[1][0];
+    uart_data[1] = cam_down.centers[1][1];
     uart_data[2] = (float)cam_down.dot_num[1];
 
     if (cam_down.light_number == 0) {
@@ -283,8 +283,8 @@ void M7_1_data_send(float* M7_1_data, float* uart_data) {
 
 void Flight_Hover_Control_Task(void) {
     SCB_CleanInvalidateDCache_by_Addr((void*)&m7_1_data, sizeof(float) * DATA_LENGTH);
-    cam_down.centers[0][0] = (uint32_t)m7_1_data[0];  // Row
-    cam_down.centers[0][1] = (uint32_t)m7_1_data[1];  // Col
+    cam_down.centers[0][0] = m7_1_data[0];  // [修改] 接收float数据，不再强转为uint32_t
+    cam_down.centers[0][1] = m7_1_data[1];  // [修改] 接收float数据
     cam_down.dot_num[0] = (uint32_t)m7_1_data[2];     // Area
     if (cam_down.dot_num[0] > MIN_LIGHT_SIZE && cam_down.centers[0][0] > 0 && cam_down.centers[0][1] > 0) {
         cam_down.light_number = 1;

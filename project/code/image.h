@@ -23,7 +23,7 @@ typedef struct {
 
     // --- 处理结果 ---
     uint8_t light_number;            // 识别到的有效灯数量
-    uint32_t centers[MAX_LIGHTS][2]; // 灯光质心坐标 [row(y), col(x)]
+    float centers[MAX_LIGHTS][2];    // [修改] 灯光质心坐标改为 float 以提高精度
                                      // 注意: row对应图像垂直方向，col对应图像水平方向
     uint32_t dot_num[MAX_DOTS];      // 灯光像素点数 (面积)
     uint8_t components_count;        // 连通域数量

@@ -3,6 +3,13 @@
 
 #include "zf_common_headfile.h"
 
+// =================== PID 配置 ===================
+// D项低通滤波截止频率 (Hz)
+// 推荐值: 20Hz ~ 60Hz. 越小越平滑但延迟越高，越大对噪声越敏感。
+// 对于 1kHz (1ms) 的控制回路，40Hz 是一个平衡的选择。
+#define PID_D_FILTER_HZ 40.0f
+#define PID_PI 3.1415926535f
+
 // =================== PID 结构体定义 ===================
 typedef struct {
     // --- 参数 (Parameters) ---
@@ -16,6 +23,7 @@ typedef struct {
     // --- 运行时状态 (Runtime State) ---
     float integral;     // 积分累加值
     float prev_error;   // 上一次误差 (用于计算微分)
+    float prev_derivative; // [新增] 上一次的微分值 (用于低通滤波)
 } PID_t;
 
 typedef struct {

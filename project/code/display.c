@@ -21,9 +21,9 @@ void display_motor_output_display()
     
   
     ips200_show_string(0,16*4,"y:");
-    ips200_show_int(40,16*4 , cam_down.centers[0][0], 4);
+    ips200_show_float(40,16*4 , cam_down.centers[0][0], 3, 2); // [修改] 显示浮点数坐标
     ips200_show_string(120,16*4,"x:");
-    ips200_show_int(160,16*4 , cam_down.centers[0][1], 4);
+    ips200_show_float(160,16*4 , cam_down.centers[0][1], 3, 2); // [修改] 显示浮点数坐标
     
     ips200_show_string(0,16*5,"t_p:");
     ips200_show_float(40,16*5 , flight_target.target_pitch, 3,2);
