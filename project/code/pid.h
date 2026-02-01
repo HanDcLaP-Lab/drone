@@ -4,10 +4,6 @@
 #include "zf_common_headfile.h"
 
 // =================== PID 配置 ===================
-// D项低通滤波截止频率 (Hz)
-// 推荐值: 20Hz ~ 60Hz. 越小越平滑但延迟越高，越大对噪声越敏感。
-// 对于 1kHz (1ms) 的控制回路，40Hz 是一个平衡的选择。
-#define PID_D_FILTER_HZ 40.0f
 #define PID_PI 3.1415926535f
 
 // =================== PID 结构体定义 ===================
@@ -19,6 +15,7 @@ typedef struct {
     
     float max_i;        // 积分限幅 (防止积分饱和/Windup)
     float out_max;      // 总输出限幅
+    float d_filter_hz;  // [新增] D项低通滤波截止频率 (Hz)
     
     // --- 运行时状态 (Runtime State) ---
     float integral;     // 积分累加值
@@ -35,10 +32,12 @@ typedef struct {
     
     float max_i;        // 积分限幅 (防止积分饱和/Windup)
     float out_max;      // 总输出限幅
+    float d_filter_hz;  // [新增] D项低通滤波截止频率 (Hz)
     
     // --- 运行时状态 (Runtime State) ---
     float integral;     // 积分累加值
     float prev_error;   // 上一次误差 (用于计算微分)
+    float prev_derivative; // [新增] 上一次的微分值 (用于低通滤波)
 } Nonline_PID_t;
 
 extern PID_t pid_height_vel;
@@ -62,8 +61,8 @@ extern PID_t pid_g_yaw;
  * @param max_i: 积分项的最大值 (绝对值)
  * @param out_max: 总输出的最大值 (绝对值)
  */
-void PID_Init(PID_t *pid, float kp, float ki, float kd, float max_i, float out_max);
-void Nonline_PID_Init(Nonline_PID_t *pid, float kp, float ki, float kd, float kp2, float max_i, float out_max);
+void PID_Init(PID_t *pid, float kp, float ki, float kd, float max_i, float out_max, float d_filter_hz);
+void Nonline_PID_Init(Nonline_PID_t *pid, float kp, float ki, float kd, float kp2, float max_i, float out_max, float d_filter_hz);
 
 /**
  * 重置 PID 状态 (清除积分和历史误差)
