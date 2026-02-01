@@ -84,6 +84,10 @@ void wireless_uart_output_pid(void){    //打印pid数据
     wireless_uart_send_float(imu_data.roll);
     wireless_uart_send_string(",");
     wireless_uart_send_float(imu_data.pitch);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(pid_roll.integral);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(pid_pitch.integral);
     wireless_uart_send_string("\n");
 }
 

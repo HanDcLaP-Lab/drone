@@ -86,6 +86,7 @@ int main(void) {
 
     pit_ms_init(PIT_NUM1, 20); // 图像处理中断 20ms
     pit_ms_init(PIT_NUM2, 400); // 输出中断 400ms
+    pit_ms_init(PIT_CH10, 1000);
     system_delay_ms(1000);
     pit_ms_init(PIT_NUM0, 1); // 飞控主循环中断 1ms
 
@@ -103,7 +104,8 @@ int main(void) {
                 
                 // 将参数应用到 PID (通道号 = 索引 + 1)
                 // seekfree_assistant_parameter[i] 是接收到的浮点数值
-                Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]); 
+                //Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]); 
+                Fly_Param_Update_Visual(i + 1, seekfree_assistant_parameter[i]);
                 
                 // 可选：通过无线串口回传确认，告诉上位机收到并更新了
                 // wireless_uart_send_string("Param Updated\r\n");

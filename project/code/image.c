@@ -142,12 +142,12 @@ static void sort_lights(CameraObject *cam) {
                 cam->dot_num[j+1] = temp_num;
 
                 // 2. 交换坐标 (Row/Y)
-                uint32_t temp_row = cam->centers[j][0];
+                float temp_row = cam->centers[j][0];
                 cam->centers[j][0] = cam->centers[j+1][0];
                 cam->centers[j+1][0] = temp_row;
 
                 // 3. 交换坐标 (Col/X)
-                uint32_t temp_col = cam->centers[j][1];
+                float temp_col = cam->centers[j][1];
                 cam->centers[j][1] = cam->centers[j+1][1];
                 cam->centers[j+1][1] = temp_col;
             }
@@ -187,8 +187,8 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
     for (int i = 0; i < cam->components_count && i < MAX_DOTS; i++) {
         if (cam->dot_num[i] > MIN_LIGHT_SIZE) {
             if (valid_idx < MAX_LIGHTS) {
-                cam->centers[valid_idx][0] = sum_r[i] / cam->dot_num[i]; // Row (Y)
-                cam->centers[valid_idx][1] = sum_c[i] / cam->dot_num[i]; // Col (X)
+                cam->centers[valid_idx][0] = (float)sum_r[i] / (float)cam->dot_num[i]; // Row (Y)
+                cam->centers[valid_idx][1] = (float)sum_c[i] / (float)cam->dot_num[i]; // Col (X)
                 cam->dot_num[valid_idx] = cam->dot_num[i]; 
                 
                 valid_idx++;

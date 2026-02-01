@@ -12,7 +12,7 @@
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 100.0f  // 目标高度
 #define LAND_HEIGHT 10.0f       // 着陆高度
-#define HOVER_THROTTLE 3550    // 基础悬停油门 
+#define HOVER_THROTTLE 3750    // 基础悬停油门 
 #define MAX_PWM 5800
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 10.0f  // 最大倾角限制 (度) 
@@ -97,4 +97,5 @@ void M7_1_data_send(float* M7_1_data,float* uart_data);
 void Flight_Hover_Control_Task(void);
 // [code/fly_ctrl.h] 在 "函数声明" 区域添加
 void Fly_Param_Update(uint8_t ch, float val);
+void Fly_Param_Update_Visual(uint8_t ch, float val);
 #endif

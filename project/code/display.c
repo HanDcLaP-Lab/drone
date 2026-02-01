@@ -40,14 +40,12 @@ void display_motor_output_display()
     ips200_show_string(120,16*8,"z:");
     ips200_show_float(160,16*8 , imu_data.z, 3,2);
     
-    // ips200_show_string(120,16*10,"yaw:");
-    // ips200_show_float(160,16*10 , imu_data.yaw, 3,2);
-    // ips200_show_string(0,16*9,"GR:");
-    // ips200_show_int(40,16*9 , (int)imu_data.groll, 4);
-    // ips200_show_string(120,16*9,"GP:");
-    // ips200_show_int(160,16*9 , (int)imu_data.gpitch, 4);
-    // ips200_show_string(0,16*10,"GY:");
-    // ips200_show_int(40,16*10 , (int)imu_data.gyaw, 4);
+    ips200_show_string(0,16*9,"GR:");
+    ips200_show_int(40,16*9 , (int)imu_data.groll, 4);
+    ips200_show_string(120,16*9,"GP:");
+    ips200_show_int(160,16*9 , (int)imu_data.gpitch, 4);
+    ips200_show_string(0,16*10,"GY:");
+    ips200_show_int(40,16*10 , (int)imu_data.gyaw, 4);
 
     ips200_show_string(0,16*11,"a_kp:");
     ips200_show_float(40,16*11 , pid_roll.kp, 4 , 2);
@@ -55,10 +53,21 @@ void display_motor_output_display()
     ips200_show_float(160,16*11 , pid_roll.ki, 4 , 2);
     ips200_show_string(0,16*12,"a_kp2:");
     ips200_show_float(40,16*12 , pid_roll.kp2, 4 , 2);
-    ips200_show_string(0,16*13,"g_kp:");
-    ips200_show_float(40,16*13 , pid_g_roll.kp, 4 , 2);
+    ips200_show_string(120,16*12,"g_kp:");
+    ips200_show_float(160,16*12 , pid_g_roll.kp, 4 , 2);
+    ips200_show_string(0,16*13,"g_ki:");
+    ips200_show_float(40,16*13 , pid_g_roll.ki, 4 , 2);
     ips200_show_string(120,16*13,"g_kd:");
     ips200_show_float(160,16*13 , pid_g_roll.kd, 4 , 2);
+
+    ips200_show_string(0,16*15,"v_kp:");
+    ips200_show_float(40,16*15 , pid_image_x.kp, 4 , 2);
+    ips200_show_string(120,16*15,"v_ki:");
+    ips200_show_float(160,16*15 , pid_image_x.ki, 4 , 2);
+    ips200_show_string(0,16*16,"v_kd:");
+    ips200_show_float(40,16*16 , pid_image_x.kd, 4 , 2);
+    ips200_show_string(120,16*16,"v_kp2:");
+    ips200_show_float(160,16*16 , pid_image_x.kp2, 4 , 2);
     
     
 }

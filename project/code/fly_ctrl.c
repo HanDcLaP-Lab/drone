@@ -49,16 +49,16 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_height_pos, 0.5f, 0.15f, 0.0f, 3, 30, 40.0f);
     PID_Init(&pid_height_vel, 24.0f, 0.0f, 0.2f, 80, 1000, 40.0f);
     // 角度环a
-    Nonline_PID_Init(&pid_roll, 4.5f, 0.1f, 0.0f, 0.05f, 20, 150, 40.0f);
-    Nonline_PID_Init(&pid_pitch, 4.5f, 0.1f, 0.0f, 0.05f, 20, 150, 40.0f);
-    Nonline_PID_Init(&pid_yaw, 1.0f, 0.8f, 0.0f, 0.03f, 6, 70, 40.0f);
+    Nonline_PID_Init(&pid_roll, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
+    Nonline_PID_Init(&pid_pitch, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
+    Nonline_PID_Init(&pid_yaw, 1.0f, 0.4f, 0.0f, 0.03f, 6, 70, 40.0f);
     // 角速度环g
-    PID_Init(&pid_g_roll, 6.5f, 10.0f, 0.15f, 150, 3500, 40.0f);
-    PID_Init(&pid_g_pitch, 6.5f, 10.0f, 0.15f, 150, 3500, 40.0f);
-    PID_Init(&pid_g_yaw, 3.5f, 10.0f, 0.1f, 150, 3500, 40.0f);
+    PID_Init(&pid_g_roll, 1.86f, 0.08f, 0.12f, 30, 3500, 40.0f);
+    PID_Init(&pid_g_pitch, 1.86f, 0.08f, 0.12f, 30, 3500, 40.0f);
+    PID_Init(&pid_g_yaw, 0.93f, 0.04f, 0.06f, 30, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.15f, 0.0f, 0.005f, 0.003f, 1, 15, 5.0f);
-    Nonline_PID_Init(&pid_image_y, 0.15f, 0.0f, 0.005f, 0.003f, 1, 15, 5.0f);
+    Nonline_PID_Init(&pid_image_x, 0.29f, 0.06f, 0.266f, 0.0f, 15, 15, 10.0f);
+    Nonline_PID_Init(&pid_image_y, 0.29f, 0.06f, 0.266f, 0.0f, 15, 15, 10.0f);
 }
 
 void Flight_Unlock(void) {
@@ -293,16 +293,18 @@ void Flight_Hover_Control_Task(void) {
     }
     if (cam_down.light_number >= 1) {
         // 直接计算像素误差
-        float car_row = (float)Kalman_Update(&K_w_ay, cam_down.centers[0][0]);
-        float car_col = (float)Kalman_Update(&K_w_ax, cam_down.centers[0][1]);
+        // [移除] 移除卡尔曼滤波。视觉数据(50Hz)本身已有较大延迟，额外的强低通滤波会加剧相位滞后，导致严重的"荡秋千"。
+        // 且质心计算本身具有均值特性，直接使用原始数据响应更快。
+        float car_row = cam_down.centers[0][0];
+        float car_col = cam_down.centers[0][1];
 
         comp_row = car_row - (imu_data.pitch * ANGLE_COMP_COEF);
 
         comp_col = car_col - (imu_data.roll * ANGLE_COMP_COEF);
         float error_row = comp_row - IMG_CENTER_Y;
         float error_col = comp_col - IMG_CENTER_X;
-        if(fabs(error_col) < ACCEPT_ERROR) error_col = 0;
-        if(fabs(error_row) < ACCEPT_ERROR) error_row = 0;
+        //if(fabs(error_col) < ACCEPT_ERROR) error_col = 0;
+        //if(fabs(error_row) < ACCEPT_ERROR) error_row = 0;
         // if(cam_down.dot_num[0] > VALID_MIN_NUM) error_row = error_col = 0;
 
         // PID 控制
@@ -336,18 +338,18 @@ void Fly_Param_Update(uint8_t ch, float val) {
             pid_yaw.ki = val * 0.5f;
             break;
             
-        case 3: // 角度环 KP2 (非线性项)
-            pid_roll.kp2 = val;
-            pid_pitch.kp2 = val;
-            pid_yaw.kp2 = val * 0.5f;
+        case 3: // 角速度环 KP
+            pid_g_roll.kp = val;
+            pid_g_pitch.kp = val;
+            pid_g_yaw.kp = val * 0.5f;
             break;
 
         // === 第二组：角速度环 (PID) ===
         // 包含 kp, kd (通常速度环 ki 给 0 或很小，这里只调 kp, kd)
-        case 4: // 角速度环 KP
-            pid_g_roll.kp = val;
-            pid_g_pitch.kp = val;
-            pid_g_yaw.kp = val * 0.5f;
+        case 4: // 角速度环 KI
+            pid_g_roll.ki = val;
+            pid_g_pitch.ki = val;
+            pid_g_yaw.ki = val * 0.5f;
             break;
             
         case 5: // 角速度环 KD
@@ -378,6 +380,61 @@ void Fly_Param_Update(uint8_t ch, float val) {
                 flight_target.cur_state = normal;
                 start_up_scale = 0;
             }
+        default:
+            break;
+    }
+}
+
+void Fly_Param_Update_Visual(uint8_t ch, float val) {
+    switch (ch) {
+        case 1: // 视觉环 KP
+            pid_image_x.kp = val;
+            pid_image_y.kp = val;
+            break;
+        case 2: // 视觉环 KI
+            pid_image_x.ki = val;
+            pid_image_y.ki = val;
+            break;
+        case 3: // 视觉环 KD
+            pid_image_x.kd = val;
+            pid_image_y.kd = val;
+            break;
+        case 4: // 视觉环 KP2
+            pid_image_x.kp2 = val;
+            pid_image_y.kp2 = val;
+            break;
+        case 5: // 角速度环 KP
+            pid_g_roll.kp = val;
+            pid_g_pitch.kp = val;
+            pid_g_yaw.kp = val * 0.5f;
+            break;
+        case 6: // 角速度环 KI
+            pid_g_roll.ki = val;
+            pid_g_pitch.ki = val;
+            pid_g_yaw.ki = val * 0.5f;
+            break;
+        case 7: // 角速度环 KD
+            pid_g_roll.kd = val;
+            pid_g_pitch.kd = val;
+            pid_g_yaw.kd = val * 0.5f;
+            break;
+        case 8:
+            if(0.5 <= val && val < 1.5){
+                wireless_uart_send_string("land\r\n");
+                flight_target.cur_state = pre_landing; 
+            }else if(val >=1.5 && val <=2.5){
+                wireless_uart_send_string("emergency stop\r\n");
+                Flight_Lock();
+            }else if(val <= 0.5 && val >= -0.5){
+                if (imu_data.is_calibrated) {
+                    Flight_Unlock();
+                } else {
+                    flight_target.is_armed = 2; 
+                }
+                flight_target.cur_state = normal;
+                start_up_scale = 0;
+            }
+            break;
         default:
             break;
     }
