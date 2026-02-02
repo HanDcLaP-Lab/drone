@@ -19,7 +19,6 @@ PID_t pid_g_roll;
 PID_t pid_g_pitch;
 PID_t pid_g_yaw;
 
-float comp_coef=1.47;
 
 extern float m7_1_data[6];
 static float start_up_scale = 0.0f;
@@ -59,8 +58,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_pitch, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     PID_Init(&pid_g_yaw, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.2f, 0.00f, 0.331f, 0.0029f, 100, 15, 6.0f);
-    Nonline_PID_Init(&pid_image_y, 0.2f, 0.00f, 0.331f, 0.0029f, 100, 15, 6.0f);
+    Nonline_PID_Init(&pid_image_x, 0.15f, 0.00f, 0.205f, 0.003f, 100, 15, 6.0f);
+    Nonline_PID_Init(&pid_image_y, 0.15f, 0.00f, 0.205f, 0.003f, 100, 15, 6.0f);
 }
 
 void Flight_Unlock(void) {
@@ -297,8 +296,8 @@ void Flight_Hover_Control_Task(void) {
         // 直接计算像素误差
         // [移除] 移除卡尔曼滤波。视觉数据(50Hz)本身已有较大延迟，额外的强低通滤波会加剧相位滞后，导致严重的"荡秋千"。
         // 且质心计算本身具有均值特性，直接使用原始数据响应更快。
-        cam_down.centers[0][0] -= imu_data.pitch * comp_coef;
-        cam_down.centers[0][1] -= imu_data.roll * comp_coef;
+        cam_down.centers[0][0] -= imu_data.pitch * ANGLE_COMP_COEF;
+        cam_down.centers[0][1] -= imu_data.roll * ANGLE_COMP_COEF;
 
         // [新增] 高度增益修正，并将结果回写到 cam_down.centers
         // 原理：相同物理位移在不同高度下对应的像素偏移不同。高度越高，像素偏移越小。
@@ -401,10 +400,8 @@ void Fly_Param_Update_Visual(uint8_t ch, float val) {
             pid_image_y.kp = val;
             break;
         case 2: // 视觉环 KI
-          comp_coef = val;
-          /*
             pid_image_x.ki = val;
-            pid_image_y.ki = val;*/
+            pid_image_y.ki = val;
             break;
         case 3: // 视觉环 KD
             pid_image_x.kd = val;
