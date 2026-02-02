@@ -73,6 +73,10 @@ void wireless_uart_output_imu(void){   //打印imu数据
 }
 
 void wireless_uart_output_pid(void){    //打印pid数据
+    wireless_uart_send_float(flight_target.target_roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_pitch);
+    wireless_uart_send_string(",");
     wireless_uart_send_float(flight_target.target_g_roll);
     wireless_uart_send_string(",");
     wireless_uart_send_float(flight_target.target_g_pitch);
