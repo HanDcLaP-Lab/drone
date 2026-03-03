@@ -273,9 +273,14 @@ void M7_1_data_send(float* M7_1_data, float* uart_data) {
     M7_1_data[0] = cam_down.centers[0][0]; // [修改] 源数据已是float，直接赋值
     M7_1_data[1] = cam_down.centers[0][1];
     M7_1_data[2] = (float)cam_down.dot_num[0];
-    uart_data[0] = cam_down.centers[1][0];
-    uart_data[1] = cam_down.centers[1][1];
-    uart_data[2] = (float)cam_down.dot_num[1];
+    uart_data[0] = cam_down.centers[0][0];
+    uart_data[1] = cam_down.centers[0][1];
+    uart_data[2] = cam_down.centers[1][0];
+    uart_data[3] = cam_down.centers[1][1];
+    uart_data[4] = M7_1_data[3];
+    uart_data[5] = M7_1_data[4];
+    uart_data[6] = M7_1_data[5];
+    uart_data[7] = M7_1_data[6];
 
     if (cam_down.light_number == 0) {
         M7_1_data[2] = uart_data[2] = 0;

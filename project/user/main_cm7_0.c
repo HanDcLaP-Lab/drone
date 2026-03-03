@@ -44,7 +44,7 @@
 
 // **************************** 代码区域 ****************************
 //---------------------------------多核心通讯---------------------------------------------//
-//#define DATA_LENGTH (3)  // 数组数据长度(移动至fly_ctrl.h文件中统一定义)
+//#define DATA_LENGTH (8)  // 数组数据长度(移动至fly_ctrl.h文件中统一定义)
 
 #pragma location = 0x28001000  // 将下面这个数组定义到指定的RAM地址，#pragma需要手动分配地址，因此需要计算数据长度后再分配
 __root __no_init volatile float m7_1_data[DATA_LENGTH];
@@ -112,6 +112,11 @@ int main(void) {
             }
         }
 
+        m7_1_data[3] = imu_data.roll; //向m7_1_data数组中写入当前的IMU数据 以便M7_1向小车发送数据
+        m7_1_data[4] = imu_data.pitch;
+        m7_1_data[5] = imu_data.yaw;
+        m7_1_data[6] = imu_data.z;
+        SCB_CleanInvalidateDCache_by_Addr((void*)&m7_1_data, sizeof(float) * DATA_LENGTH);
         system_delay_ms(10); // 稍微延时
 
     }

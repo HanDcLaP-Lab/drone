@@ -43,7 +43,7 @@
 #define TEST_RX_PIN      UART4_RX_P14_0  
 //----------------------------多核通讯-----------------------------//
 
-#define DATA_LENGTH               (3)                                           // 数组数据长度
+#define DATA_LENGTH               (8)                                           // 数组数据长度
 float uart_data[DATA_LENGTH] = {0}; 
 
 #pragma location = 0x28001000                                                   // 将下面这个数组定义到指定的RAM地址，便于其他核心直接访问(开源库默认在 0x28001000 地址保留了8kb的空间用于数据交互)
@@ -67,6 +67,7 @@ int main(void)
         {
             mt9v03x_finish_flag = 0;
             image_processing_loop();
+            SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
             M7_1_data_send(m7_1_data,uart_data);
 
             // 跨核通讯

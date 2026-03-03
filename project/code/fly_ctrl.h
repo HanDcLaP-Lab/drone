@@ -29,7 +29,7 @@
 #define VALID_MIN_NUM 300
 #define ACCEPT_ERROR 6.0f
 //视觉传输
-#define DATA_LENGTH (3)
+#define DATA_LENGTH (8)
 extern float comp_row;
 extern float comp_col;
 
