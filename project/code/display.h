@@ -9,4 +9,5 @@
 
 void display_init();
 void display_motor_output_display(); 
+void display_image_display(void);
 #endif

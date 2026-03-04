@@ -43,15 +43,16 @@
 #define TEST_RX_PIN      UART4_RX_P14_0  
 //----------------------------多核通讯-----------------------------//
 
-#define DATA_LENGTH               (8)                                           // 数组数据长度
-float uart_data[DATA_LENGTH] = {0}; 
+
+float uart_data[UART_DATA_LENGTH] = {0}; 
+
+int32_t image_cnt = 0;
 
 #pragma location = 0x28001000                                                   // 将下面这个数组定义到指定的RAM地址，便于其他核心直接访问(开源库默认在 0x28001000 地址保留了8kb的空间用于数据交互)
                                                                                 // 此处为0x28001014的原因是前面放了一个M0的数组
-float m7_1_data[DATA_LENGTH] = {0} ;                      // 定义 M7_1 演示数据数组 浮点数类型
+volatile float m7_1_data[M7_1_DATA_LENGTH] = {0} ;             // 定义 M7_1 演示数据数组 浮点数类型
 
 
-int32_t image_cnt = 0;
 
 int main(void)
 {
@@ -66,12 +67,17 @@ int main(void)
         if (mt9v03x_finish_flag)
         {
             mt9v03x_finish_flag = 0;
+            
+            SCB_InvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));
+            
             image_processing_loop();
-            SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
-            M7_1_data_send(m7_1_data,uart_data);
+            
+            // 使用最新的IMU数据(来自Core0)和最新的图像中心(来自image_processing_loop)进行解算
+            // m7_1_data: [3]=Roll, [4]=Pitch, [6]=Height
+            calculate_ground_positions(m7_1_data[6], m7_1_data[4], m7_1_data[3]);
 
-            // 跨核通讯
-            SCB_CleanInvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));   
+            M7_1_data_send(m7_1_data,uart_data);
+            SCB_CleanDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));
             
             //UART
             uart_write_buffer(TEST_UART, (const uint8_t *)uart_data, sizeof(uart_data));

@@ -112,5 +112,6 @@
 #include "kalman_filter.h"
 #include "image.h"
 #include "display.h"
+#include "image_process.h"
 //-------------------------------------------------------”√ªß≤„---------------------------------------------------------
 #endif

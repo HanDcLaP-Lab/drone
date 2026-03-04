@@ -1,6 +1,7 @@
 #include "display.h"
 #include "zf_common_headfile.h"
 
+extern float m7_1_data[M7_1_DATA_LENGTH];
 void display_init()
 {
     ips200_set_dir(IPS200_PORTAIT);
@@ -69,5 +70,15 @@ void display_motor_output_display()
     ips200_show_string(120,16*16,"v_kp2:");
     ips200_show_float(160,16*16 , pid_image_x.kp2, 4 , 2);
     
-    
+    ips200_show_string(0,16*17,"x:");
+    ips200_show_float(40,16*17, m7_1_data[7], 4, 2);
+    ips200_show_string(120,16*17,"y:");
+    ips200_show_float(160,16*17, m7_1_data[8], 4, 2);
+}
+
+void display_image_display(void){
+    ips200_show_string(0,16*16,"x:");
+    ips200_show_float(40,16*16, car_ground_pos.x, 4, 2);
+    ips200_show_string(120,16*16,"y:");
+    ips200_show_float(160,16*16, car_ground_pos.y, 4, 2);
 }

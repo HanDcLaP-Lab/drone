@@ -1,5 +1,5 @@
 #include "image.h"
-
+#include "zf_common_headfile.h"
 // --- 1. 内存分配 ---
 // 定义二值化图像缓冲区 (只定义一个)
 uint8_t buffer_bin_down[MT9V03X_H][MT9V03X_W];
@@ -8,6 +8,7 @@ uint8_t visited_buffer[MT9V03X_H * MT9V03X_W];
 uint8 image_copy[MT9V03X_H][MT9V03X_W];
 // 定义全局实例
 CameraObject cam_down;
+extern float m7_1_data[M7_1_DATA_LENGTH];
 
 // --- 2. 初始化函数 ---
 void camera_init(void) {
@@ -213,6 +214,8 @@ void image_processing_loop(void) {
     // 3. 计算质心
     calculate_centroids(&cam_down, visited_buffer);
 
+    // 4. 矫正处理
+    //calculate_ground_positions(m7_1_data[6], m7_1_data[4], m7_1_data[3]);
 } 
 
 void image_send(void){

@@ -20,7 +20,7 @@ PID_t pid_g_pitch;
 PID_t pid_g_yaw;
 
 
-extern float m7_1_data[6];
+extern float m7_1_data[M7_1_DATA_LENGTH];
 static float start_up_scale = 0.0f;
 // =================== 内部辅助函数 ===================
 static float Constrain_Float(float val, float min, float max) {
@@ -269,26 +269,35 @@ void motor_pwm_init() {
 }
 
 
-void M7_1_data_send(float* M7_1_data, float* uart_data) {
+void M7_1_data_send(volatile float* M7_1_data,volatile float* uart_data) { //在7_1中调用这个函数向M7_0发送数据
     M7_1_data[0] = cam_down.centers[0][0]; // [修改] 源数据已是float，直接赋值
     M7_1_data[1] = cam_down.centers[0][1];
     M7_1_data[2] = (float)cam_down.dot_num[0];
-    uart_data[0] = cam_down.centers[0][0];
-    uart_data[1] = cam_down.centers[0][1];
-    uart_data[2] = cam_down.centers[1][0];
-    uart_data[3] = cam_down.centers[1][1];
+    uart_data[0] = car_ground_pos.x;
+    uart_data[1] = car_ground_pos.y;
+    uart_data[2] = target_ground_pos.x;
+    uart_data[3] = target_ground_pos.y;
     uart_data[4] = M7_1_data[3];
     uart_data[5] = M7_1_data[4];
     uart_data[6] = M7_1_data[5];
     uart_data[7] = M7_1_data[6];
 
+    M7_1_data[7] = car_ground_pos.x;
+    M7_1_data[8] = car_ground_pos.y;
     if (cam_down.light_number == 0) {
         M7_1_data[2] = uart_data[2] = 0;
     }
 }
 
+void M7_1_data_send_m7_0(volatile float* M7_1_data) { //在7_0中调用这个函数向M7_1发送数据
+    m7_1_data[3] = imu_data.roll; //向m7_1_data数组中写入当前的IMU数据 以便M7_1向小车发送数据
+    m7_1_data[4] = imu_data.pitch;
+    m7_1_data[5] = imu_data.yaw;
+    m7_1_data[6] = imu_data.z;
+}
+
 void Flight_Hover_Control_Task(void) {
-    SCB_CleanInvalidateDCache_by_Addr((void*)&m7_1_data, sizeof(float) * DATA_LENGTH);
+    SCB_CleanInvalidateDCache_by_Addr((void*)&m7_1_data, sizeof(float) * M7_1_DATA_LENGTH);
     cam_down.centers[0][0] = m7_1_data[0];  // [修改] 接收float数据，不再强转为uint32_t
     cam_down.centers[0][1] = m7_1_data[1];  // [修改] 接收float数据
     cam_down.dot_num[0] = (uint32_t)m7_1_data[2];     // Area

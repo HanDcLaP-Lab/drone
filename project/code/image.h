@@ -9,6 +9,9 @@
 #define MAX_DOTS 10         // 最大记录的连通域数量
 #define THRESHOLD 120      //二值化阈值设置
 #define MIN_LIGHT_SIZE  5   //灯最小判定大小
+
+#define UART_DATA_LENGTH 8  // 数组数据长度
+#define M7_1_DATA_LENGTH 10
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---
@@ -32,6 +35,7 @@ typedef struct {
 
 // 声明全局下视摄像头实例
 extern CameraObject cam_down; 
+
 
 // 函数声明
 void camera_init(void);           // 初始化
