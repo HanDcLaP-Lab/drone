@@ -46,9 +46,11 @@
 //---------------------------------多核心通讯---------------------------------------------//
 //#define DATA_LENGTH (8)  // 数组数据长度(移动至image.h文件中统一定义)
 
-#pragma location = 0x28001000  // 将下面这个数组定义到指定的RAM地址，#pragma需要手动分配地址，因此需要计算数据长度后再分配
-__root __no_init volatile float m7_1_data[M7_1_DATA_LENGTH];
-// 定义M7_1演示数据数组 浮点数类型  由于该数组已经在M7_1核心赋值过初值，因此此处不再初始化
+#pragma location = 0x28001000  
+__root __no_init volatile float share_data_from_1[M7_1_DATA_LENGTH]; // Core 1 写 -> Core 0 读 (视觉数据)
+
+#pragma location = 0x28001040  // 偏移64字节，确保与上面数组不在同一个Cache Line (32字节)
+__root __no_init volatile float share_data_from_0[M7_1_DATA_LENGTH]; // Core 0 写 -> Core 1 读 (IMU数据)
 
 //----------------------------------------------------------------------------------------//
 #define PIT_NUM0 (PIT_CH0)
@@ -112,10 +114,14 @@ int main(void) {
             }
         }
 
-        SCB_InvalidateDCache_by_Addr((void*)&m7_1_data, sizeof(float) * M7_1_DATA_LENGTH);
-        M7_1_data_send_m7_0(m7_1_data);
-        SCB_CleanDCache_by_Addr((void*)&m7_1_data, sizeof(float) * M7_1_DATA_LENGTH);
-        system_delay_ms(10); // 稍微延时
+        // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
+        SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
+        
+        // 2. 写入 IMU 数据，并 Clean Cache (刷入 RAM 供 Core 1 读取)
+        M7_1_data_send_m7_0(share_data_from_0);
+        SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
+        
+        system_delay_ms(5); // 稍微延时
 
     }
 }

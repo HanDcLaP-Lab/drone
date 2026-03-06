@@ -1,7 +1,7 @@
 #include "display.h"
 #include "zf_common_headfile.h"
 
-extern float m7_1_data[M7_1_DATA_LENGTH];
+extern volatile float share_data_from_1[];
 void display_init()
 {
     ips200_set_dir(IPS200_PORTAIT);
@@ -71,14 +71,49 @@ void display_motor_output_display()
     ips200_show_float(160,16*16 , pid_image_x.kp2, 4 , 2);
     
     ips200_show_string(0,16*17,"x:");
-    ips200_show_float(40,16*17, m7_1_data[7], 4, 2);
+    ips200_show_float(40,16*17, share_data_from_1[3], 4, 2);
     ips200_show_string(120,16*17,"y:");
-    ips200_show_float(160,16*17, m7_1_data[8], 4, 2);
+    ips200_show_float(160,16*17, share_data_from_1[4], 4, 2);
 }
 
 void display_image_display(void){
-    ips200_show_string(0,16*16,"x:");
-    ips200_show_float(40,16*16, car_ground_pos.x, 4, 2);
-    ips200_show_string(120,16*16,"y:");
-    ips200_show_float(160,16*16, car_ground_pos.y, 4, 2);
+    ips200_show_string(0,16*1,"x:");
+    ips200_show_float(40,16*1, share_data_from_1[1], 4, 2);
+    ips200_show_string(120,16*1,"y:");
+    ips200_show_float(160,16*1, share_data_from_1[0], 4, 2);
+
+    ips200_show_string(0,16*3,"cx:");
+    ips200_show_float(40,16*3, share_data_from_1[3], 4, 2);
+    ips200_show_string(120,16*3,"cy:");
+    ips200_show_float(160,16*3, share_data_from_1[4], 4, 2);
+    ips200_show_string(0,16*4,"tx:");
+    ips200_show_float(40,16*4, share_data_from_1[5], 4, 2);
+    ips200_show_string(120,16*4,"ty:");
+    ips200_show_float(160,16*4, share_data_from_1[6], 4, 2);
+
+    ips200_show_string(0,16*5,"x:");
+    ips200_show_float(40,16*5, share_data_from_1[7], 4, 2);
+    ips200_show_string(120,16*5,"y:");
+    ips200_show_float(160,16*5, share_data_from_1[8], 4, 2);
+    ips200_show_string(0,16*6,"z:");
+    ips200_show_float(40,16*6, share_data_from_1[9], 4, 2);
+
+    ips200_show_string(0,16*7,"x:");
+    ips200_show_float(40,16*7, share_data_from_1[10], 4, 2);
+    ips200_show_string(120,16*7,"y:");
+    ips200_show_float(160,16*7, share_data_from_1[11], 4, 2);
+    ips200_show_string(0,16*8,"z:");
+    ips200_show_float(40,16*8, share_data_from_1[12], 4, 2);
+
+    ips200_show_string(0,16*9,"Ro:");
+    ips200_show_float(40,16*9 , imu_data.roll, 3,2);
+    ips200_show_string(120,16*9,"Pi:");
+    ips200_show_float(160,16*9 , imu_data.pitch, 3,2);
+    ips200_show_string(0,16*10,"Ya:");
+    ips200_show_float(40,16*10 , imu_data.yaw, 3,2);
+    ips200_show_string(120,16*10,"z:");
+    ips200_show_float(160,16*10 , imu_data.z, 3,2);
+
+    ips200_show_string(0,16*12,"di:");
+    ips200_show_float(40,16*12 , share_data_from_1[13], 4,2);
 }

@@ -164,8 +164,9 @@ static void sort_lights(CameraObject *cam) {
 
 // 提取质心 (已修改)
 static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
-    uint32_t sum_r[MAX_LIGHTS] = {0};
-    uint32_t sum_c[MAX_LIGHTS] = {0};
+    // [修复] 数组大小必须匹配最大连通域数量(MAX_DOTS)，否则 lbl > 20 时会越界崩溃
+    uint32_t sum_r[MAX_DOTS] = {0};
+    uint32_t sum_c[MAX_DOTS] = {0};
     
     // 清空上一帧结果
     memset(cam->dot_num, 0, sizeof(cam->dot_num));
@@ -215,7 +216,7 @@ void image_processing_loop(void) {
     calculate_centroids(&cam_down, visited_buffer);
 
     // 4. 矫正处理
-    //calculate_ground_positions(m7_1_data[6], m7_1_data[4], m7_1_data[3]);
+    //calculate_ground_positions(m7_1_data[6], m7_1_data[4], m7_1_data[3]); //此步骤移至main_cm7_1.c
 } 
 
 void image_send(void){

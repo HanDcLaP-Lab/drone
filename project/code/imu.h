@@ -21,7 +21,7 @@
 // 陀螺仪映射 (机体角速度)
 // 规则: 符合右手定则直接映射，轴向相反则取负
 #define IMU_MAP_GX(x, y, z)  (x)       // Roll  = Gz
-#define IMU_MAP_GY(x, y, z)  (y)    // Pitch = -Gy
+#define IMU_MAP_GY(x, y, z)  (y)    // Pitch = Gy
 #define IMU_MAP_GZ(x, y, z)  (z)       // Yaw   = Gx
 
 // 加速度计映射 (重力向量, 即 -1 * 机体加速度)

@@ -32,6 +32,10 @@ GroundPoint target_ground_pos = {0.0, 0.0};
 // ==========================================
 // 2. 核心算法：像素坐标 -> 3D 空间射线 (指向地面)
 // ==========================================
+// 输出坐标系定义 (Camera Frame):
+// X: 相机右侧 (Right)
+// Y: 相机前方 (Forward, 图像上方)
+// Z: 相机上方 (Up, 实际指向相机内部，地面点此处为负值)
 static Vector3D pixelTo3DRay(double u, double v) {
     Vector3D ray;
     
@@ -58,6 +62,9 @@ static Vector3D pixelTo3DRay(double u, double v) {
 // ==========================================
 // 3. 无人机姿态旋转 (Pitch, Roll)
 // ==========================================
+// 将相机坐标系下的射线旋转回水平坐标系 (Body/World Frame)
+// 输入 cam: x=Right, y=Forward, z=Up(Negative)
+// 输出 body: x=World_Right, y=World_Forward, z=World_Up(Negative)
 static Vector3D cameraToBody(const Vector3D *cam, double pitch_deg, double roll_deg) {
     Vector3D body;
     double p = pitch_deg * M_PI / 180.0;
@@ -66,7 +73,7 @@ static Vector3D cameraToBody(const Vector3D *cam, double pitch_deg, double roll_
     double sinp = sin(p), cosp = cos(p);
     double sinr = sin(r), cosr = cos(r);
 
-    // 映射输入向量到物理坐标系 (Forward, Right, Down)
+    // 映射输入向量到中间物理坐标系 (Forward, Right, Down) 以便使用标准旋转公式
     // pixelTo3DRay 输出: x=Right (Body Y), y=Forward (Body X), z=Up
     // 物理坐标: xb=Forward, yb=Right, zb=Down
     double xb = cam->y;      // Forward
@@ -74,13 +81,13 @@ static Vector3D cameraToBody(const Vector3D *cam, double pitch_deg, double roll_
     double zb = -cam->z;     // Down (取反，因为cam->z是负的)
 
     // 1. 应用 Roll (绕 Forward/X 轴旋转)
-    // 右翼下压(Roll>0) -> Right向量向下偏(+Z)
+    // 右翼下压(Roll>0) -> 相机右侧下沉 -> 需将向量逆向旋转回水平
     double xt = xb;
     double yt = yb * cosr - zb * sinr;
     double zt = yb * sinr + zb * cosr;
     
     // 2. 应用 Pitch (绕 Right/Y 轴旋转) -> 影响 Forward(X) 和 Down(Z)
-    // 机头抬起(Pitch>0) -> Forward向量向上偏(-Z)
+    // 机头抬起(Pitch>0) -> 相机前视上扬 -> 需将向量压回水平
     double xw = xt * cosp + zt * sinp;
     double zw = -xt * sinp + zt * cosp;
     double yw = yt;
@@ -96,30 +103,50 @@ static Vector3D cameraToBody(const Vector3D *cam, double pitch_deg, double roll_
 // ==========================================
 // 4. 将射线投影到真实水平地面
 // ==========================================
+// 基于相似三角形原理计算地面坐标
 static GroundPoint projectToGround(Vector3D ray, double height) {
     GroundPoint ground_pt = {0.0, 0.0};
     if (ray.z >= 0) return ground_pt; 
     
     double scale = -height / ray.z;
     
-    // 修正映射关系以符合 README (X前 Y右)
-    // ray.y 是 Forward, ray.x 是 Right
-    ground_pt.x = ray.y * scale; // X = Forward
-    ground_pt.y = ray.x * scale; // Y = Right
+    // ray.x 是 Right, ray.y 是 Forward
+    ground_pt.x = ray.x * scale; // X = Right
+    ground_pt.y = ray.y * scale; // Y = Forward
     return ground_pt;
 }
 
 // ==========================================
 // 5. 计算地面坐标主函数
 // ==========================================
+// 输出: car_ground_pos.x (右), car_ground_pos.y (前) 单位: cm (取决于height单位)
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg) {
+    const double k = 0.4; // 滤波系数 (0~1)，越小越平滑但延迟越高
+
     // 小车 (Index 0): image.h 中定义 centers[i][0] 为 row (v), centers[i][1] 为 col (u)
     Vector3D ray_car = pixelTo3DRay((double)cam_down.centers[0][1], (double)cam_down.centers[0][0]);
     Vector3D body_car = cameraToBody(&ray_car, pitch_deg, roll_deg);
-    car_ground_pos = projectToGround(body_car, height);
+    GroundPoint raw_car = projectToGround(body_car, height);
+    car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
+    car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
 
+    extern float share_data_from_1[]; 
+    share_data_from_1[7] = ray_car.x;
+    share_data_from_1[8] = ray_car.y;
+    share_data_from_1[9] = ray_car.z;
+    share_data_from_1[10] = body_car.x;
+    share_data_from_1[11] = body_car.y;
+    share_data_from_1[12] = body_car.z;
+    
     // 目标 (Index 1)
     Vector3D ray_target = pixelTo3DRay((double)cam_down.centers[1][1], (double)cam_down.centers[1][0]);
     Vector3D body_target = cameraToBody(&ray_target, pitch_deg, roll_deg);
-    target_ground_pos = projectToGround(body_target, height);
+    GroundPoint raw_target = projectToGround(body_target, height);
+    target_ground_pos.x = target_ground_pos.x * (1.0 - k) + raw_target.x * k;
+    target_ground_pos.y = target_ground_pos.y * (1.0 - k) + raw_target.y * k;
+
+    // 计算 car 和 target 之间的距离并写入 share_data_from_1[13]
+    double dx = car_ground_pos.x - target_ground_pos.x;
+    double dy = car_ground_pos.y - target_ground_pos.y;
+    share_data_from_1[13] = (float)sqrt(dx * dx + dy * dy);
 }

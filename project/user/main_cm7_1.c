@@ -48,9 +48,11 @@ float uart_data[UART_DATA_LENGTH] = {0};
 
 int32_t image_cnt = 0;
 
-#pragma location = 0x28001000                                                   // 将下面这个数组定义到指定的RAM地址，便于其他核心直接访问(开源库默认在 0x28001000 地址保留了8kb的空间用于数据交互)
-                                                                                // 此处为0x28001014的原因是前面放了一个M0的数组
-volatile float m7_1_data[M7_1_DATA_LENGTH] = {0} ;             // 定义 M7_1 演示数据数组 浮点数类型
+#pragma location = 0x28001000                                                   
+volatile float share_data_from_1[M7_1_DATA_LENGTH] = {0};      // Core 1 写 -> Core 0 读
+
+#pragma location = 0x28001040
+volatile float share_data_from_0[M7_1_DATA_LENGTH] = {0};      // Core 0 写 -> Core 1 读
 
 
 
@@ -68,16 +70,18 @@ int main(void)
         {
             mt9v03x_finish_flag = 0;
             
-            SCB_InvalidateDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));
+            // 1. 读取 IMU 数据前，先无效化 Cache (从 RAM 拉取 Core 0 写入的最新数据)
+            SCB_InvalidateDCache_by_Addr(&share_data_from_0, sizeof(share_data_from_0));
             
             image_processing_loop();
             
             // 使用最新的IMU数据(来自Core0)和最新的图像中心(来自image_processing_loop)进行解算
-            // m7_1_data: [3]=Roll, [4]=Pitch, [6]=Height
-            calculate_ground_positions(m7_1_data[6], m7_1_data[4], m7_1_data[3]);
+            // share_data_from_0: [0]=Roll, [1]=Pitch, [3]=Height
+            calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0]);
 
-            M7_1_data_send(m7_1_data,uart_data);
-            SCB_CleanDCache_by_Addr(&m7_1_data, sizeof(m7_1_data));
+            // 2. 写入视觉数据，并 Clean Cache (刷入 RAM 供 Core 0 读取)
+            M7_1_data_send(share_data_from_1, uart_data);
+            SCB_CleanDCache_by_Addr(&share_data_from_1, sizeof(share_data_from_1));
             
             //UART
             uart_write_buffer(TEST_UART, (const uint8_t *)uart_data, sizeof(uart_data));

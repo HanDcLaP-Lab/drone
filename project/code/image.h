@@ -6,12 +6,12 @@
 // 宏定义
 #define STACK_SIZE 4096     // DFS 栈大小
 #define MAX_LIGHTS 20       // 最大识别灯光数量
-#define MAX_DOTS 10         // 最大记录的连通域数量
+#define MAX_DOTS 40         // 最大记录的连通域数量
 #define THRESHOLD 120      //二值化阈值设置
-#define MIN_LIGHT_SIZE  5   //灯最小判定大小
+#define MIN_LIGHT_SIZE  2   //灯最小判定大小
 
 #define UART_DATA_LENGTH 8  // 数组数据长度
-#define M7_1_DATA_LENGTH 10
+#define M7_1_DATA_LENGTH 16
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---
