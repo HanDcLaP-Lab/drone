@@ -113,5 +113,6 @@
 #include "image.h"
 #include "display.h"
 #include "image_process.h"
+#include "board_comm.h"
 //-------------------------------------------------------”√ªß≤„---------------------------------------------------------
 #endif

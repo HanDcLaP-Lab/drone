@@ -1,0 +1,55 @@
+// ... 前面宏定义保持不变 ...
+#define TEST_UART        UART_4          
+#define TEST_BAUDRATE    115200          
+#define TEST_TX_PIN      UART4_TX_P14_1  
+#define TEST_RX_PIN      UART4_RX_P14_0  
+
+float f_buffer[8] = {0.5, 1.5, 2.5, 3.5, 4.5, 1.5, 2.5, 2.5};
+
+// 1. 添加协议宏和发送缓冲区
+#define FRAME_HEADER1 0xAA
+#define FRAME_HEADER2 0x55
+#define FRAME_TAIL    0x7F
+uint8_t send_buffer[36]; 
+
+// 2. 增加打包发送函数
+void send_uart_data_pack(float *data_array)
+{
+    // 填入帧头
+    send_buffer[0] = FRAME_HEADER1;
+    send_buffer[1] = FRAME_HEADER2;
+    
+    // 拷贝 8 个 float (32字节) 到缓冲区
+    memcpy(&send_buffer[2], data_array, sizeof(float) * 8);
+    
+    // 计算校验和
+    uint8_t checksum = 0;
+    for (int i = 2; i < 34; i++) {
+        checksum += send_buffer[i];
+    }
+    
+    // 填入校验和与帧尾
+    send_buffer[34] = checksum;
+    send_buffer[35] = FRAME_TAIL;
+    
+    // 发送整包 (36字节)
+    uart_write_buffer(TEST_UART, send_buffer, sizeof(send_buffer));
+}
+
+
+int main(void)
+{
+    clock_init(SYSTEM_CLOCK_250M); 	
+    debug_init();                   
+    
+    uart_init(UART_INDEX, UART_BAUDRATE, UART_TX_PIN, UART_RX_PIN);             
+    uart_init(TEST_UART, TEST_BAUDRATE, TEST_TX_PIN, TEST_RX_PIN);
+    
+    while(true)
+    {
+        // 3. 替换掉原来的裸发函数，使用带有帧头帧尾的打包发送函数
+        send_uart_data_pack(f_buffer);
+        
+        system_delay_ms(500); // 500ms 发送一次便于观察
+    }
+}

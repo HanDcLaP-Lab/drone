@@ -37,10 +37,10 @@
 
 #include "zf_common_headfile.h"
 
-#define TEST_UART        UART_4 
-#define TEST_BAUDRATE    115200 
-#define TEST_TX_PIN      UART4_TX_P14_1 
-#define TEST_RX_PIN      UART4_RX_P14_0  
+// #define TEST_UART        UART_4 
+// #define TEST_BAUDRATE    115200 
+// #define TEST_TX_PIN      UART4_TX_P14_1 
+// #define TEST_RX_PIN      UART4_RX_P14_0  
 //----------------------------多核通讯-----------------------------//
 
 
@@ -61,7 +61,7 @@ int main(void)
     clock_init(SYSTEM_CLOCK_250M); 	// 时钟配置及系统初始化<务必保留>
     debug_info_init();                  // 调试串口信息初始化
 
-    uart_init(TEST_UART, TEST_BAUDRATE, TEST_TX_PIN, TEST_RX_PIN);
+    //uart_init(TEST_UART, TEST_BAUDRATE, TEST_TX_PIN, TEST_RX_PIN);
     camera_init();
     while(true)
     {          
@@ -84,7 +84,7 @@ int main(void)
             SCB_CleanDCache_by_Addr(&share_data_from_1, sizeof(share_data_from_1));
             
             //UART
-            uart_write_buffer(TEST_UART, (const uint8_t *)uart_data, sizeof(uart_data));
+            //uart_write_buffer(TEST_UART, (const uint8_t *)uart_data, sizeof(uart_data));
         }
     }
 }
