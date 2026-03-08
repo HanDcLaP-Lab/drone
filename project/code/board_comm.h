@@ -3,16 +3,16 @@
 
 #include "zf_common_headfile.h"
 
-// ================= 板间通讯硬件配置 (发送端) =================
+// ================= 鏉块棿閫氳纭欢閰嶇疆 (鍙戦�佺) =================
 #define BOARD_UART       UART_4          
 #define BOARD_BAUDRATE   115200          
 #define BOARD_TX_PIN     UART4_TX_P14_1  
 #define BOARD_RX_PIN     UART4_RX_P14_0  
 
-// ================= 函数声明 =================
+// ================= 鍑芥暟澹版槑 =================
 void Board_Comm_Init(void);
 
-// 传入 float 指针
+// 浼犲叆 float 鎸囬拡
 void Board_Comm_Send_Data(volatile float *data_array);
-
+void F_Buffer_write(float* buffer, volatile float* data);
 #endif

@@ -56,7 +56,7 @@ void pit0_ch1_isr()
     pit_isr_flag_clear(PIT_CH1);
 
     // 悬停控制任务
-    Flight_Hover_Control_Task(); 
+    
     
 }
 

@@ -270,28 +270,16 @@ void motor_pwm_init() {
 }
 
 
-void M7_1_data_send(volatile float* data_out, volatile float* uart_data) { // Core 1 调用，写入 data_out (share_data_from_1)
+void M7_1_data_send(volatile float* data_out) { // Core 1 调用，写入 data_out (share_data_from_1)
     data_out[0] = cam_down.centers[0][0]; 
     data_out[1] = cam_down.centers[0][1];
     data_out[2] = (float)cam_down.dot_num[0];
-    
-    uart_data[0] = car_ground_pos.x;
-    uart_data[1] = car_ground_pos.y;
-    uart_data[2] = target_ground_pos.x;
-    uart_data[3] = target_ground_pos.y;
-    
-    // 从 Core 0 的数据中读取 IMU 信息填入 UART
-    uart_data[4] = share_data_from_0[0];
-    uart_data[5] = share_data_from_0[1];
-    uart_data[6] = share_data_from_0[2];
-    uart_data[7] = share_data_from_0[3];
-
     data_out[3] = car_ground_pos.x;
     data_out[4] = car_ground_pos.y;
     data_out[5] = target_ground_pos.x;
     data_out[6] = target_ground_pos.y;
     if (cam_down.light_number == 0) {
-        data_out[2] = uart_data[2] = 0;
+        data_out[2] = 0;
     }
 }
 

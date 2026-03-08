@@ -106,20 +106,21 @@ static Vector3D cameraToBody(const Vector3D *cam, double pitch_deg, double roll_
 // 基于相似三角形原理计算地面坐标
 static GroundPoint projectToGround(Vector3D ray, double height) {
     GroundPoint ground_pt = {0.0, 0.0};
-    if (ray.z >= 0) return ground_pt; 
-    
+    if (ray.z >= 0) return ground_pt;
+
     double scale = -height / ray.z;
-    
+
     // ray.x 是 Right, ray.y 是 Forward
-    ground_pt.x = ray.x * scale; // X = Right
-    ground_pt.y = ray.y * scale; // Y = Forward
+    // 目标: ground_pt.x 是 Forward, ground_pt.y 是 Right
+    ground_pt.x = ray.y * scale; // X = Forward (cm)
+    ground_pt.y = ray.x * scale; // Y = Right (cm)
     return ground_pt;
 }
 
 // ==========================================
 // 5. 计算地面坐标主函数
 // ==========================================
-// 输出: car_ground_pos.x (右), car_ground_pos.y (前) 单位: cm (取决于height单位)
+// 输出: car_ground_pos.x (前), car_ground_pos.y (右) 单位: cm (取决于height单位)
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg) {
     const double k = 0.4; // 滤波系数 (0~1)，越小越平滑但延迟越高
 
@@ -130,7 +131,7 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
     car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
     car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
 
-    extern float share_data_from_1[]; 
+    extern volatile float share_data_from_1[]; 
     share_data_from_1[7] = ray_car.x;
     share_data_from_1[8] = ray_car.y;
     share_data_from_1[9] = ray_car.z;

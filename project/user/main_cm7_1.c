@@ -44,7 +44,7 @@
 //----------------------------多核通讯-----------------------------//
 
 
-float uart_data[UART_DATA_LENGTH] = {0}; 
+//float uart_data[UART_DATA_LENGTH] = {0}; 
 
 int32_t image_cnt = 0;
 
@@ -80,7 +80,8 @@ int main(void)
             calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0]);
 
             // 2. 写入视觉数据，并 Clean Cache (刷入 RAM 供 Core 0 读取)
-            M7_1_data_send(share_data_from_1, uart_data);
+            M7_1_data_send(share_data_from_1);
+            share_data_from_1[15] = 1.0f;
             SCB_CleanDCache_by_Addr(&share_data_from_1, sizeof(share_data_from_1));
             
             //UART

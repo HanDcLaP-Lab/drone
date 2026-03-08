@@ -87,7 +87,7 @@ void motor_pwm_set(void);
 void motor_pwm_init(void);
 
 // 视觉/上层逻辑
-void M7_1_data_send(volatile float* M7_1_data,volatile float* uart_data);
+void M7_1_data_send(volatile float* M7_1_data);
 void M7_1_data_send_m7_0(volatile float* M7_1_data);
 /**
  * @brief 自动悬停控制逻辑封装

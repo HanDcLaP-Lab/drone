@@ -1,42 +1,56 @@
 #include "board_comm.h"
 #include "zf_common_headfile.h"
 
-// ================= °å¼äÍ¨Ñ¶Ğ­ÒéÅäÖÃ =================
+// ================= æ¿é—´é€šè®¯åè®®é…ç½® =================
 #define FRAME_HEADER1 0xAA
 #define FRAME_HEADER2 0x55
 #define FRAME_TAIL    0x7F
 
-// ·¢ËÍ»º³åÇø£º2×Ö½ÚÖ¡Í· + 32×Ö½Ú(8¸öfloat) + 1×Ö½ÚĞ£ÑéºÍ + 1×Ö½ÚÖ¡Î² = 36×Ö½Ú
+// å‘é€ç¼“å†²åŒºï¼š2å­—èŠ‚å¸§å¤´ + 32å­—èŠ‚(8ä¸ªfloat) + 1å­—èŠ‚æ ¡éªŒå’Œ + 1å­—èŠ‚å¸§å°¾ = 36å­—èŠ‚
 static uint8_t send_buffer[36]; 
 
-// ================= Í¨Ñ¶³õÊ¼»¯ =================
+// ================= é€šè®¯åˆå§‹åŒ– =================
 void Board_Comm_Init(void)
 {
-    // ³õÊ¼»¯ÅäÖÃºÃµÄ´®¿Ú
+    // åˆå§‹åŒ–é…ç½®å¥½çš„ä¸²å£
     uart_init(BOARD_UART, BOARD_BAUDRATE, BOARD_TX_PIN, BOARD_RX_PIN);
 }
 
-// ================= ´ò°ü²¢·¢ËÍº¯Êı =================
-// Ö»Òª´«Èë³¤¶ÈÎª 8 µÄ float Êı×éÊ×µØÖ·¼´¿É
+// ================= æ‰“åŒ…å¹¶å‘é€å‡½æ•° =================
+// åªè¦ä¼ å…¥é•¿åº¦ä¸º 8 çš„ float æ•°ç»„é¦–åœ°å€å³å¯
 void Board_Comm_Send_Data(volatile float *data_array)
 {
-    // 1. ÌîÈëÖ¡Í·
+    // 1. å¡«å…¥å¸§å¤´
     send_buffer[0] = FRAME_HEADER1;
     send_buffer[1] = FRAME_HEADER2;
     
-    // 2. ½«´«ÈëµÄ float Êı×é°´×Ö½Ú¿½±´µ½·¢ËÍ»º³åÇø (Ç¿×ªÎªvoid*ÒÔÏû³ıvolatile¾¯¸æ)
-    memcpy(&send_buffer[2], (void *)data_array, sizeof(float) * 8);
+    // 2. å°†ä¼ å…¥çš„ float æ•°ç»„æ‹·è´åˆ°å‘é€ç¼“å†²åŒº
+    // å…ˆè¯»å…¥å±€éƒ¨å˜é‡ä»¥ä¿ç•™ volatile è¯»å–è¯­ä¹‰ï¼Œå†ç”¨ memcpy å¤„ç†å¯¹é½
+    float local_data[8];
+    for (int i = 0; i < 8; i++) {
+        local_data[i] = data_array[i];
+    }
+    memcpy(&send_buffer[2], local_data, sizeof(local_data));
     
-    // 3. ¼ÆËã¼òµ¥µÄÀÛ¼ÓĞ£ÑéºÍ (Ö»Ğ£ÑéÊı¾İÇøµÄ32×Ö½Ú)
+    // 3. è®¡ç®—ç®€å•çš„ç´¯åŠ æ ¡éªŒå’Œ (åªæ ¡éªŒæ•°æ®åŒºçš„32å­—èŠ‚)
     uint8_t checksum = 0;
     for (int i = 2; i < 34; i++) {
         checksum += send_buffer[i];
     }
     
-    // 4. ÌîÈëĞ£ÑéºÍÓëÖ¡Î²
+    // 4. å¡«å…¥æ ¡éªŒå’Œä¸å¸§å°¾
     send_buffer[34] = checksum;
     send_buffer[35] = FRAME_TAIL;
     
-    // 5. ÎïÀí·¢ËÍÕû°üÊı¾İ (36×Ö½Ú)
+    // 5. ç‰©ç†å‘é€æ•´åŒ…æ•°æ® (36å­—èŠ‚)
     uart_write_buffer(BOARD_UART, send_buffer, sizeof(send_buffer));
+}
+
+void F_Buffer_write(float* buffer, volatile float* data)
+{
+    buffer[0] = data[3];
+    buffer[1] = data[4];
+    buffer[2] = data[5];
+    buffer[3] = data[6];
+    buffer[4] = imu_data.yaw;
 }
