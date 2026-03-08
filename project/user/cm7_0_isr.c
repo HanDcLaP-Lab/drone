@@ -74,12 +74,14 @@ void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH10);
     debug_key1_test();
+    app_state_machine_update();
     //display_motor_output_display();
     //display_image_display();
 }
 
 void pit0_ch11_isr()  // 定时器通道 11 周期中断服务函数
 {
+    //display_motor_output_display();
     pit_isr_flag_clear(PIT_CH11);
 }
 

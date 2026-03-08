@@ -43,8 +43,7 @@
 // 本例程是开源库空工程 可用作移植或者测试各类内外设
 
 // **************************** 代码区域 ****************************
-//---------------------------------多核心通讯---------------------------------------------//
-//#define DATA_LENGTH (8)  // 数组数据长度(移动至image.h文件中统一定义)
+
 
 #pragma location = 0x28001000  
 __root __no_init volatile float share_data_from_1[M7_1_DATA_LENGTH]; // Core 1 写 -> Core 0 读 (视觉数据)
@@ -58,6 +57,7 @@ float f_buffer[UART_DATA_LENGTH] = {0};
 #define PIT_NUM1 (PIT_CH1)
 #define PIT_NUM2 (PIT_CH2)
 #define PIT_NUM3 (PIT_CH10)
+#define PIT_NUM4 (PIT_CH11)
 #define LED1 (P19_0)
 
 int main(void) {
@@ -70,31 +70,39 @@ int main(void) {
     wireless_uart_init_();
     Board_Comm_Init();
     key_switch_init();
+
+    app_init();
+    share_data_from_0[4] = (float)current_drone_state;
+    SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
     pit_ms_init(PIT_NUM3, 10);
+    pit_ms_init(PIT_NUM4, 500);
+    
     seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
-    
-    Kalman_Init(&K_w_ax,1e-3f,0.01,0);
-    Kalman_Init(&K_w_ay,1e-3f,0.01,0);
-    Kalman_Init(&K_groll,1e-3f,0.01f,0);
-    Kalman_Init(&K_gpitch,1e-3f,0.01f,0);
-    Kalman_Init(&K_gyaw,1e-3f,0.01f,0);
-    
-    // 加速度计滤波初始化 (Q=0.001, R=0.1 强滤波以抑制震动)
-    Kalman_Init(&K_ax, 0.001f, 0.1f, 0);
-    Kalman_Init(&K_ay, 0.001f, 0.1f, 0);
-    Kalman_Init(&K_az, 0.001f, 0.1f, 9.8f); // Z轴初始设为重力
 
-    gpio_init(LED1, GPO, GPIO_HIGH, GPO_PUSH_PULL);
-    display_init();
-    imu_init();
-    tof_init();
-    motor_pwm_init();  /// pwm输出初始化
-    Flight_Control_Init();
+    //display_init();
+if (current_drone_state == DRONE_STATE_NORMAL_FLIGHT) {
+        Kalman_Init(&K_w_ax,1e-3f,0.01,0);
+        Kalman_Init(&K_w_ay,1e-3f,0.01,0);
+        Kalman_Init(&K_groll,1e-3f,0.01f,0);
+        Kalman_Init(&K_gpitch,1e-3f,0.01f,0);
+        Kalman_Init(&K_gyaw,1e-3f,0.01f,0);
+        Kalman_Init(&K_ax, 0.001f, 0.1f, 0);
+        Kalman_Init(&K_ay, 0.001f, 0.1f, 0);
+        Kalman_Init(&K_az, 0.001f, 0.1f, 9.8f); 
 
-    pit_ms_init(PIT_NUM1, 20); // 图像处理中断 20ms
+        imu_init();
+        tof_init();
+        motor_pwm_init(); 
+        Flight_Control_Init();
+        pit_ms_init(PIT_NUM1, 20); // 图像处理中断 20ms
     pit_ms_init(PIT_NUM2, 400); // 输出中断 400ms
     system_delay_ms(1000);
     pit_ms_init(PIT_NUM0, 1); // 飞控主循环中断 1ms
+    } else {
+        printf("DEBUG MODE: Flight Peripherals Bypassed.\r\n");
+    }
+
+    
 
     // 此处编写用户代码 例如外设初始化代码等
 
@@ -121,16 +129,20 @@ int main(void) {
         // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
         
-        if (share_data_from_1[15] != 0.0f)
+        if (current_drone_state == DRONE_STATE_NORMAL_FLIGHT) 
         {
-            share_data_from_1[15] = 0.0f;
-            Flight_Hover_Control_Task(); 
-            SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
-            
-            F_Buffer_write(f_buffer, share_data_from_1);
-            Board_Comm_Send_Data(f_buffer);
+            if (share_data_from_1[15] != 0.0f)
+            {
+                share_data_from_1[15] = 0.0f;
+                Flight_Hover_Control_Task(); 
+                SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
+                
+                F_Buffer_write(f_buffer, share_data_from_1);
+                Board_Comm_Send_Data(f_buffer);
+            }
         }
-
+        
+        share_data_from_0[4] = (float)current_drone_state;
         // 2. 写入 IMU 数据，并 Clean Cache (刷入 RAM 供 Core 1 读取)
         M7_1_data_send_m7_0(share_data_from_0);
         SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));

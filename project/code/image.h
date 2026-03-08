@@ -7,7 +7,7 @@
 #define STACK_SIZE 4096     // DFS 栈大小
 #define MAX_LIGHTS 20       // 最大识别灯光数量
 #define MAX_DOTS 40         // 最大记录的连通域数量
-#define THRESHOLD 120      //二值化阈值设置
+#define THRESHOLD 70      //二值化阈值设置
 #define MIN_LIGHT_SIZE  2   //灯最小判定大小
 
 #define UART_DATA_LENGTH 8  // 数组数据长度
@@ -35,7 +35,7 @@ typedef struct {
 
 // 声明全局下视摄像头实例
 extern CameraObject cam_down; 
-
+extern uint8 image_copy[MT9V03X_H][MT9V03X_W];
 
 // 函数声明
 void camera_init(void);           // 初始化

@@ -115,5 +115,6 @@
 #include "image_process.h"
 #include "board_comm.h"
 #include "key_switch.h"
+#include "app.h"
 //-------------------------------------------------------”√ªß≤„---------------------------------------------------------
 #endif

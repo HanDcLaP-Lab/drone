@@ -63,6 +63,8 @@ int main(void)
 
     //uart_init(TEST_UART, TEST_BAUDRATE, TEST_TX_PIN, TEST_RX_PIN);
     camera_init();
+    system_delay_ms(2000);
+    display_init();
     while(true)
     {          
         // 等待摄像头采集完成 (同步物理帧率，50Hz)
@@ -72,18 +74,40 @@ int main(void)
             
             // 1. 读取 IMU 数据前，先无效化 Cache (从 RAM 拉取 Core 0 写入的最新数据)
             SCB_InvalidateDCache_by_Addr(&share_data_from_0, sizeof(share_data_from_0));
-            
+            int drone_mode = (int)share_data_from_0[4];
             image_processing_loop();
             
             // 使用最新的IMU数据(来自Core0)和最新的图像中心(来自image_processing_loop)进行解算
             // share_data_from_0: [0]=Roll, [1]=Pitch, [3]=Height
-            calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0]);
+            if (drone_mode == 1) // DRONE_STATE_NORMAL_FLIGHT = 1
+            {
+                calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0]);
+            }
 
             // 2. 写入视觉数据，并 Clean Cache (刷入 RAM 供 Core 0 读取)
             M7_1_data_send(share_data_from_1);
             share_data_from_1[15] = 1.0f;
             SCB_CleanDCache_by_Addr(&share_data_from_1, sizeof(share_data_from_1));
-            
+            if (drone_mode == 0) // DRONE_STATE_DEBUG = 0
+            {
+                // 将底层的 0/1 放大为 0/255 以便屏幕显示
+                for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++) {
+                    image_copy[0][i] = cam_down.binarized_image[i] ? 255 : 0;
+                }
+                
+                // 将要显示的数组刷入内存供 DMA 搬运
+                SCB_CleanDCache_by_Addr((void*)image_copy, sizeof(image_copy));
+                
+                // 显示二值化图像 (假设全屏大小为 188x120)
+                ips200_displayimage03x((const uint8 *)image_copy , MT9V03X_W, MT9V03X_H);
+                
+                // 在屏幕下方显示状态与阈值
+                ips200_show_string(0, 140, "Mode: DEBUG");
+                ips200_show_string(0, 160, "Threshold:");
+                
+                // 打印当前的二值化阈值变量，占用 3 个字符宽度
+                ips200_show_int(80, 160, cam_down.threshold, 3);
+            }
             //UART
             //uart_write_buffer(TEST_UART, (const uint8_t *)uart_data, sizeof(uart_data));
         }
