@@ -56,7 +56,7 @@ void pit0_ch1_isr()
     pit_isr_flag_clear(PIT_CH1);
 
     // 悬停控制任务
-    
+    Flight_Hover_Control_Task(); 
     
 }
 
@@ -74,9 +74,9 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH10);
-    
+    debug_key1_test();
     //display_motor_output_display();
-    display_image_display();
+    //display_image_display();
 }
 
 void pit0_ch11_isr()  // 定时器通道 11 周期中断服务函数

@@ -114,5 +114,6 @@
 #include "display.h"
 #include "image_process.h"
 #include "board_comm.h"
+#include "key_switch.h"
 //-------------------------------------------------------”√ªß≤„---------------------------------------------------------
 #endif

@@ -52,11 +52,12 @@ __root __no_init volatile float share_data_from_1[M7_1_DATA_LENGTH]; // Core 1 �
 #pragma location = 0x28001040  // 偏移64字节，确保与上面数组不在同一个Cache Line (32字节)
 __root __no_init volatile float share_data_from_0[M7_1_DATA_LENGTH]; // Core 0 写 -> Core 1 读 (IMU数据)
 
-float f_buffer[UART_DATA_LENGTH] = {0};
+float f_buffer[8] = {0.5, 1.5, 2.5, 3.5, 4.5, 1.5, 2.5, 2.5};
 
 #define PIT_NUM0 (PIT_CH0)
 #define PIT_NUM1 (PIT_CH1)
 #define PIT_NUM2 (PIT_CH2)
+#define PIT_NUM3 (PIT_CH10)
 #define LED1 (P19_0)
 
 int main(void) {
@@ -68,6 +69,8 @@ int main(void) {
 
     wireless_uart_init_();
     Board_Comm_Init();
+    key_switch_init();
+    pit_ms_init(PIT_NUM3, 10);
     seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
     
     Kalman_Init(&K_w_ax,1e-3f,0.01,0);
@@ -90,7 +93,6 @@ int main(void) {
 
     pit_ms_init(PIT_NUM1, 20); // 图像处理中断 20ms
     pit_ms_init(PIT_NUM2, 400); // 输出中断 400ms
-    pit_ms_init(PIT_CH10, 1000);
     system_delay_ms(1000);
     pit_ms_init(PIT_NUM0, 1); // 飞控主循环中断 1ms
 
@@ -119,20 +121,11 @@ int main(void) {
         // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
         
-        if (share_data_from_1[15] != 0.0f)
-        {
-            share_data_from_1[15] = 0.0f;
-            Flight_Hover_Control_Task(); 
-            SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
-            
-            F_Buffer_write(f_buffer, share_data_from_1);
-            Board_Comm_Send_Data(f_buffer);
-        }
-
         // 2. 写入 IMU 数据，并 Clean Cache (刷入 RAM 供 Core 1 读取)
         M7_1_data_send_m7_0(share_data_from_0);
         SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
-        system_delay_ms(1); // 稍微延时
+        Board_Comm_Send_Data(f_buffer);
+        system_delay_ms(5); // 稍微延时
 
     }
 }
