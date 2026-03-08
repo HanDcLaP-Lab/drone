@@ -10,34 +10,34 @@
 #define SWITCH1                 (P21_5)
 #define SWITCH2                 (P21_6)
 
-// Ê±¼ä»ù×¼ÓëÅĞ¶¨ãĞÖµºê (Ê¹ÓÃ KS_ Ç°×º·ÀÖ¹Óë¹Ù·½¿â³åÍ»)
-#define KEY_DT                  10    // Key_Switch_UpdateµÄÖÜÆÚ£¬µ¥Î»£ºms
-#define KS_MAX_SHOCK_PERIOD     20    // Ïû¶¶Ê±¼ä(ms)
-#define KS_LONG_PRESS_PERIOD    1000  // ³¤°´ÅĞ¶¨Ê±¼ä(ms)
+// æ—¶é—´åŸºå‡†ä¸åˆ¤å®šé˜ˆå€¼å® (ä½¿ç”¨ KS_ å‰ç¼€é˜²æ­¢ä¸å®˜æ–¹åº“å†²çª)
+#define KEY_DT                  10    // Key_Switch_Updateçš„å‘¨æœŸï¼Œå•ä½ï¼šms
+#define KS_MAX_SHOCK_PERIOD     20    // æ¶ˆæŠ–æ—¶é—´(ms)
+#define KS_LONG_PRESS_PERIOD    1000  // é•¿æŒ‰åˆ¤å®šæ—¶é—´(ms)
 
-// ¶¨Òå×´Ì¬Ã¶¾Ù
+// å®šä¹‰çŠ¶æ€æšä¸¾
 typedef enum {
     KEY_EVT_NONE = 0,
-    KEY_EVT_DOWN,       // ¸Õ¸Õ°´ÏÂµÄË²¼ä
-    KEY_EVT_UP,         // ¸Õ¸ÕËÉ¿ªµÄË²¼ä
-    KEY_EVT_SHORT,      // ³É¹¦´¥·¢¶Ì°´
-    KEY_EVT_LONG        // ³É¹¦´¥·¢³¤°´
+    KEY_EVT_DOWN,       // åˆšåˆšæŒ‰ä¸‹çš„ç¬é—´
+    KEY_EVT_UP,         // åˆšåˆšæ¾å¼€çš„ç¬é—´
+    KEY_EVT_SHORT,      // æˆåŠŸè§¦å‘çŸ­æŒ‰
+    KEY_EVT_LONG        // æˆåŠŸè§¦å‘é•¿æŒ‰
 } Key_Event_e;
 
-// °´¼ü¶ÔÏó½á¹¹Ìå
+// æŒ‰é”®å¯¹è±¡ç»“æ„ä½“
 typedef struct {
-    gpio_pin_enum pin;           // °ó¶¨µÄÎïÀíÒı½Å
-    uint8_t  active_level;       // ´¥·¢ÓĞĞ§µçÆ½ (°´ÏÂÎª0£¬ËÉ¿ªÎª1)
-    uint8_t  raw_state;          // Ë²Ê±×´Ì¬
-    uint8_t  stable_state;       // Ïû¶¶ºóµÄµ±Ç°×´Ì¬
-    uint8_t  last_stable_state;  // ÉÏÒ»Ö¡µÄÎÈ¶¨×´Ì¬
-    uint16_t debounce_cnt;       // Ïû¶¶¼ÆÊıÆ÷
-    uint16_t press_time;         // ÒÑ°´ÏÂ³ÖĞøÊ±¼ä
-    uint8_t  is_pressed;         // ÎÈ¶¨³¤Ğ§±£³Ö×´Ì¬ (1=°´×¡, 0=ËÉ¿ª)
-    Key_Event_e event;           // µ±Ç°ÖÜÆÚµÄË²¼ä¶¯×÷ÊÂ¼ş
+    gpio_pin_enum pin;           // ç»‘å®šçš„ç‰©ç†å¼•è„š
+    uint8_t  active_level;       // è§¦å‘æœ‰æ•ˆç”µå¹³ (æŒ‰ä¸‹ä¸º0ï¼Œæ¾å¼€ä¸º1)
+    uint8_t  raw_state;          // ç¬æ—¶çŠ¶æ€
+    uint8_t  stable_state;       // æ¶ˆæŠ–åçš„å½“å‰çŠ¶æ€
+    uint8_t  last_stable_state;  // ä¸Šä¸€å¸§çš„ç¨³å®šçŠ¶æ€
+    uint16_t debounce_cnt;       // æ¶ˆæŠ–è®¡æ•°å™¨
+    uint16_t press_time;         // å·²æŒ‰ä¸‹æŒç»­æ—¶é—´
+    uint8_t  is_pressed;         // ç¨³å®šé•¿æ•ˆä¿æŒçŠ¶æ€ (1=æŒ‰ä½, 0=æ¾å¼€)
+    Key_Event_e event;           // å½“å‰å‘¨æœŸçš„ç¬é—´åŠ¨ä½œäº‹ä»¶
 } Key_Switch_t;
 
-// ÉùÃ÷È«¾Ö°´¼ü¶ÔÏó£¬¹©Íâ²¿Èç main »ò isr µ÷ÓÃ
+// å£°æ˜å…¨å±€æŒ‰é”®å¯¹è±¡ï¼Œä¾›å¤–éƒ¨å¦‚ main æˆ– isr è°ƒç”¨
 extern Key_Switch_t dev_key1;
 extern Key_Switch_t dev_key2;
 extern Key_Switch_t dev_key3;
@@ -45,7 +45,7 @@ extern Key_Switch_t dev_key4;
 extern Key_Switch_t dev_switch1;
 extern Key_Switch_t dev_switch2;
 
-// Íâ²¿¿Éµ÷ÓÃµÄ½Ó¿Úº¯Êı
+// å¤–éƒ¨å¯è°ƒç”¨çš„æ¥å£å‡½æ•°
 void key_switch_init(void);
 void Key_Switch_Update(Key_Switch_t *key);
 void Key_Switch_Update_All(void);

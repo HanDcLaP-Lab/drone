@@ -1,7 +1,7 @@
 #include "key_switch.h"
 #include "zf_common_headfile.h"
 
-// Êµ¼Ê·ÖÅäÄÚ´æ¿Õ¼ä
+// å®é™…åˆ†é…å†…å­˜ç©ºé—´
 Key_Switch_t dev_key1;
 Key_Switch_t dev_key2;
 Key_Switch_t dev_key3;
@@ -9,7 +9,7 @@ Key_Switch_t dev_key4;
 Key_Switch_t dev_switch1;
 Key_Switch_t dev_switch2;
 
-// ´´½¨Ò»¸öÖ¸ÕëÊı×é£¬°ÑËùÓĞÒªÉ¨ÃèµÄ°´¼ü/²¦Âë¿ª¹Ø¼¯ÖĞ¹ÜÀí
+// åˆ›å»ºä¸€ä¸ªæŒ‡é’ˆæ•°ç»„ï¼ŒæŠŠæ‰€æœ‰è¦æ‰«æçš„æŒ‰é”®/æ‹¨ç å¼€å…³é›†ä¸­ç®¡ç†
 static Key_Switch_t* const ALL_KEYS[] = {
     &dev_key1, 
     &dev_key2, 
@@ -20,10 +20,10 @@ static Key_Switch_t* const ALL_KEYS[] = {
 };
 #define KEY_COUNT (sizeof(ALL_KEYS) / sizeof(ALL_KEYS[0]))
 
-// ÄÚ²¿¸¨Öúº¯Êı£¬¿ìËÙ³õÊ¼»¯¶ÔÏóµÄÊôĞÔ
+// å†…éƒ¨è¾…åŠ©å‡½æ•°ï¼Œå¿«é€Ÿåˆå§‹åŒ–å¯¹è±¡çš„å±æ€§
 static void Key_Switch_Object_Init(Key_Switch_t *key_obj, gpio_pin_enum pin, uint8_t active_level) {
     key_obj->pin = pin;
-    key_obj->active_level = active_level; // °´ÏÂÊ±Òı½ÅÎª0
+    key_obj->active_level = active_level; // æŒ‰ä¸‹æ—¶å¼•è„šä¸º0
     key_obj->raw_state = 0;
     key_obj->stable_state = 0;
     key_obj->last_stable_state = 0;
@@ -33,9 +33,9 @@ static void Key_Switch_Object_Init(Key_Switch_t *key_obj, gpio_pin_enum pin, uin
     key_obj->event = KEY_EVT_NONE;
 }
 
-// Ó²¼şÓëÈí¼ş¶ÔÏó³õÊ¼»¯
+// ç¡¬ä»¶ä¸è½¯ä»¶å¯¹è±¡åˆå§‹åŒ–
 void key_switch_init(void){
-    // 1. ³õÊ¼»¯µ×²ã GPIO Òı½ÅÄ£Ê½
+    // 1. åˆå§‹åŒ–åº•å±‚ GPIO å¼•è„šæ¨¡å¼
     gpio_init(KEY1, GPI, GPIO_HIGH, GPI_PULL_UP);               
     gpio_init(KEY2, GPI, GPIO_HIGH, GPI_PULL_UP);               
     gpio_init(KEY3, GPI, GPIO_HIGH, GPI_PULL_UP);               
@@ -44,94 +44,94 @@ void key_switch_init(void){
     gpio_init(SWITCH1, GPI, GPIO_HIGH, GPI_PULL_UP);            
     gpio_init(SWITCH2, GPI, GPIO_HIGH, GPI_PULL_UP);            
 
-    // 2. °ó¶¨Èí¼ş¶ÔÏóÓëÒı½Å (×¢ÊÍ±íÃ÷°´ÏÂÊ±µçÆ½Îª0)
+    // 2. ç»‘å®šè½¯ä»¶å¯¹è±¡ä¸å¼•è„š (æ³¨é‡Šè¡¨æ˜æŒ‰ä¸‹æ—¶ç”µå¹³ä¸º0)
     Key_Switch_Object_Init(&dev_key1, KEY1, 0);
     Key_Switch_Object_Init(&dev_key2, KEY2, 0);
     Key_Switch_Object_Init(&dev_key3, KEY3, 0);
     Key_Switch_Object_Init(&dev_key4, KEY4, 0);
     
-    // Switch Ò²ÊÇÔÚ ON µÄÒ»²àÎª 0
+    // Switch ä¹Ÿæ˜¯åœ¨ ON çš„ä¸€ä¾§ä¸º 0
     Key_Switch_Object_Init(&dev_switch1, SWITCH1, 0);
     Key_Switch_Object_Init(&dev_switch2, SWITCH2, 0);
 }
 
 /**
- * @brief  °´¼ü×´Ì¬¸üĞÂÓë·À¶¶´¦ÀíºËĞÄ
- * @param  key: Ö¸ÏòĞèÒª¸üĞÂµÄ°´¼ü¶ÔÏóµÄÖ¸Õë
+ * @brief  æŒ‰é”®çŠ¶æ€æ›´æ–°ä¸é˜²æŠ–å¤„ç†æ ¸å¿ƒ
+ * @param  key: æŒ‡å‘éœ€è¦æ›´æ–°çš„æŒ‰é”®å¯¹è±¡çš„æŒ‡é’ˆ
  */
 void Key_Switch_Update(Key_Switch_t *key) {
-    // 1. ¶ÁÈ¡Ó²¼şÒı½ÅË²Ê±×´Ì¬£¬×ª»»ÎªÂß¼­×´Ì¬ (1=ÕıÔÚ°´, 0=Ã»°´)
+    // 1. è¯»å–ç¡¬ä»¶å¼•è„šç¬æ—¶çŠ¶æ€ï¼Œè½¬æ¢ä¸ºé€»è¾‘çŠ¶æ€ (1=æ­£åœ¨æŒ‰, 0=æ²¡æŒ‰)
     uint8_t current_raw = (gpio_get_level(key->pin) == key->active_level) ? 1 : 0;
 
-    // 2. ºËĞÄÏû¶¶Âß¼­£ºÖ»ÓĞ×´Ì¬³ÖĞø²»±ä´ïµ½Éè¶¨ãĞÖµ£¬²ÅÈÏ¿É¸Ã×´Ì¬
+    // 2. æ ¸å¿ƒæ¶ˆæŠ–é€»è¾‘ï¼šåªæœ‰çŠ¶æ€æŒç»­ä¸å˜è¾¾åˆ°è®¾å®šé˜ˆå€¼ï¼Œæ‰è®¤å¯è¯¥çŠ¶æ€
     if (current_raw != key->raw_state) {
         key->raw_state = current_raw;
-        key->debounce_cnt = 0; // Ö»ÒªÓĞµçÆ½Ìø±ä£¨ÔÓ²¨£©£¬Á¢¿ÌÖØĞÂ¼ÆÊ±
+        key->debounce_cnt = 0; // åªè¦æœ‰ç”µå¹³è·³å˜ï¼ˆæ‚æ³¢ï¼‰ï¼Œç«‹åˆ»é‡æ–°è®¡æ—¶
     } else {
         key->debounce_cnt += KEY_DT;
-        // µ±µçÆ½ÎÈ¶¨Ê±¼ä´ïµ½Ïû¶¶ãĞÖµ (KS_MAX_SHOCK_PERIOD)
+        // å½“ç”µå¹³ç¨³å®šæ—¶é—´è¾¾åˆ°æ¶ˆæŠ–é˜ˆå€¼ (KS_MAX_SHOCK_PERIOD)
         if (key->debounce_cnt >= KS_MAX_SHOCK_PERIOD) {
             key->stable_state = key->raw_state;
-            key->debounce_cnt = KS_MAX_SHOCK_PERIOD; // ·ÀÖ¹¼ÆÊıÆ÷Òç³ö
+            key->debounce_cnt = KS_MAX_SHOCK_PERIOD; // é˜²æ­¢è®¡æ•°å™¨æº¢å‡º
         }
     }
 
-    // 3. ÇåÀíÉÏÒ»Ö¡µÄË²·¢ÊÂ¼ş
+    // 3. æ¸…ç†ä¸Šä¸€å¸§çš„ç¬å‘äº‹ä»¶
     key->event = KEY_EVT_NONE;
     key->is_pressed = key->stable_state;
 
-    // 4. ±ßÑØ¼ì²âÓë³¤¶Ì°´ÒµÎñÂß¼­
+    // 4. è¾¹æ²¿æ£€æµ‹ä¸é•¿çŸ­æŒ‰ä¸šåŠ¡é€»è¾‘
     if (key->stable_state == 1 && key->last_stable_state == 0) {
-        // [ÏÂ½µÑØ] ¸Õ¸Õ°´ÏÂµÄË²¼ä
+        // [ä¸‹é™æ²¿] åˆšåˆšæŒ‰ä¸‹çš„ç¬é—´
         key->event = KEY_EVT_DOWN;
         key->press_time = 0;
     } 
     else if (key->stable_state == 0 && key->last_stable_state == 1) {
-        // [ÉÏÉıÑØ] ¸Õ¸ÕËÉ¿ªµÄË²¼ä
+        // [ä¸Šå‡æ²¿] åˆšåˆšæ¾å¼€çš„ç¬é—´
         key->event = KEY_EVT_UP;
         
-        // Èç¹ûËÉ¿ªÊ±£¬°´ÏÂµÄÊ±¼äÂú×ã¶Ì°´Ìõ¼ş
+        // å¦‚æœæ¾å¼€æ—¶ï¼ŒæŒ‰ä¸‹çš„æ—¶é—´æ»¡è¶³çŸ­æŒ‰æ¡ä»¶
         if (key->press_time >= KS_MAX_SHOCK_PERIOD && key->press_time < KS_LONG_PRESS_PERIOD) {
             key->event = KEY_EVT_SHORT; 
         }
     } 
     else if (key->stable_state == 1 && key->last_stable_state == 1) {
-        // [µçÆ½±£³Ö] ³ÖĞø°´×¡
+        // [ç”µå¹³ä¿æŒ] æŒç»­æŒ‰ä½
         key->press_time += KEY_DT;
         
-        // ´ïµ½³¤°´ãĞÖµµÄË²¼ä´¥·¢Ò»´Î³¤°´ÊÂ¼ş
+        // è¾¾åˆ°é•¿æŒ‰é˜ˆå€¼çš„ç¬é—´è§¦å‘ä¸€æ¬¡é•¿æŒ‰äº‹ä»¶
         if (key->press_time == KS_LONG_PRESS_PERIOD) {
             key->event = KEY_EVT_LONG;
         }
     }
 
-    // 5. ¸üĞÂÀúÊ·×´Ì¬¹©ÏÂÒ»Ö¡¶Ô±È
+    // 5. æ›´æ–°å†å²çŠ¶æ€ä¾›ä¸‹ä¸€å¸§å¯¹æ¯”
     key->last_stable_state = key->stable_state;
 }
 
-// ¾ÛºÏ¸üĞÂËùÓĞÉè±¸×´Ì¬ (¿ÉÖ±½Ó·ÅÔÚ 10ms ¶¨Ê±Æ÷ÖĞ¶ÏÖĞ)
+// èšåˆæ›´æ–°æ‰€æœ‰è®¾å¤‡çŠ¶æ€ (å¯ç›´æ¥æ”¾åœ¨ 10ms å®šæ—¶å™¨ä¸­æ–­ä¸­)
 void Key_Switch_Update_All(void) {
     for (int i = 0; i < KEY_COUNT; i++) {
         Key_Switch_Update(ALL_KEYS[i]);
     }
 }
 
-// µ¥¶À²âÊÔ dev_key1 ´òÓ¡×´Ì¬µÄ²âÊÔº¯Êı
+// å•ç‹¬æµ‹è¯• dev_key1 æ‰“å°çŠ¶æ€çš„æµ‹è¯•å‡½æ•°
 void debug_key1_test(void) {
-    // 1. ¾ÛºÏ¸üĞÂËùÓĞ°´¼üºÍ²¦Âë¿ª¹ØµÄ×´Ì¬
+    // 1. èšåˆæ›´æ–°æ‰€æœ‰æŒ‰é”®å’Œæ‹¨ç å¼€å…³çš„çŠ¶æ€
     Key_Switch_Update_All();
 
-    // 2. ±ßÑØÓë¶¯×÷ÊÂ¼şÅĞ¶Ï (Ë²·¢ÊÂ¼ş£¬Ò»Ö¡Ö»½øÒ»´Î)
+    // 2. è¾¹æ²¿ä¸åŠ¨ä½œäº‹ä»¶åˆ¤æ–­ (ç¬å‘äº‹ä»¶ï¼Œä¸€å¸§åªè¿›ä¸€æ¬¡)
     if (dev_key1.event == KEY_EVT_DOWN) {
-        printf("KEY1 [ÊÂ¼ş]: ¸Õ¸Õ±»°´ÏÂ (DOWN) \r\n");
+        printf("KEY1 [äº‹ä»¶]: åˆšåˆšè¢«æŒ‰ä¸‹ (DOWN) \r\n");
     } 
     else if (dev_key1.event == KEY_EVT_UP) {
-        printf("KEY1 [ÊÂ¼ş]: ¸Õ¸Õ±»ËÉ¿ª (UP) \r\n");
+        printf("KEY1 [äº‹ä»¶]: åˆšåˆšè¢«æ¾å¼€ (UP) \r\n");
     } 
     else if (dev_key1.event == KEY_EVT_SHORT) {
-        printf("KEY1 [ÊÂ¼ş]: ´¥·¢¡¾¶Ì°´¡¿(SHORT)! \r\n");
+        printf("KEY1 [äº‹ä»¶]: è§¦å‘ã€çŸ­æŒ‰ã€‘(SHORT)! \r\n");
     } 
     else if (dev_key1.event == KEY_EVT_LONG) {
-        printf("KEY1 [ÊÂ¼ş]: ´¥·¢¡¾³¤°´¡¿(LONG)! \r\n");
+        printf("KEY1 [äº‹ä»¶]: è§¦å‘ã€é•¿æŒ‰ã€‘(LONG)! \r\n");
     }
 }
