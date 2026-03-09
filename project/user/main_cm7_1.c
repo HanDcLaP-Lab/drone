@@ -112,7 +112,7 @@ int main(void)
 
             // 2. 写入视觉数据，并 Clean Cache (刷入 RAM 供 Core 0 读取)
             M7_1_data_send(share_data_from_1);
-            share_data_from_1[15] = 1.0f;
+            share_data_from_1[15] = 1.0f; // 图像处理完成标志位，Core 0 可根据此位判断何时读取数据
             SCB_CleanDCache_by_Addr(&share_data_from_1, sizeof(share_data_from_1));
             if (drone_mode == 0) // DRONE_STATE_DEBUG = 0
             {

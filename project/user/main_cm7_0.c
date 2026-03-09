@@ -58,6 +58,7 @@ float f_buffer[UART_DATA_LENGTH] = {0};
 #define PIT_NUM2 (PIT_CH2)
 
 #define LED1 (P19_0)
+#define UART_KEY (P19_2)
 
 int main(void) {
     clock_init(SYSTEM_CLOCK_250M);  // 时钟配置及系统初始化<务必保留>
@@ -66,6 +67,7 @@ int main(void) {
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(1500);
 
+    gpio_init(UART_KEY, GPI, GPIO_HIGH, GPI_PULL_UP); //uart
     wireless_uart_init_();
     Board_Comm_Init();
 
