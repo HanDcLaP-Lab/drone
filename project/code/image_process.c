@@ -125,26 +125,38 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
     const double k = 0.4; // 滤波系数 (0~1)，越小越平滑但延迟越高
 
     // 小车 (Index 0): image.h 中定义 centers[i][0] 为 row (v), centers[i][1] 为 col (u)
-    Vector3D ray_car = pixelTo3DRay((double)cam_down.centers[0][1], (double)cam_down.centers[0][0]);
-    Vector3D body_car = cameraToBody(&ray_car, pitch_deg, roll_deg);
-    GroundPoint raw_car = projectToGround(body_car, height);
-    car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
-    car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
+    if (cam_down.light_number >= 1) {
+        Vector3D ray_car = pixelTo3DRay((double)cam_down.centers[0][1], (double)cam_down.centers[0][0]);
+        Vector3D body_car = cameraToBody(&ray_car, pitch_deg, roll_deg);
+        GroundPoint raw_car = projectToGround(body_car, height);
+        car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
+        car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
 
-    extern volatile float share_data_from_1[]; 
-    share_data_from_1[7] = ray_car.x;
-    share_data_from_1[8] = ray_car.y;
-    share_data_from_1[9] = ray_car.z;
-    share_data_from_1[10] = body_car.x;
-    share_data_from_1[11] = body_car.y;
-    share_data_from_1[12] = body_car.z;
+        extern volatile float share_data_from_1[]; 
+        share_data_from_1[7] = ray_car.x;
+        share_data_from_1[8] = ray_car.y;
+        share_data_from_1[9] = ray_car.z;
+        share_data_from_1[10] = body_car.x;
+        share_data_from_1[11] = body_car.y;
+        share_data_from_1[12] = body_car.z;
+    } else {
+        // 未识别到小车，坐标归零
+        car_ground_pos.x = 0.0;
+        car_ground_pos.y = 0.0;
+    }
     
     // 目标 (Index 1)
-    Vector3D ray_target = pixelTo3DRay((double)cam_down.centers[1][1], (double)cam_down.centers[1][0]);
-    Vector3D body_target = cameraToBody(&ray_target, pitch_deg, roll_deg);
-    GroundPoint raw_target = projectToGround(body_target, height);
-    target_ground_pos.x = target_ground_pos.x * (1.0 - k) + raw_target.x * k;
-    target_ground_pos.y = target_ground_pos.y * (1.0 - k) + raw_target.y * k;
+    if (cam_down.light_number >= 2) {
+        Vector3D ray_target = pixelTo3DRay((double)cam_down.centers[1][1], (double)cam_down.centers[1][0]);
+        Vector3D body_target = cameraToBody(&ray_target, pitch_deg, roll_deg);
+        GroundPoint raw_target = projectToGround(body_target, height);
+        target_ground_pos.x = target_ground_pos.x * (1.0 - k) + raw_target.x * k;
+        target_ground_pos.y = target_ground_pos.y * (1.0 - k) + raw_target.y * k;
+    } else {
+        // 未识别到目标点，坐标归零
+        target_ground_pos.x = 0.0;
+        target_ground_pos.y = 0.0;
+    }
 
     // 计算 car 和 target 之间的距离并写入 share_data_from_1[13]
     double dx = car_ground_pos.x - target_ground_pos.x;

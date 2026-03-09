@@ -67,7 +67,7 @@ int main(void) {
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(1500);
 
-    gpio_init(UART_KEY, GPI, GPIO_HIGH, GPI_PULL_UP); //uart
+    gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL); //uart
     wireless_uart_init_();
     Board_Comm_Init();
 
