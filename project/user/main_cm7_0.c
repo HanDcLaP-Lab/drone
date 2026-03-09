@@ -56,8 +56,7 @@ float f_buffer[UART_DATA_LENGTH] = {0};
 #define PIT_NUM0 (PIT_CH0)
 #define PIT_NUM1 (PIT_CH1)
 #define PIT_NUM2 (PIT_CH2)
-#define PIT_NUM3 (PIT_CH10)
-#define PIT_NUM4 (PIT_CH11)
+
 #define LED1 (P19_0)
 
 int main(void) {
@@ -69,13 +68,10 @@ int main(void) {
 
     wireless_uart_init_();
     Board_Comm_Init();
-    key_switch_init();
 
     app_init();
     share_data_from_0[4] = (float)current_drone_state;
     SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
-    pit_ms_init(PIT_NUM3, 10);
-    pit_ms_init(PIT_NUM4, 500);
     
     seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
 

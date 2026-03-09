@@ -47,6 +47,39 @@ static uint8_t is_valid_pixel(CameraObject *cam, uint16_t r, uint16_t c, uint8_t
             cam->binarized_image[index] == 1);
 }
 
+// ==========================================
+// [新增] 8邻域极速膨胀函数 (缝合线缆遮挡造成的裂缝)
+// ==========================================
+static void fast_dilate_3x3_8_neighbor(CameraObject *cam) {
+    // 1. 清空临时缓冲区 image_copy (利用一维数组的形式快速清空)
+    memset(image_copy[0], 0, cam->width * cam->height);
+    
+    // 2. 遍历原始二值化图像 (避开最外层1个像素边界，防止指针越界)
+    for (uint16_t r = cam->margin_cut + 1; r < cam->height - cam->margin_cut - 1; r++) {
+        for (uint16_t c = cam->margin_cut + 1; c < cam->width - cam->margin_cut - 1; c++) {
+            uint32_t idx = r * cam->width + c;
+            
+            // 只要当前中心点是 1 (白点)
+            if (cam->binarized_image[idx] == 1) {
+                // 将缓冲区中的自己和周围 8 个邻居全部点亮
+                image_copy[0][idx] = 1;                   // 中心
+                image_copy[0][idx - 1] = 1;               // 左
+                image_copy[0][idx + 1] = 1;               // 右
+                image_copy[0][idx - cam->width] = 1;      // 上
+                image_copy[0][idx + cam->width] = 1;      // 下
+                
+                image_copy[0][idx - cam->width - 1] = 1;  // 左上
+                image_copy[0][idx - cam->width + 1] = 1;  // 右上
+                image_copy[0][idx + cam->width - 1] = 1;  // 左下
+                image_copy[0][idx + cam->width + 1] = 1;  // 右下
+            }
+        }
+    }
+    
+    // 3. 将膨胀后的连续图像覆盖回原数组，供后面的 DFS 搜索使用
+    memcpy(cam->binarized_image, image_copy[0], cam->width * cam->height);
+}
+
 // 深度优先搜索 (DFS) - 迭代版 (防止栈溢出)
 static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, uint16_t start_r, uint16_t start_c) {
     typedef struct { uint16_t r; uint16_t c; } Node;
@@ -208,7 +241,8 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
 void image_processing_loop(void) {
     // 1. 二值化
     binarize_image(&cam_down);
-    
+    //膨胀处理
+    fast_dilate_3x3_8_neighbor(&cam_down);
     // 2. 连通域标记
     mark_components(&cam_down, visited_buffer);
     

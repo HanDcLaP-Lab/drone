@@ -46,6 +46,9 @@
 
 //float uart_data[UART_DATA_LENGTH] = {0}; 
 
+#define PIT_NUM3 (PIT_CH10)
+#define PIT_NUM4 (PIT_CH11)
+
 int32_t image_cnt = 0;
 
 #pragma location = 0x28001000                                                   
@@ -65,6 +68,8 @@ int main(void)
     camera_init();
     system_delay_ms(2000);
     display_init();
+    key_switch_init();
+    pit_ms_init(PIT_NUM3 , 10);
     while(true)
     {          
         // 等待摄像头采集完成 (同步物理帧率，50Hz)
@@ -75,6 +80,7 @@ int main(void)
             // 1. 读取 IMU 数据前，先无效化 Cache (从 RAM 拉取 Core 0 写入的最新数据)
             SCB_InvalidateDCache_by_Addr(&share_data_from_0, sizeof(share_data_from_0));
             int drone_mode = (int)share_data_from_0[4];
+            cam_down.threshold = (uint8_t)debug_params[0];
             image_processing_loop();
             
             // 使用最新的IMU数据(来自Core0)和最新的图像中心(来自image_processing_loop)进行解算
@@ -102,11 +108,14 @@ int main(void)
                 ips200_displayimage03x((const uint8 *)image_copy , MT9V03X_W, MT9V03X_H);
                 
                 // 在屏幕下方显示状态与阈值
-                ips200_show_string(0, 140, "Mode: DEBUG");
-                ips200_show_string(0, 160, "Threshold:");
-                
-                // 打印当前的二值化阈值变量，占用 3 个字符宽度
-                ips200_show_int(80, 160, cam_down.threshold, 3);
+                ips200_show_string(0, 16*9, "Mode: DEBUG");
+
+                if (current_param_idx == 0) {
+                    ips200_show_string(0, 16*10, "-> Thresh:"); // 带有指示箭头代表当前高亮选中
+                } else {
+                    ips200_show_string(0, 16*10, "   Thresh:"); // 未选中时用空格对齐
+                }
+                ips200_show_int(80, 16*10, cam_down.threshold, 3);
             }
             //UART
             //uart_write_buffer(TEST_UART, (const uint8_t *)uart_data, sizeof(uart_data));

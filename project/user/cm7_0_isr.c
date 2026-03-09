@@ -73,8 +73,8 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH10);
-    debug_key1_test();
-    app_state_machine_update();
+    //debug_key1_test();
+    //app_state_machine_update();
     //display_motor_output_display();
     //display_image_display();
 }

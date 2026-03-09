@@ -36,11 +36,14 @@
 
 
 #include "zf_common_headfile.h"
+extern float debug_params[];
+extern uint8_t current_param_idx;
+#define PARAM_COUNT 1 // 目前只有 1 个参数
 // **************************** PIT中断函数 ****************************
 void pit0_ch0_isr()                     // 定时器通道 0 周期中断服务函数      
 {
     pit_isr_flag_clear(PIT_CH0);
-  
+    
     
     
 }
@@ -60,6 +63,8 @@ void pit0_ch2_isr()                     // 定时器通道 2 周期中断服务�
 void pit0_ch10_isr()                    // 定时器通道 10 周期中断服务函数      
 {
     pit_isr_flag_clear(PIT_CH10);
+    Key_Switch_Update_All();
+    Key_Switch_Param_Edit();
 	
 }
 
