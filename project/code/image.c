@@ -184,6 +184,10 @@ static void sort_lights(CameraObject *cam) {
                 float temp_col = cam->centers[j][1];
                 cam->centers[j][1] = cam->centers[j+1][1];
                 cam->centers[j+1][1] = temp_col;
+                // 4. 交换长宽比
+                float temp_ratio = cam->aspect_ratio[j];
+                cam->aspect_ratio[j] = cam->aspect_ratio[j+1];
+                cam->aspect_ratio[j+1] = temp_ratio;
             }
         }
     }
@@ -194,37 +198,72 @@ static void sort_lights(CameraObject *cam) {
 
 
 
-
-// 提取质心 (已修改)
 static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
-    // [修复] 数组大小必须匹配最大连通域数量(MAX_DOTS)，否则 lbl > 20 时会越界崩溃
     uint32_t sum_r[MAX_DOTS] = {0};
     uint32_t sum_c[MAX_DOTS] = {0};
     
-    // 清空上一帧结果
+    // 【新增】：用于计算二阶矩的平方和
+    uint32_t sum_rr[MAX_DOTS] = {0};
+    uint32_t sum_cc[MAX_DOTS] = {0};
+    uint32_t sum_rc[MAX_DOTS] = {0};
+    
     memset(cam->dot_num, 0, sizeof(cam->dot_num));
     memset(cam->centers, 0, sizeof(cam->centers));
+    memset(cam->aspect_ratio, 0, sizeof(cam->aspect_ratio)); // 清空上一帧的长宽比
 
-    // 1. 累加坐标
+    // 1. 累加坐标与坐标的平方
     for (uint16_t i = cam->margin_cut; i < cam->height - cam->margin_cut; i++) {
         for (uint16_t j = cam->margin_cut; j < cam->width - cam->margin_cut; j++) {
             uint8_t lbl = visited[i * cam->width + j];
             if (lbl > 0 && lbl <= MAX_DOTS) { 
-                sum_r[lbl-1] += i;
-                sum_c[lbl-1] += j;
+                sum_r[lbl-1] += i;            // y
+                sum_c[lbl-1] += j;            // x
+                
+                sum_rr[lbl-1] += i * i;       // y^2
+                sum_cc[lbl-1] += j * j;       // x^2
+                sum_rc[lbl-1] += i * j;       // x*y
+                
                 cam->dot_num[lbl-1]++;
             }
         }
     }
 
-    // 2. 计算平均值并初步筛选
+    // 2. 计算质心和协方差矩阵特征值 (真实长宽比)
     uint8_t valid_idx = 0;
     for (int i = 0; i < cam->components_count && i < MAX_DOTS; i++) {
-        if (cam->dot_num[i] > MIN_LIGHT_SIZE) {
+        uint32_t num = cam->dot_num[i];
+        if (num > MIN_LIGHT_SIZE) {
             if (valid_idx < MAX_LIGHTS) {
-                cam->centers[valid_idx][0] = (float)sum_r[i] / (float)cam->dot_num[i]; // Row (Y)
-                cam->centers[valid_idx][1] = (float)sum_c[i] / (float)cam->dot_num[i]; // Col (X)
-                cam->dot_num[valid_idx] = cam->dot_num[i]; 
+                // 计算质心
+                float cy = (float)sum_r[i] / num; // Row (Y)
+                float cx = (float)sum_c[i] / num; // Col (X)
+                cam->centers[valid_idx][0] = cy; 
+                cam->centers[valid_idx][1] = cx; 
+                cam->dot_num[valid_idx] = num; 
+                
+                // ==========================================
+                // 【核心算法】：计算二阶中心矩与真实长宽比
+                // ==========================================
+                // 计算协方差
+                float mu20 = (float)sum_cc[i] / num - cx * cx; // X的方差
+                float mu02 = (float)sum_rr[i] / num - cy * cy; // Y的方差
+                float mu11 = (float)sum_rc[i] / num - cx * cy; // XY的协方差
+                
+                // 计算特征值 (代表该连通域在最长和最短方向的散布程度)
+                float delta = sqrtf((mu20 - mu02)*(mu20 - mu02) + 4.0f * mu11 * mu11);
+                float lambda1 = (mu20 + mu02 + delta) / 2.0f; // 主轴(长边)方差
+                float lambda2 = (mu20 + mu02 - delta) / 2.0f; // 次轴(短边)方差
+                
+                // 真实长宽比 = sqrt(主轴方差 / 次轴方差)
+                float ratio = 1.0f;
+                if (lambda2 > 0.1f) {
+                    ratio = sqrtf(lambda1 / lambda2);
+                } else {
+                    ratio = 10.0f; // 如果次轴极其小(如一条1像素宽的纯直线)，赋予一个大数值
+                }
+                
+                cam->aspect_ratio[valid_idx] = ratio; // 记录该灯的长宽比
+                // ==========================================
                 
                 valid_idx++;
             }
@@ -232,7 +271,8 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
     }
     cam->light_number = valid_idx;
 
-    // 3. [新增] 按面积从大到小排序
+    // 3. 按面积从大到小排序 (需同步交换 aspect_ratio)
+    // 注意：你原来的 sort_lights 函数里也要把 aspect_ratio 跟着一起交换！
     sort_lights(cam);
 }
 

@@ -64,7 +64,6 @@ int main(void)
     clock_init(SYSTEM_CLOCK_250M); 	// 时钟配置及系统初始化<务必保留>
     debug_info_init();                  // 调试串口信息初始化
 
-    //uart_init(TEST_UART, TEST_BAUDRATE, TEST_TX_PIN, TEST_RX_PIN);
     camera_init();
     system_delay_ms(2000);
     display_init();
@@ -81,7 +80,28 @@ int main(void)
             SCB_InvalidateDCache_by_Addr(&share_data_from_0, sizeof(share_data_from_0));
             int drone_mode = (int)share_data_from_0[4];
             cam_down.threshold = (uint8_t)debug_params[0];
-            image_processing_loop();
+
+
+            //uint32_t start_time = systick_get_ms(); // 记录算法开始时间 (毫秒)
+
+            image_processing_loop();               // 执行核心视觉算法
+            
+            //uint32_t end_time = systick_get_ms();   // 记录算法结束时间 (毫秒)
+            
+            //static uint32_t time_sum_ms = 0;
+            static uint16_t frame_cnt = 0;
+            //static uint32_t avg_time_ms = 0;       // 最终显示在屏幕上的平均耗时
+            
+            //time_sum_ms += (end_time - start_time); 
+            frame_cnt++;
+            
+            // 每处理 100 帧更新一次屏幕显示的数值
+            if (frame_cnt >= 100) {
+                //avg_time_ms = time_sum_ms / 100;
+                //time_sum_ms = 0;
+                frame_cnt = 0;
+                printf("100");
+            }
             
             // 使用最新的IMU数据(来自Core0)和最新的图像中心(来自image_processing_loop)进行解算
             // share_data_from_0: [0]=Roll, [1]=Pitch, [3]=Height
@@ -116,6 +136,16 @@ int main(void)
                     ips200_show_string(0, 16*10, "   Thresh:"); // 未选中时用空格对齐
                 }
                 ips200_show_int(80, 16*10, cam_down.threshold, 3);
+                ips200_show_string(0, 16*11, "L1 A:");
+                ips200_show_int(40, 16*11, cam_down.dot_num[0], 4);
+                ips200_show_string(80, 16*11, "R:"); // Ratio 长宽比
+                ips200_show_float(100, 16*11, cam_down.aspect_ratio[0], 2, 2);
+
+                // 打印 2 号灯 (面积次大的灯) 的数据
+                ips200_show_string(0, 16*12, "L2 A:");
+                ips200_show_int(40, 16*12, cam_down.dot_num[1], 4);
+                ips200_show_string(80, 16*12, "R:"); 
+                ips200_show_float(100, 16*12, cam_down.aspect_ratio[1], 2, 2);
             }
             //UART
             //uart_write_buffer(TEST_UART, (const uint8_t *)uart_data, sizeof(uart_data));
