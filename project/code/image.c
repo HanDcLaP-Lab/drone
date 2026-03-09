@@ -257,9 +257,9 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
                 // 真实长宽比 = sqrt(主轴方差 / 次轴方差)
                 float ratio = 1.0f;
                 if (lambda2 > 0.1f) {
-                    ratio = sqrtf(lambda1 / lambda2);
+                    ratio = lambda1 / lambda2;
                 } else {
-                    ratio = 10.0f; // 如果次轴极其小(如一条1像素宽的纯直线)，赋予一个大数值
+                    ratio = 100.0f; // 如果次轴极其小(如一条1像素宽的纯直线)，赋予一个大数值
                 }
                 
                 cam->aspect_ratio[valid_idx] = ratio; // 记录该灯的长宽比
