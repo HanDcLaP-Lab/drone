@@ -44,7 +44,7 @@
 
 // **************************** 代码区域 ****************************
 
-
+void M7_0_data_send(volatile float* data_out);
 #pragma location = 0x28001000  
 __root __no_init volatile float share_data_from_1[M7_1_DATA_LENGTH]; // Core 1 写 -> Core 0 读 (视觉数据)
 
@@ -140,13 +140,19 @@ if (current_drone_state == DRONE_STATE_NORMAL_FLIGHT) {
             }
         }
         
-        share_data_from_0[4] = (float)current_drone_state;
-        // 2. 写入 IMU 数据，并 Clean Cache (刷入 RAM 供 Core 1 读取)
-        M7_1_data_send_m7_0(share_data_from_0);
+        // 2. 刷入 RAM 供 Core 1 读取
+        M7_0_data_send(share_data_from_0);
         SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
+        
         system_delay_ms(1); // 稍微延时
-
     }
 }
 
 // **************************** 代码区域 ****************************
+void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入 data_out (share_data_from_0)
+    data_out[0] = imu_data.roll; 
+    data_out[1] = imu_data.pitch;
+    data_out[2] = imu_data.yaw;
+    data_out[3] = imu_data.z;
+    data_out[4] = (float)current_drone_state;
+}

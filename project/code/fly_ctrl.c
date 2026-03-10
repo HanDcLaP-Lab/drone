@@ -270,25 +270,9 @@ void motor_pwm_init() {
 }
 
 
-void M7_1_data_send(volatile float* data_out) { // Core 1 调用，写入 data_out (share_data_from_1)
-    data_out[0] = cam_down.centers[0][0]; 
-    data_out[1] = cam_down.centers[0][1];
-    data_out[2] = (float)cam_down.dot_num[0];
-    data_out[3] = car_ground_pos.x;
-    data_out[4] = car_ground_pos.y;
-    data_out[5] = target_ground_pos.x;
-    data_out[6] = target_ground_pos.y;
-    if (cam_down.light_number == 0) {
-        data_out[2] = 0;
-    }
-}
 
-void M7_1_data_send_m7_0(volatile float* data_out) { // Core 0 调用，写入 data_out (share_data_from_0)
-    data_out[0] = imu_data.roll; 
-    data_out[1] = imu_data.pitch;
-    data_out[2] = imu_data.yaw;
-    data_out[3] = imu_data.z;
-}
+
+
 
 void Flight_Hover_Control_Task(void) {
     // 这里的 Cache 操作已在 main_cm7_0 中完成，此处直接读取 share_data_from_1

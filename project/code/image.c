@@ -271,9 +271,6 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
     }
     cam->light_number = valid_idx;
 
-    // 3. 按面积从大到小排序 (需同步交换 aspect_ratio)
-    // 注意：你原来的 sort_lights 函数里也要把 aspect_ratio 跟着一起交换！
-    sort_lights(cam);
 }
 
 
@@ -289,8 +286,12 @@ void image_processing_loop(void) {
     // 3. 计算质心
     calculate_centroids(&cam_down, visited_buffer);
 
-    // 4. 矫正处理
-    //calculate_ground_positions(m7_1_data[6], m7_1_data[4], m7_1_data[3]); //此步骤移至main_cm7_1.c
+    // 3. 按面积从大到小排序 (需同步交换 aspect_ratio)
+    sort_lights(&cam_down);
+
+    // 4. 矫正处理 share_data_from_0: [0]=Roll, [1]=Pitch, [3]=Height
+    extern float share_data_from_0[];
+    calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0]);
 } 
 
 void image_send(void){

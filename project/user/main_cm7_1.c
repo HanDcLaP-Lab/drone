@@ -50,6 +50,7 @@
 #define PIT_NUM4 (PIT_CH11)
 
 int32_t image_cnt = 0;
+void M7_1_data_send(volatile float* data_out);
 
 #pragma location = 0x28001000                                                   
 volatile float share_data_from_1[M7_1_DATA_LENGTH] = {0};      // Core 1 写 -> Core 0 读
@@ -76,76 +77,31 @@ int main(void)
         {
             mt9v03x_finish_flag = 0;
             
-            // 1. 读取 IMU 数据前，先无效化 Cache (从 RAM 拉取 Core 0 写入的最新数据)
+            // 1. 拉取 Core 0 写入的最新数据
             SCB_InvalidateDCache_by_Addr(&share_data_from_0, sizeof(share_data_from_0));
             int drone_mode = (int)share_data_from_0[4];
             cam_down.threshold = (uint8_t)debug_params[0];
 
-
-            //uint32_t start_time = systick_get_ms(); // 记录算法开始时间 (毫秒)
-
             image_processing_loop();               // 执行核心视觉算法
-            
-            //uint32_t end_time = systick_get_ms();   // 记录算法结束时间 (毫秒)
-            
-            //static uint32_t time_sum_ms = 0;
-            static uint16_t frame_cnt = 0;
-            //static uint32_t avg_time_ms = 0;       // 最终显示在屏幕上的平均耗时
-            
-            //time_sum_ms += (end_time - start_time); 
-            frame_cnt++;
-            
-            // 每处理 100 帧更新一次屏幕显示的数值
-            if (frame_cnt >= 100) {
-                //avg_time_ms = time_sum_ms / 100;
-                //time_sum_ms = 0;
-                frame_cnt = 0;
-                printf("100");
-            }
-            
-            // 使用最新的IMU数据(来自Core0)和最新的图像中心(来自image_processing_loop)进行解算
-            // share_data_from_0: [0]=Roll, [1]=Pitch, [3]=Height
-            if (drone_mode == 1) // DRONE_STATE_NORMAL_FLIGHT = 1
-            {
-                calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0]);
-            }
 
-            // 2. 写入视觉数据，并 Clean Cache (刷入 RAM 供 Core 0 读取)
+
+            // 2. 刷入 RAM 供 Core 0 读取
             M7_1_data_send(share_data_from_1);
             share_data_from_1[15] = 1.0f; // 图像处理完成标志位，Core 0 可根据此位判断何时读取数据
             SCB_CleanDCache_by_Addr(&share_data_from_1, sizeof(share_data_from_1));
+
+            // 3. 屏幕打印
             if (drone_mode == 0) // DRONE_STATE_DEBUG = 0
             {
-                // 将底层的 0/1 放大为 0/255 以便屏幕显示
-                for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++) {
-                    image_copy[0][i] = cam_down.binarized_image[i] ? 255 : 0;
-                }
-                
-                // 将要显示的数组刷入内存供 DMA 搬运
-                SCB_CleanDCache_by_Addr((void*)image_copy, sizeof(image_copy));
-                
-                // 显示二值化图像 (假设全屏大小为 188x120)
-                ips200_displayimage03x((const uint8 *)image_copy , MT9V03X_W, MT9V03X_H);
-                
-                // 在屏幕下方显示状态与阈值
-                ips200_show_string(0, 16*9, "Mode: DEBUG");
+                display_image_debug_display();
+            }
 
-                if (current_param_idx == 0) {
-                    ips200_show_string(0, 16*10, "-> Thresh:"); // 带有指示箭头代表当前高亮选中
-                } else {
-                    ips200_show_string(0, 16*10, "   Thresh:"); // 未选中时用空格对齐
-                }
-                ips200_show_int(80, 16*10, cam_down.threshold, 3);
-                ips200_show_string(0, 16*11, "L1 A:");
-                ips200_show_int(40, 16*11, cam_down.dot_num[0], 4);
-                ips200_show_string(80, 16*11, "R:"); // Ratio 长宽比
-                ips200_show_float(100, 16*11, cam_down.aspect_ratio[0], 2, 2);
-
-                // 打印 2 号灯 (面积次大的灯) 的数据
-                ips200_show_string(0, 16*12, "L2 A:");
-                ips200_show_int(40, 16*12, cam_down.dot_num[1], 4);
-                ips200_show_string(80, 16*12, "R:"); 
-                ips200_show_float(100, 16*12, cam_down.aspect_ratio[1], 2, 2);
+            // 图像处理效率观测
+            static uint16_t frame_cnt = 0;
+            frame_cnt++;
+            if (frame_cnt >= 100) {
+                frame_cnt = 0;
+                //printf("100");
             }
             //UART
             //uart_write_buffer(TEST_UART, (const uint8_t *)uart_data, sizeof(uart_data));
@@ -154,3 +110,17 @@ int main(void)
 }
 
 // **************************** 代码区域 ****************************
+void M7_1_data_send(volatile float* data_out) { // Core 1 调用，写入 data_out (share_data_from_1)
+    data_out[0] = cam_down.centers[0][0]; 
+    data_out[1] = cam_down.centers[0][1];
+    data_out[2] = (float)cam_down.dot_num[0];
+    data_out[3] = car_ground_pos.x;
+    data_out[4] = car_ground_pos.y;
+    data_out[5] = target_ground_pos.x;
+    data_out[6] = target_ground_pos.y;
+
+    
+    if (cam_down.light_number == 0) {
+        data_out[2] = 0;
+    }
+}
