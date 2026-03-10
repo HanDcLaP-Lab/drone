@@ -140,32 +140,45 @@ void debug_key1_test(void) {
 }
 
 void Key_Switch_Param_Edit(void) {
-    // 1. KEY1 短按：向下切换当前选中的参数
+    // 1. KEY1 短按：向下切换当前选中的参数 (未写 LONG 事件，长按天然无效)
     if (dev_key1.event == KEY_EVT_SHORT) {
         current_param_idx++;
         if (current_param_idx >= PARAM_COUNT) {
             current_param_idx = 0; // 越界后切回第一个
         }
     }
-
-    // 2. KEY2 调参：短按减小，长按增大
-    if (dev_key2.event == KEY_EVT_SHORT || dev_key2.event == KEY_EVT_LONG) {
+    //  KEY2 短按：增大参数 
+    if (dev_key2.event == KEY_EVT_SHORT) {
         
         // 计算 5% 的变化量，并保证最少变化 1.0 
         float delta = debug_params[current_param_idx] * 0.05f;
         if (delta < 1.0f) delta = 1.0f;
 
-        if (dev_key2.event == KEY_EVT_SHORT) {
-            debug_params[current_param_idx] -= delta;
-        } 
-        else if (dev_key2.event == KEY_EVT_LONG) {
-            debug_params[current_param_idx] += delta;
-        }
+        // 短按增大参数
+        debug_params[current_param_idx] += delta;
 
-        // 3. 安全限幅处理 (阈值只能在 0~255 之间)
+        // 3. 安全限幅与循环处理 (阈值在 0~255 之间)
         if (current_param_idx == 0) {
-            if (debug_params[0] > 255.0f) debug_params[0] = 255.0f;
-            if (debug_params[0] < 0.0f)   debug_params[0] = 0.0f;
+            if (debug_params[0] > 255.0f) {
+                debug_params[0] = 255.0f; 
+            }
+        }
+    }
+
+    if (dev_key3.event == KEY_EVT_SHORT) {
+        
+        // 计算 5% 的变化量，并保证最少变化 1.0 
+        float delta = debug_params[current_param_idx] * 0.05f;
+        if (delta < 1.0f) delta = 1.0f;
+
+        // 短按减小参数
+        debug_params[current_param_idx] -= delta;
+
+        // 3. 安全限幅与循环处理 (阈值在 0~255 之间)
+        if (current_param_idx == 0) {
+            if (debug_params[0] < 0.0f) {
+                debug_params[0] = 0.0f; 
+            }
         }
     }
 }

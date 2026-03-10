@@ -123,7 +123,7 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
 // 输出: car_ground_pos.x (前), car_ground_pos.y (右) 单位: cm (取决于height单位)
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg) {
     const double k = 0.4; // 滤波系数 (0~1)，越小越平滑但延迟越高
-
+    extern volatile float share_data_from_1[]; 
     // 小车 (Index 0): image.h 中定义 centers[i][0] 为 row (v), centers[i][1] 为 col (u)
     if (cam_down.light_number >= 1) {
         Vector3D ray_car = pixelTo3DRay((double)cam_down.centers[0][1], (double)cam_down.centers[0][0]);
@@ -132,7 +132,7 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
         car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
 
-        extern volatile float share_data_from_1[]; 
+        
         share_data_from_1[7] = ray_car.x;
         share_data_from_1[8] = ray_car.y;
         share_data_from_1[9] = ray_car.z;

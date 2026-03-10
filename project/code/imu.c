@@ -107,7 +107,7 @@ static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, floa
     // 5. 误差计算 (叉积: 测量向量 x 估计向量)
     ex = (ay * vz - az * vy);
     ey = (az * vx - ax * vz);
-    ez = (ax * vy - ay * vx);
+    //ez = (ax * vy - ay * vx);
 
     // 6. 积分误差 (Integral Feedback)
     // 【关键补偿】：当运动剧烈(权重低)时，必须停止积分！
