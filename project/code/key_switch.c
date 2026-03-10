@@ -9,7 +9,7 @@ Key_Switch_t dev_key4;
 Key_Switch_t dev_switch1;
 Key_Switch_t dev_switch2;
 
-float debug_params[PARAM_COUNT] = {70.0f}; // 索引0: 二值化阈值，默认70
+float debug_params[PARAM_COUNT] = {(float)THRESHOLD};
 uint8_t current_param_idx = 0;             // 当前选中的参数索引
 
 // 鍒涘缓涓�涓寚閽堟暟缁勶紝鎶婃墍鏈夎鎵弿鐨勬寜閿?/鎷ㄧ爜寮�鍏抽泦涓鐞?

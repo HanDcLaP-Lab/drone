@@ -139,8 +139,7 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         share_data_from_1[10] = body_car.x;
         share_data_from_1[11] = body_car.y;
         share_data_from_1[12] = body_car.z;
-    } else {
-        // 未识别到小车，坐标归零
+    } else {        // 未识别到小车，坐标归零
         car_ground_pos.x = 0.0;
         car_ground_pos.y = 0.0;
     }
