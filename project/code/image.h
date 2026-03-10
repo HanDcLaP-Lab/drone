@@ -7,7 +7,7 @@
 #define STACK_SIZE 4096     // DFS 栈大小
 #define MAX_LIGHTS 20       // 最大识别灯光数量
 #define MAX_DOTS 10         // 最大记录的连通域数量
-#define THRESHOLD 70      //二值化阈值设置
+#define THRESHOLD 130      //二值化阈值设置
 #define MIN_LIGHT_SIZE  12   //灯最小判定大小
 
 #define UART_DATA_LENGTH 8  // 数组数据长度
