@@ -278,12 +278,15 @@ void Flight_Hover_Control_Task(void) {
     // 这里的 Cache 操作已在 main_cm7_0 中完成，此处直接读取 share_data_from_1
     cam_down.centers[0][0] = share_data_from_1[0];  
     cam_down.centers[0][1] = share_data_from_1[1];  
-    cam_down.dot_num[0] = (uint32_t)share_data_from_1[2];     
-    if (cam_down.dot_num[0] > MIN_LIGHT_SIZE && cam_down.centers[0][0] > 0 && cam_down.centers[0][1] > 0) {
-        cam_down.light_number = 1;
-    } else {
+    cam_down.dot_num[0] = (uint32_t)share_data_from_1[2]; 
+    cam_down.light_number = (uint8_t)share_data_from_1[14];    
+    
+    if (cam_down.light_number >= 1 && 
+       (cam_down.dot_num[0] <= MIN_LIGHT_SIZE || cam_down.centers[0][0] <= 0 || cam_down.centers[0][1] <= 0)) {
         cam_down.light_number = 0;
     }
+
+    static float search_dir = 1.0f;
     if (cam_down.light_number >= 1) {
         // 直接计算像素误差
         // [移除] 移除卡尔曼滤波。视觉数据(50Hz)本身已有较大延迟，额外的强低通滤波会加剧相位滞后，导致严重的"荡秋千"。
@@ -311,10 +314,25 @@ void Flight_Hover_Control_Task(void) {
         float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, CTRL_DT_CTANG);
         float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, CTRL_DT_CTANG);
 
+        if (cam_down.light_number == 1) {
+            // 产生恒定的角速度步进
+            flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * CTRL_DT_CTANG;
+            
+            // 触碰左右极限边界时反转方向 (因为起飞是0，直接拿 target_yaw 判断即可)
+            if (flight_target.target_yaw > MAX_YAW_DEV) {
+                flight_target.target_yaw = MAX_YAW_DEV; // 限幅防超调
+                search_dir = -1.0f; 
+            } else if (flight_target.target_yaw < -MAX_YAW_DEV) {
+                flight_target.target_yaw = -MAX_YAW_DEV; // 限幅防超调
+                search_dir = 1.0f;  
+            }
+        }
         Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
     } else {
         comp_row = IMG_CENTER_Y;
         comp_col = IMG_CENTER_X;
+        Nonline_PID_Reset(&pid_image_x);
+        Nonline_PID_Reset(&pid_image_y);
         Set_Target_Attitude(0, 0, flight_target.target_yaw);
     }                                                                                                                                                        
     

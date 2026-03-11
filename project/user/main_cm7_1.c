@@ -118,7 +118,7 @@ void M7_1_data_send(volatile float* data_out) { // Core 1 调用，写入 data_o
     data_out[4] = car_ground_pos.y;
     data_out[5] = target_ground_pos.x;
     data_out[6] = target_ground_pos.y;
-
+    data_out[14] = (float)cam_down.light_number;
     
     if (cam_down.light_number == 0) {
         data_out[2] = 0;

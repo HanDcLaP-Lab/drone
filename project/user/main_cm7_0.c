@@ -67,14 +67,14 @@ int main(void) {
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(1500);
 
+    app_init();
+    share_data_from_0[4] = (float)current_drone_state;
+    SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
+
     gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL); //uart
     wireless_uart_init_();
     Board_Comm_Init();
 
-    app_init();
-    share_data_from_0[4] = (float)current_drone_state;
-    SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
-    
     seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
 
     //display_init();
