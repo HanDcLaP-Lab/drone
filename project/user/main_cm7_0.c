@@ -78,25 +78,8 @@ int main(void) {
     seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
 
     //display_init();
-if (current_drone_state == DRONE_STATE_NORMAL_FLIGHT) {
-        Kalman_Init(&K_w_ax,1e-3f,0.01,0);
-        Kalman_Init(&K_w_ay,1e-3f,0.01,0);
-        Kalman_Init(&K_groll,1e-3f,0.01f,0);
-        Kalman_Init(&K_gpitch,1e-3f,0.01f,0);
-        Kalman_Init(&K_gyaw,1e-3f,0.01f,0);
-        Kalman_Init(&K_ax, 0.001f, 0.1f, 0);
-        Kalman_Init(&K_ay, 0.001f, 0.1f, 0);
-        Kalman_Init(&K_az, 0.001f, 0.1f, 9.8f); 
-
-        imu_init();
-        tof_init();
-        motor_pwm_init(); 
-        Flight_Control_Init();
-        pit_ms_init(PIT_NUM1, 20); // 图像处理中断 20ms
-    pit_ms_init(PIT_NUM2, 400); // 输出中断 400ms
-    system_delay_ms(1000);
-    pit_ms_init(PIT_NUM0, 1); // 飞控主循环中断 1ms
-    } else {
+    // 初始化逻辑已封装至 app_init 及 app_flight_start 中
+    if (current_drone_state != DRONE_STATE_NORMAL_FLIGHT) {
         printf("DEBUG MODE: Flight Peripherals Bypassed.\r\n");
     }
 
@@ -105,6 +88,7 @@ if (current_drone_state == DRONE_STATE_NORMAL_FLIGHT) {
     // 此处编写用户代码 例如外设初始化代码等
 
     while (true) {
+        app_state_machine_update(); // 状态机轮询，检测模式切换
         seekfree_assistant_data_analysis();
 
         // 2. 检查是否有参数更新 (遍历所有通道)
