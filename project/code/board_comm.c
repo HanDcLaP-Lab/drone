@@ -53,4 +53,5 @@ void F_Buffer_write(float* buffer, volatile float* data)
     buffer[2] = data[5];
     buffer[3] = data[6];
     buffer[4] = imu_data.yaw;
+    buffer[5] = data[14];
 }
