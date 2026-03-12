@@ -82,6 +82,8 @@
 #include "zf_device_gnss.h"
 #include "zf_device_icm20602.h"
 #include "zf_device_imu660ra.h"
+#include "zf_device_imu660rb.h"
+#include "zf_device_imu660rc.h"
 #include "zf_device_imu963ra.h"
 #include "zf_device_ips114.h"
 #include "zf_device_ips200.h"
@@ -89,6 +91,7 @@
 #include "zf_device_key.h"
 #include "zf_device_menc15a.h"
 #include "zf_device_oled.h"
+#include "zf_device_pmw3901.h"
 #include "zf_device_mt9v03x.h"
 #include "zf_device_tft180.h"
 #include "zf_device_tsl1401.h"
@@ -103,8 +106,6 @@
 #include "seekfree_assistant.h"
 #include "seekfree_assistant_interface.h"
 //=====================================================组件应用层=====================================================
-
-//-----------------------------------------------------------------------------------------------------------------------
 #include "imu.h"
 #include "fly_ctrl.h"
 #include "pid.h"
@@ -116,5 +117,5 @@
 #include "board_comm.h"
 #include "key_switch.h"
 #include "app.h"
-//-------------------------------------------------------用户层---------------------------------------------------------
+
 #endif

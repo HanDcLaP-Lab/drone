@@ -16,8 +16,8 @@
 #define MAX_PWM 5800
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 10.0f  // 最大倾角限制 (度) 
-#define CTRL_DT_CTLOOP 0.001  // 控制周期
-#define CTRL_DT_CTANG 0.02   // 控制周期
+#define CTRL_DT_CTLOOP 0.001  // 飞控控制周期
+#define CTRL_DT_CTANG 0.02   // 视觉控制周期
 
 // 视觉控制增益
 // 广角镜头单位角度对应的像素位移较小，过大的系数会导致过度补偿引起绕圈震荡

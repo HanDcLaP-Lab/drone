@@ -52,7 +52,7 @@
 #include "zf_driver_uart.h"
 #include "zf_device_type.h"
 #include "zf_device_wireless_uart.h"
-#include "fly_ctrl.h"
+
 static  fifo_struct                                     wireless_uart_fifo;
 static  uint8                                           wireless_uart_buffer[WIRELESS_UART_BUFFER_SIZE];
 
@@ -198,18 +198,6 @@ void wireless_uart_callback (void)
 {
     if(uart_query_byte(WIRELESS_UART_INDEX, &wireless_uart_data))
     {
-        
-        // --- 新增逻辑 ---
-        // if(wireless_uart_data == 'r') {
-        //     wireless_uart_send_string("land\r\n");
-        //     flight_target.cur_state = pre_landing; 
-        // }
-        // else if(wireless_uart_data == 's') {
-        //     wireless_uart_send_string("emergency stop\r\n");
-        //     flight_target.cur_state = landing;
-        // }
-        // --- 新增逻辑 ---
-        
         fifo_write_buffer(&wireless_uart_fifo, &wireless_uart_data, 1);
     }
 #if WIRELESS_UART_AUTO_BAUD_RATE                                                // 开启自动波特率
