@@ -30,8 +30,8 @@
 #define ACCEPT_ERROR 6.0f
 
 //扫描旋转
-#define SEARCH_YAW_RATE 20.0f  // 搜索角速度 (度/秒)
-#define MAX_YAW_DEV     70.0f  // 最大扫描范围 (度)
+#define SEARCH_YAW_RATE 0.0f  // 搜索角速度 (度/秒)
+#define MAX_YAW_DEV     90.0f  // 最大扫描范围 (度)
 
 //视觉传输
 extern float comp_row;

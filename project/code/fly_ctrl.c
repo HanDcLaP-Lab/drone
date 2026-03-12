@@ -314,7 +314,7 @@ void Flight_Hover_Control_Task(void) {
         float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, CTRL_DT_CTANG);
         float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, CTRL_DT_CTANG);
 
-        if (cam_down.light_number == 1) {
+        if (cam_down.light_number == 1&& imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
             // 产生恒定的角速度步进
             flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * CTRL_DT_CTANG;
             
