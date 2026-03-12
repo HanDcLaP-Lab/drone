@@ -2,6 +2,7 @@
 #include "zf_common_headfile.h"
 
 extern volatile float share_data_from_1[];
+extern volatile float share_data_from_0[];
 void display_init()
 {
     ips200_set_dir(IPS200_PORTAIT);
@@ -149,4 +150,13 @@ void display_image_debug_display(void){
     ips200_show_int(40, 16*12, cam_down.dot_num[1], 4);
     ips200_show_string(80, 16*12, "R:"); 
     ips200_show_float(100, 16*12, cam_down.aspect_ratio[1], 2, 2);
+
+    ips200_show_string(0, 16*14, "LF:");
+    ips200_show_int(40, 16*14, (int)share_data_from_0[5], 4);
+    ips200_show_string(80, 16*14, "RF:");
+    ips200_show_int(120, 16*14, (int)share_data_from_0[6], 4);
+    ips200_show_string(0, 16*15, "LB:");
+    ips200_show_int(40, 16*15, (int)share_data_from_0[7], 4);
+    ips200_show_string(80, 16*15, "RB:");
+    ips200_show_int(120, 16*15, (int)share_data_from_0[8], 4);
 }

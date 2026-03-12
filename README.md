@@ -72,7 +72,11 @@ https://github.com/but0n/Avem.git
 | [1] | imu_data.pitch | IMU：俯仰角 (Pitch) |
 | [2] | imu_data.yaw | IMU：偏航角 (Yaw) |
 | [3] | imu_data.z | IMU：Z 轴位置 (高度) |
-| [4] | 未使用 | |
+| [4] | (float)current_drone_state |调试：无人机状态|
+| [5] | motor_out.lf | CONTROL：左前输出值|
+| [6] | motor_out.rf | CONTROL：右前输出值|
+| [7] | motor_out.lb | CONTROL：左后输出值|
+| [8] | motor_out.rb | CONTROL：右后输出值|
 | ... | ... | |
 | [15] | 未使用 | |
 
@@ -86,7 +90,7 @@ https://github.com/but0n/Avem.git
 | 2 | target_ground_pos.x | 计算：目标在地面坐标系中的 X 坐标 (若未识别到目标则为 0) |
 | 3 | target_ground_pos.y | 计算：目标在地面坐标系中的 Y 坐标 |
 | 4 | imu_data.yaw | IMU：无人机的偏航角 (Yaw)，来自 Core 0 共享数据 |
-| 5 | |  |
+| 5 |cam_down.light_number | 计算：检测到的有效灯数 |
 | 6 | |  |
 | 7 | |  |
 
@@ -225,3 +229,7 @@ key1短按切换到下一个参数 ， key2短按将选定参数下调5% ， key
 **3.12a**  
 更新逐飞库至版本3.9.1[注意：需要更新iar目录文件]  
 
+**3.12b**  
+现在debug模式会进行除了电机赋值之外的所有流程  
+现在debug屏幕会打印电机输出数据  
+整理部分代码和功能的位置，提高可读性  

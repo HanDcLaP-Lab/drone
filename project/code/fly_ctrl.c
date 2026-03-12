@@ -65,6 +65,8 @@ void Flight_Control_Init(void) {
 
 void Flight_Unlock(void) {
     flight_target.is_armed = 1;
+    start_up_scale = 0.0f;
+
     // 解锁瞬间重置积分，防止暴冲
     PID_Reset(&pid_height_vel);
     PID_Reset(&pid_height_pos);
@@ -245,6 +247,13 @@ void Flight_Control_Loop(void) {
 
 // 辅助：电机PWM设置
 void motor_pwm_set() {
+    if(current_drone_state == DRONE_STATE_DEBUG) {
+        pwm_set_duty(PWM_RF, 4000);
+        pwm_set_duty(PWM_RB, 4000);
+        pwm_set_duty(PWM_LF, 4000);
+        pwm_set_duty(PWM_LB, 4000);
+        return;
+    }
     if (flight_target.is_armed == 1) {
         pwm_set_duty(PWM_RF, (motor_out.rf * 2 / 5) + 4000);
         pwm_set_duty(PWM_RB, (motor_out.rb * 2 / 5) + 4000);

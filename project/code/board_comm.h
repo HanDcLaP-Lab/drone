@@ -14,5 +14,4 @@ void Board_Comm_Init(void);
 
 // 传入 float 指针
 void Board_Comm_Send_Data(volatile float *data_array);
-void F_Buffer_write(float* buffer, volatile float* data);
 #endif

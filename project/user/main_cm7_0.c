@@ -45,13 +45,13 @@
 // **************************** 代码区域 ****************************
 
 void M7_0_data_send(volatile float* data_out);
+void Float_Buffer_write(float* buffer, volatile float* share_data_from_1);
+float float_buffer[UART_DATA_LENGTH] = {0};
 #pragma location = 0x28001000  
 __root __no_init volatile float share_data_from_1[M7_1_DATA_LENGTH]; // Core 1 写 -> Core 0 读 (视觉数据)
 
 #pragma location = 0x28001040  // 偏移64字节，确保与上面数组不在同一个Cache Line (32字节)
 __root __no_init volatile float share_data_from_0[M7_1_DATA_LENGTH]; // Core 0 写 -> Core 1 读 (IMU数据)
-
-float f_buffer[UART_DATA_LENGTH] = {0};
 
 #define PIT_NUM0 (PIT_CH0)
 #define PIT_NUM1 (PIT_CH1)
@@ -66,31 +66,46 @@ int main(void) {
 
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(1500);
+    gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL); //uart
 
     app_init();
     share_data_from_0[4] = (float)current_drone_state;
     SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
 
-    gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL); //uart
-    wireless_uart_init_();
-    Board_Comm_Init();
+    { //初始化
+        // 1. 初始化卡尔曼滤波参数
+        Kalman_Init(&K_w_ax, 1e-3f, 0.01f, 0);
+        Kalman_Init(&K_w_ay, 1e-3f, 0.01f, 0);
+        Kalman_Init(&K_groll, 1e-3f, 0.01f, 0);
+        Kalman_Init(&K_gpitch, 1e-3f, 0.01f, 0);
+        Kalman_Init(&K_gyaw, 1e-3f, 0.01f, 0);
+        Kalman_Init(&K_ax, 0.001f, 0.1f, 0);
+        Kalman_Init(&K_ay, 0.001f, 0.1f, 0);
+        Kalman_Init(&K_az, 0.001f, 0.1f, 9.8f);
 
-    seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
+        // 2. 初始化底层传感器与执行器
+        imu_init();
+        tof_init();
+        wireless_uart_init_();
+        seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
+        Board_Comm_Init();
+        motor_pwm_init(); 
+        Flight_Control_Init();
 
-    //display_init();
-    // 初始化逻辑已封装至 app_init 及 app_flight_start 中
-    if (current_drone_state != DRONE_STATE_NORMAL_FLIGHT) {
-        printf("DEBUG MODE: Flight Peripherals Bypassed.\r\n");
+        // 3. 启动周期中断
+        pit_ms_init(PIT_CH1, 20); //图像
+        pit_ms_init(PIT_CH2, 400); //打印
+        system_delay_ms(1000);     // 等待传感器数据稳定
+
+        pit_ms_init(PIT_CH0, 1);   // 开启核心飞控中断 (1ms)
     }
-
-    
 
     // 此处编写用户代码 例如外设初始化代码等
 
     while (true) {
         app_state_machine_update(); // 状态机轮询，检测模式切换
-        seekfree_assistant_data_analysis();
 
+        seekfree_assistant_data_analysis();
         // 2. 检查是否有参数更新 (遍历所有通道)
         for (int i = 0; i < SEEKFREE_ASSISTANT_SET_PARAMETR_COUNT; i++) {
             // 如果第 i 个通道有数据更新标志
@@ -110,18 +125,14 @@ int main(void) {
 
         // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
-        
-        if (current_drone_state == DRONE_STATE_NORMAL_FLIGHT) 
+        if (share_data_from_1[15] != 0.0f)
         {
-            if (share_data_from_1[15] != 0.0f)
-            {
-                share_data_from_1[15] = 0.0f;
-                Flight_Hover_Control_Task(); 
-                SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
-                
-                F_Buffer_write(f_buffer, share_data_from_1);
-                Board_Comm_Send_Data(f_buffer);
-            }
+            share_data_from_1[15] = 0.0f;
+            Flight_Hover_Control_Task(); 
+            SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
+            
+            Float_Buffer_write(float_buffer, share_data_from_1);
+            Board_Comm_Send_Data(float_buffer);
         }
         
         // 2. 刷入 RAM 供 Core 1 读取
@@ -139,4 +150,19 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入 data_o
     data_out[2] = imu_data.yaw;
     data_out[3] = imu_data.z;
     data_out[4] = (float)current_drone_state;
+    data_out[5] = motor_out.lf;
+    data_out[6] = motor_out.rf;
+    data_out[7] = motor_out.lb;
+    data_out[8] = motor_out.rb;
+
+}
+
+void Float_Buffer_write(float* buffer, volatile float* share_data_from_1)
+{
+    buffer[0] = share_data_from_1[3];
+    buffer[1] = share_data_from_1[4];
+    buffer[2] = share_data_from_1[5];
+    buffer[3] = share_data_from_1[6];
+    buffer[4] = imu_data.yaw;
+    buffer[5] = share_data_from_1[14];
 }

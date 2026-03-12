@@ -45,13 +45,3 @@ void Board_Comm_Send_Data(volatile float *data_array)
     // 5. 物理发送整包数据 (36字节)
     uart_write_buffer(BOARD_UART, send_buffer, sizeof(send_buffer));
 }
-
-void F_Buffer_write(float* buffer, volatile float* data)
-{
-    buffer[0] = data[3];
-    buffer[1] = data[4];
-    buffer[2] = data[5];
-    buffer[3] = data[6];
-    buffer[4] = imu_data.yaw;
-    buffer[5] = data[14];
-}
