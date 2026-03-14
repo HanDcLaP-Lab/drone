@@ -59,7 +59,7 @@ __root __no_init volatile float share_data_from_0[M7_1_DATA_LENGTH]; // Core 0 �
 
 #define LED1 (P19_0)
 #define UART_KEY (P19_2)
-
+int vis_cnt = 0;
 int main(void) {
     clock_init(SYSTEM_CLOCK_250M);  // 时钟配置及系统初始化<务必保留>
     debug_init();                   // 调试串口信息初始化
@@ -127,6 +127,13 @@ int main(void) {
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
         if (share_data_from_1[15] != 0.0f)
         {
+            
+            //vis_cnt++;
+            // if(vis_cnt == 100){
+            //     vis_cnt = 0;
+            //     wireless_uart_send_string("Done");
+            // }
+
             share_data_from_1[15] = 0.0f;
             Flight_Hover_Control_Task(); 
             SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
