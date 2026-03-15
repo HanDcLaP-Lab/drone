@@ -162,94 +162,66 @@ static void mark_components(CameraObject *cam, uint8_t *visited) {
     }
     cam->components_count = label - 1;
 }
-//[0]为小车，[1]为信标
+
 static void sort_lights(CameraObject *cam) {
-    static float pre_car_col = 0, pre_car_row = 0, pre_light_x = 0, pre_light_y = 0;
-    if(cam->light_number == 0){
-        // cam->dot_num[0] = cam->dot_num[1] = 0;
-        // cam->centers[0][0] = cam->centers[1][0] = cam->centers[0][1] = cam->centers[1][1] = 0;
-        // cam->aspect_ratio[0] = cam->aspect_ratio[1] = 0;
-        pre_car_col = 0; 
-        pre_car_row = 0; 
-        pre_light_x = 0;
-        pre_light_y = 0;
-    }
-    if(cam->light_number == 1){
-        if(pre_car_col == 0 || pre_car_row == 0){
-            if(cam->aspect_ratio[0] < RATIO)
+    if (cam->light_number == 0) return;
+
+    int car_idx = -1;
+    int target_idx = -1;
+    
+    // 1. 第一轮遍历：寻找小车
+    // 小车特征：长宽方差比 (aspect_ratio) 较大。
+    // 设定阈值 1.8f 作为长方形的合理标准，选出比值最大的一个
+    float max_car_ratio = 1.8f; 
+    for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+        if (cam->aspect_ratio[i] > max_car_ratio) {
+            max_car_ratio = cam->aspect_ratio[i];
+            car_idx = i;
         }
-        // if( (fabs(cam->centers[0][0] - pre_car_col) < ROI_DISTANCE && fabs(cam->centers[0][1] - pre_car_row) < ROI_DISTANCE)
-        //     || pre_car_col == 0 || pre_car_row == 0){
-        //     pre_car_col = cam->centers[0][0];
-        //     pre_car_row = cam->centers[0][1];
-        // }else{
-        //     cam->dot_num[1] = cam->dot_num[0];
-        //     cam->aspect_ratio[1] = cam->aspect_ratio[0];
-        //     cam->centers[1][0] = cam->centers[0][0];
-        //     cam->centers[1][1] = cam->centers[0][1];
-        //     cam->centers[0][0] = cam->centers[0][1] = cam->aspect_ratio[0] = cam->dot_num[0] = 0;
-        //     pre_light_x = cam->centers[0][0];
-        //     pre_light_y = cam->centers[0][1];
-        // }
     }
-    if(cam->light_number > 1){
-       for (int i = 0; i < cam->light_number - 1; i++) {
-           for (int j = 0; j < cam->light_number - 1 - i; j++) {
-               if (cam->dot_num[j] < cam->dot_num[j+1]) {
-                   // 交换面积
-                   uint32_t temp_num = cam->dot_num[j];
-                   cam->dot_num[j] = cam->dot_num[j+1];
-                   cam->dot_num[j+1] = temp_num;
 
-                   // 交换坐标 Y (Row)
-                   float temp_row = cam->centers[j][0];
-                   cam->centers[j][0] = cam->centers[j+1][0];
-                   cam->centers[j+1][0] = temp_row;
-
-                   // 交换坐标 X (Col)
-                   float temp_col = cam->centers[j][1];
-                   cam->centers[j][1] = cam->centers[j+1][1];
-                   cam->centers[j+1][1] = temp_col;
-
-                   // 交换长宽比
-                   float temp_ratio = cam->aspect_ratio[j];
-                   cam->aspect_ratio[j] = cam->aspect_ratio[j+1];
-                   cam->aspect_ratio[j+1] = temp_ratio;
-               }
+    // 2. 第二轮遍历：寻找目标
+    // 目标特征：除了小车之外面积最大的，且近似圆形 (方差比相对较小)
+    uint32_t max_target_area = 0;
+    for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+        if (i == car_idx) continue; // 【关键修复】：直接从候选池中排除已被认定为小车的目标
+        
+        // 放宽对圆形的限制，只要不属于过度细长的噪点 (如 < 2.5f) 就允许参选，选面积最大的
+        if (cam->aspect_ratio[i] < 2.5f) {
+            if (cam->dot_num[i] > max_target_area) {
+                max_target_area = cam->dot_num[i];
+                target_idx = i;
             }
         }
-        int score = 0;//现有排序匹配的量化指标
-    score += (fabs(cam->centers[0][0] - pre_car_col) < ROI_DISTANCE);
-    score += (fabs(cam->centers[0][1] - pre_car_row) < ROI_DISTANCE);
-    score += (cam->aspect_ratio[0] > cam->aspect_ratio[1]);
-    if ((score <= 1) && (pre_car_col != 0 && pre_car_row != 0 && cam->aspect_ratio[1] > cam->aspect_ratio[0])) {
-        
-        // 交换面积
-        uint32_t temp_num = cam->dot_num[0];
-        cam->dot_num[0] = cam->dot_num[1];
-        cam->dot_num[1] = temp_num;
-pre_car_col
-        // 交换坐标 Y
-        float temp_row = cam->centers[0][0];
-        cam->centers[0][0] = cam->centers[1][0];
-        cam->centers[1][0] = temp_row;
-
-        // 交换坐标 X
-        float temp_col = cam->centers[0][1];
-        cam->centers[0][1] = cam->centers[1][1];
-        cam->centers[1][1] = temp_col;
-        
-        // 交换长宽比
-        float temp_ratio = cam->aspect_ratio[0];
-        cam->aspect_ratio[0] = cam->aspect_ratio[1];
-        cam->aspect_ratio[1] = temp_ratio;
     }
-    pre_car_col = cam->centers[0][0];
-    pre_car_row = cam->centers[0][1];
-    pre_light_x = cam->centers[1][0];
-    pre_light_y = cam->centers[1][1];
+
+    // 3. 身份锁定：将结果强制填入固定位置，供 image_process 使用
+    float res_centers[2][2] = {0};
+    uint32_t res_dots[2] = {0};
+    float res_ratios[2] = {0};
+    uint8_t locked_count = 0; // [新增] 计算真正锁定的有效目标数
+
+    if (car_idx != -1) {
+        res_centers[0][0] = cam->centers[car_idx][0]; res_centers[0][1] = cam->centers[car_idx][1];
+        res_dots[0] = cam->dot_num[car_idx]; res_ratios[0] = cam->aspect_ratio[car_idx];
+        locked_count++;
+    }
+    if (target_idx != -1) {
+        res_centers[1][0] = cam->centers[target_idx][0]; res_centers[1][1] = cam->centers[target_idx][1];
+        res_dots[1] = cam->dot_num[target_idx]; res_ratios[1] = cam->aspect_ratio[target_idx];
+        locked_count++;
+    }
+
+    // 写回前两个槽位，其余清零
+    for (int i = 0; i < 2; i++) {
+        cam->centers[i][0] = res_centers[i][0]; cam->centers[i][1] = res_centers[i][1];
+        cam->dot_num[i] = res_dots[i]; cam->aspect_ratio[i] = res_ratios[i];
     }
     
+    // [关键修复]：重写 light_number，仅报告真正成功锁定的身份数量
+    // 排除噪点干扰，使得下发给小车的数据中 light_num 是精确的 0/1/2
+    // 这样就能完美触发小车 car_image.c / mecnum.c 中的 lost_timer 记忆滑行与超时停车保护！
+    cam->light_number = locked_count;
 }
 
 
