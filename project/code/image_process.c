@@ -117,42 +117,44 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
     return ground_pt;
 }
 
+
 // ==========================================
 // 5. 计算地面坐标主函数
 // ==========================================
 // 输出: car_ground_pos.x (前), car_ground_pos.y (右) 单位: cm (取决于height单位)
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg) {
-    const double k = 0.4; // 滤波系数 (0~1)，越小越平滑但延迟越高
     extern volatile float share_data_from_1[]; 
-    // 小车 (Index 0): image.h 中定义 centers[i][0] 为 row (v), centers[i][1] 为 col (u)
-    if (cam_down.light_number >= 1) {
+    
+    // ================== 小车 (Index 0) ==================
+    // 逻辑：只要 dot_num[0] > 0，说明 sort_lights 确认找到了小车
+    if (cam_down.dot_num[0] > 0) {
         Vector3D ray_car = pixelTo3DRay((double)cam_down.centers[0][1], (double)cam_down.centers[0][0]);
         Vector3D body_car = cameraToBody(&ray_car, pitch_deg, roll_deg);
         GroundPoint raw_car = projectToGround(body_car, height);
-        //car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
-        //car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
+        
         car_ground_pos.x = raw_car.x;
         car_ground_pos.y = raw_car.y;
 
-        
+        // 共享内存更新
         share_data_from_1[7] = ray_car.x;
         share_data_from_1[8] = ray_car.y;
         share_data_from_1[9] = ray_car.z;
         share_data_from_1[10] = body_car.x;
         share_data_from_1[11] = body_car.y;
         share_data_from_1[12] = body_car.z;
-    } else {        // 未识别到小车，坐标归零
+    } else {        
+        // 未识别到小车，坐标严格归零
         car_ground_pos.x = 0.0;
         car_ground_pos.y = 0.0;
     }
     
-    // 目标 (Index 1)
-    if (cam_down.light_number >= 2) {
+    // ================== 目标/信标 (Index 1) ==================
+    // 逻辑：只要 dot_num[1] > 0，说明 sort_lights 记录了信标
+    if (cam_down.dot_num[1] > 0) {
         Vector3D ray_target = pixelTo3DRay((double)cam_down.centers[1][1], (double)cam_down.centers[1][0]);
         Vector3D body_target = cameraToBody(&ray_target, pitch_deg, roll_deg);
         GroundPoint raw_target = projectToGround(body_target, height);
-        //target_ground_pos.x = target_ground_pos.x * (1.0 - k) + raw_target.x * k;
-        //target_ground_pos.y = target_ground_pos.y * (1.0 - k) + raw_target.y * k;
+        
         target_ground_pos.x = raw_target.x;
         target_ground_pos.y = raw_target.y;
     } else {
@@ -161,8 +163,14 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         target_ground_pos.y = 0.0;
     }
 
-    // 计算 car 和 target 之间的距离并写入 share_data_from_1[13]
-    double dx = car_ground_pos.x - target_ground_pos.x;
-    double dy = car_ground_pos.y - target_ground_pos.y;
-    share_data_from_1[13] = (float)sqrt(dx * dx + dy * dy);
+    // ================== 距离计算 ==================
+    // 只有当小车和信标【同时存在】时，才计算并更新相对距离
+    if (cam_down.dot_num[0] > 0 && cam_down.dot_num[1] > 0) {
+        double dx = car_ground_pos.x - target_ground_pos.x;
+        double dy = car_ground_pos.y - target_ground_pos.y;
+        share_data_from_1[13] = (float)sqrt(dx * dx + dy * dy);
+    } else {
+        // 数据不全时距离归零（或者你可以设为上一帧的值，这里归0便于判断失效）
+        share_data_from_1[13] = 0.0f; 
+    }
 }

@@ -162,37 +162,100 @@ static void mark_components(CameraObject *cam, uint8_t *visited) {
     }
     cam->components_count = label - 1;
 }
-//[0]为小车，[1]为信标
+
+
+// [0]为小车，[1]为信标
 static void sort_lights(CameraObject *cam) {
-    static float pre_car_col = 0, pre_car_row = 0, pre_light_x = 0, pre_light_y = 0;
+    // 修正变量名，保持与底层数据的真实对应：row对应Y轴([0]), col对应X轴([1])
+    static float pre_car_row = 0, pre_car_col = 0;
+    static float pre_light_row = 0, pre_light_col = 0;
+    static int car_valid_cnt = 0;
+
+    // ===================================
+    // 1. 没有识别到灯
+    // ===================================
     if(cam->light_number == 0){
-        // cam->dot_num[0] = cam->dot_num[1] = 0;
-        // cam->centers[0][0] = cam->centers[1][0] = cam->centers[0][1] = cam->centers[1][1] = 0;
-        // cam->aspect_ratio[0] = cam->aspect_ratio[1] = 0;
-        pre_car_col = 0; 
-        pre_car_row = 0; 
-        pre_light_x = 0;
-        pre_light_y = 0;
-    }
-    if(cam->light_number == 1){
-        if(pre_car_col == 0 || pre_car_row == 0){
-            if(cam->aspect_ratio[0] < RATIO)
+        // 【新增】：视野内什么灯都没有，未识别到小车
+        car_valid_cnt++;
+        if(car_valid_cnt >= 3) {
+            pre_car_row = 0;
+            pre_car_col = 0;
+            car_valid_cnt = 0; // 重置计数器
         }
-        // if( (fabs(cam->centers[0][0] - pre_car_col) < ROI_DISTANCE && fabs(cam->centers[0][1] - pre_car_row) < ROI_DISTANCE)
-        //     || pre_car_col == 0 || pre_car_row == 0){
-        //     pre_car_col = cam->centers[0][0];
-        //     pre_car_row = cam->centers[0][1];
-        // }else{
-        //     cam->dot_num[1] = cam->dot_num[0];
-        //     cam->aspect_ratio[1] = cam->aspect_ratio[0];
-        //     cam->centers[1][0] = cam->centers[0][0];
-        //     cam->centers[1][1] = cam->centers[0][1];
-        //     cam->centers[0][0] = cam->centers[0][1] = cam->aspect_ratio[0] = cam->dot_num[0] = 0;
-        //     pre_light_x = cam->centers[0][0];
-        //     pre_light_y = cam->centers[0][1];
-        // }
+        return; 
     }
+
+    // ===================================
+    // 2. 只识别到 1 个灯
+    // ===================================
+    if(cam->light_number == 1){
+        if(pre_car_col == 0 && pre_car_row == 0){
+            // 2.1 首帧没有任何历史记录，用长宽比来猜
+            if(cam->aspect_ratio[0] < RATIO){
+                // 长宽比小，判定为【信标】
+                cam->dot_num[1] = cam->dot_num[0];
+                cam->aspect_ratio[1] = cam->aspect_ratio[0];
+                cam->centers[1][0] = cam->centers[0][0];
+                cam->centers[1][1] = cam->centers[0][1];
+                
+                // 清空[0]，防止飞控乱追
+                cam->centers[0][0] = cam->centers[0][1] = cam->aspect_ratio[0] = cam->dot_num[0] = 0;
+                
+                // 记录信标历史坐标
+                pre_light_row = cam->centers[1][0];
+                pre_light_col = cam->centers[1][1];
+
+                // 【新增】：判定为信标，说明没找到小车
+                car_valid_cnt++;
+                if(car_valid_cnt >= 3) {
+                    pre_car_row = 0;
+                    pre_car_col = 0;
+                    car_valid_cnt = 0;
+                }
+            } else {
+                // 长宽比大，判定为【小车】
+                pre_car_row = cam->centers[0][0];
+                pre_car_col = cam->centers[0][1];
+                car_valid_cnt = 0; // 【新增】：成功找到小车，清零计数器
+            }
+        } else {
+            // 2.2 有历史记录，用坐标距离来判断是谁
+            if(fabs(cam->centers[0][0] - pre_car_row) < ROI_DISTANCE && 
+               fabs(cam->centers[0][1] - pre_car_col) < ROI_DISTANCE){
+                // 距离很近，是【小车】
+                pre_car_row = cam->centers[0][0];
+                pre_car_col = cam->centers[0][1];
+                car_valid_cnt = 0; // 【新增】：成功找到小车，清零计数器
+            } else {
+                // 距离很远，说明小车丢了，现在视野里这个是【信标】
+                cam->dot_num[1] = cam->dot_num[0];
+                cam->aspect_ratio[1] = cam->aspect_ratio[0];
+                cam->centers[1][0] = cam->centers[0][0];
+                cam->centers[1][1] = cam->centers[0][1];
+                
+                // 清空[0]
+                cam->centers[0][0] = cam->centers[0][1] = cam->aspect_ratio[0] = cam->dot_num[0] = 0;
+                
+                pre_light_row = cam->centers[1][0];
+                pre_light_col = cam->centers[1][1];
+
+                // 【新增】：判定为信标，说明没找到小车
+                car_valid_cnt++;
+                if(car_valid_cnt >= 3) {
+                    pre_car_row = 0;
+                    pre_car_col = 0;
+                    car_valid_cnt = 0;
+                }
+            }
+        }
+        return; // 处理完毕，提前退出
+    }
+
+    // ===================================
+    // 3. 识别到 2 个及以上的灯
+    // ===================================
     if(cam->light_number > 1){
+       // 3.1 冒泡排序，按面积大到小
        for (int i = 0; i < cam->light_number - 1; i++) {
            for (int j = 0; j < cam->light_number - 1 - i; j++) {
                if (cam->dot_num[j] < cam->dot_num[j+1]) {
@@ -218,40 +281,46 @@ static void sort_lights(CameraObject *cam) {
                }
             }
         }
-        int score = 0;//现有排序匹配的量化指标
-    score += (fabs(cam->centers[0][0] - pre_car_col) < ROI_DISTANCE);
-    score += (fabs(cam->centers[0][1] - pre_car_row) < ROI_DISTANCE);
-    score += (cam->aspect_ratio[0] > cam->aspect_ratio[1]);
-    if ((score <= 1) && (pre_car_col != 0 && pre_car_row != 0 && cam->aspect_ratio[1] > cam->aspect_ratio[0])) {
         
-        // 交换面积
-        uint32_t temp_num = cam->dot_num[0];
-        cam->dot_num[0] = cam->dot_num[1];
-        cam->dot_num[1] = temp_num;
-pre_car_col
-        // 交换坐标 Y
-        float temp_row = cam->centers[0][0];
-        cam->centers[0][0] = cam->centers[1][0];
-        cam->centers[1][0] = temp_row;
+        // 3.2 综合量化评分 (距离+长宽比)
+        int score = 0;
+        score += (fabs(cam->centers[0][0] - pre_car_row) < ROI_DISTANCE) ? 1 : 0;
+        score += (fabs(cam->centers[0][1] - pre_car_col) < ROI_DISTANCE) ? 1 : 0;
+        score += (cam->aspect_ratio[0] > cam->aspect_ratio[1]) ? 1 : 0;
 
-        // 交换坐标 X
-        float temp_col = cam->centers[0][1];
-        cam->centers[0][1] = cam->centers[1][1];
-        cam->centers[1][1] = temp_col;
+        // 如果得分太低，且拥有有效的历史轨迹，且备选者长宽比更好，则强制更换
+        if ((score <= 1) && (pre_car_col != 0 && pre_car_row != 0 && cam->aspect_ratio[1] > cam->aspect_ratio[0])) {
+            // 交换面积
+            uint32_t temp_num = cam->dot_num[0];
+            cam->dot_num[0] = cam->dot_num[1];
+            cam->dot_num[1] = temp_num;
+            
+            // 交换坐标 Y
+            float temp_row = cam->centers[0][0];
+            cam->centers[0][0] = cam->centers[1][0];
+            cam->centers[1][0] = temp_row;
+
+            // 交换坐标 X
+            float temp_col = cam->centers[0][1];
+            cam->centers[0][1] = cam->centers[1][1];
+            cam->centers[1][1] = temp_col;
+            
+            // 交换长宽比
+            float temp_ratio = cam->aspect_ratio[0];
+            cam->aspect_ratio[0] = cam->aspect_ratio[1];
+            cam->aspect_ratio[1] = temp_ratio;
+        }
         
-        // 交换长宽比
-        float temp_ratio = cam->aspect_ratio[0];
-        cam->aspect_ratio[0] = cam->aspect_ratio[1];
-        cam->aspect_ratio[1] = temp_ratio;
+        // 3.3 最终更新所有历史坐标记录
+        pre_car_row = cam->centers[0][0];
+        pre_car_col = cam->centers[0][1];
+        pre_light_row = cam->centers[1][0];
+        pre_light_col = cam->centers[1][1];
+
+        // 【新增】：只要屏幕上有2个及以上的灯，排序机制始终能保证[0]位置分配给小车
+        car_valid_cnt = 0; 
     }
-    pre_car_col = cam->centers[0][0];
-    pre_car_row = cam->centers[0][1];
-    pre_light_x = cam->centers[1][0];
-    pre_light_y = cam->centers[1][1];
-    }
-    
 }
-
 
 
 
