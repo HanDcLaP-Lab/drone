@@ -129,8 +129,10 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         Vector3D ray_car = pixelTo3DRay((double)cam_down.centers[0][1], (double)cam_down.centers[0][0]);
         Vector3D body_car = cameraToBody(&ray_car, pitch_deg, roll_deg);
         GroundPoint raw_car = projectToGround(body_car, height);
-        car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
-        car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
+        //car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
+        //car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
+        car_ground_pos.x = raw_car.x;
+        car_ground_pos.y = raw_car.y;
 
         
         share_data_from_1[7] = ray_car.x;
@@ -149,8 +151,10 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         Vector3D ray_target = pixelTo3DRay((double)cam_down.centers[1][1], (double)cam_down.centers[1][0]);
         Vector3D body_target = cameraToBody(&ray_target, pitch_deg, roll_deg);
         GroundPoint raw_target = projectToGround(body_target, height);
-        target_ground_pos.x = target_ground_pos.x * (1.0 - k) + raw_target.x * k;
-        target_ground_pos.y = target_ground_pos.y * (1.0 - k) + raw_target.y * k;
+        //target_ground_pos.x = target_ground_pos.x * (1.0 - k) + raw_target.x * k;
+        //target_ground_pos.y = target_ground_pos.y * (1.0 - k) + raw_target.y * k;
+        target_ground_pos.x = raw_target.x;
+        target_ground_pos.y = raw_target.y;
     } else {
         // 未识别到目标点，坐标归零
         target_ground_pos.x = 0.0;

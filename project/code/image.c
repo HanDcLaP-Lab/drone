@@ -162,43 +162,73 @@ static void mark_components(CameraObject *cam, uint8_t *visited) {
     }
     cam->components_count = label - 1;
 }
-
+//[0]为小车，[1]为信标
 static void sort_lights(CameraObject *cam) {
-    if (cam->light_number < 2) return; // 少于2个不用排
+    static float pre_car_col = 0, pre_car_row = 0, pre_light_x = 0, pre_light_y = 0;
+    if(cam->light_number == 0){
+        // cam->dot_num[0] = cam->dot_num[1] = 0;
+        // cam->centers[0][0] = cam->centers[1][0] = cam->centers[0][1] = cam->centers[1][1] = 0;
+        // cam->aspect_ratio[0] = cam->aspect_ratio[1] = 0;
+        pre_car_col = 0; 
+        pre_car_row = 0; 
+        pre_light_x = 0;
+        pre_light_y = 0;
+    }
+    if(cam->light_number == 1){
+        if(pre_car_col == 0 || pre_car_row == 0){
+            if(cam->aspect_ratio[0] < RATIO)
+        }
+        // if( (fabs(cam->centers[0][0] - pre_car_col) < ROI_DISTANCE && fabs(cam->centers[0][1] - pre_car_row) < ROI_DISTANCE)
+        //     || pre_car_col == 0 || pre_car_row == 0){
+        //     pre_car_col = cam->centers[0][0];
+        //     pre_car_row = cam->centers[0][1];
+        // }else{
+        //     cam->dot_num[1] = cam->dot_num[0];
+        //     cam->aspect_ratio[1] = cam->aspect_ratio[0];
+        //     cam->centers[1][0] = cam->centers[0][0];
+        //     cam->centers[1][1] = cam->centers[0][1];
+        //     cam->centers[0][0] = cam->centers[0][1] = cam->aspect_ratio[0] = cam->dot_num[0] = 0;
+        //     pre_light_x = cam->centers[0][0];
+        //     pre_light_y = cam->centers[0][1];
+        // }
+    }
+    if(cam->light_number > 1){
+       for (int i = 0; i < cam->light_number - 1; i++) {
+           for (int j = 0; j < cam->light_number - 1 - i; j++) {
+               if (cam->dot_num[j] < cam->dot_num[j+1]) {
+                   // 交换面积
+                   uint32_t temp_num = cam->dot_num[j];
+                   cam->dot_num[j] = cam->dot_num[j+1];
+                   cam->dot_num[j+1] = temp_num;
 
-    for (int i = 0; i < cam->light_number - 1; i++) {
-        for (int j = 0; j < cam->light_number - 1 - i; j++) {
-            if (cam->dot_num[j] < cam->dot_num[j+1]) {
-                // 交换面积
-                uint32_t temp_num = cam->dot_num[j];
-                cam->dot_num[j] = cam->dot_num[j+1];
-                cam->dot_num[j+1] = temp_num;
+                   // 交换坐标 Y (Row)
+                   float temp_row = cam->centers[j][0];
+                   cam->centers[j][0] = cam->centers[j+1][0];
+                   cam->centers[j+1][0] = temp_row;
 
-                // 交换坐标 Y (Row)
-                float temp_row = cam->centers[j][0];
-                cam->centers[j][0] = cam->centers[j+1][0];
-                cam->centers[j+1][0] = temp_row;
+                   // 交换坐标 X (Col)
+                   float temp_col = cam->centers[j][1];
+                   cam->centers[j][1] = cam->centers[j+1][1];
+                   cam->centers[j+1][1] = temp_col;
 
-                // 交换坐标 X (Col)
-                float temp_col = cam->centers[j][1];
-                cam->centers[j][1] = cam->centers[j+1][1];
-                cam->centers[j+1][1] = temp_col;
-                
-                // 交换长宽比
-                float temp_ratio = cam->aspect_ratio[j];
-                cam->aspect_ratio[j] = cam->aspect_ratio[j+1];
-                cam->aspect_ratio[j+1] = temp_ratio;
+                   // 交换长宽比
+                   float temp_ratio = cam->aspect_ratio[j];
+                   cam->aspect_ratio[j] = cam->aspect_ratio[j+1];
+                   cam->aspect_ratio[j+1] = temp_ratio;
+               }
             }
         }
-    }
-    
-    if (cam->aspect_ratio[1] > cam->aspect_ratio[0]) {
+        int score = 0;//现有排序匹配的量化指标
+    score += (fabs(cam->centers[0][0] - pre_car_col) < ROI_DISTANCE);
+    score += (fabs(cam->centers[0][1] - pre_car_row) < ROI_DISTANCE);
+    score += (cam->aspect_ratio[0] > cam->aspect_ratio[1]);
+    if ((score <= 1) && (pre_car_col != 0 && pre_car_row != 0 && cam->aspect_ratio[1] > cam->aspect_ratio[0])) {
         
         // 交换面积
         uint32_t temp_num = cam->dot_num[0];
         cam->dot_num[0] = cam->dot_num[1];
         cam->dot_num[1] = temp_num;
-
+pre_car_col
         // 交换坐标 Y
         float temp_row = cam->centers[0][0];
         cam->centers[0][0] = cam->centers[1][0];
@@ -214,6 +244,12 @@ static void sort_lights(CameraObject *cam) {
         cam->aspect_ratio[0] = cam->aspect_ratio[1];
         cam->aspect_ratio[1] = temp_ratio;
     }
+    pre_car_col = cam->centers[0][0];
+    pre_car_row = cam->centers[0][1];
+    pre_light_x = cam->centers[1][0];
+    pre_light_y = cam->centers[1][1];
+    }
+    
 }
 
 
@@ -293,9 +329,6 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
     }
     cam->light_number = valid_idx;
 
-    // 3. 按面积从大到小排序 (需同步交换 aspect_ratio)
-    // 注意：你原来的 sort_lights 函数里也要把 aspect_ratio 跟着一起交换！
-    sort_lights(cam);
 }
 
 
@@ -311,8 +344,12 @@ void image_processing_loop(void) {
     // 3. 计算质心
     calculate_centroids(&cam_down, visited_buffer);
 
-    // 4. 矫正处理
-    //calculate_ground_positions(m7_1_data[6], m7_1_data[4], m7_1_data[3]); //此步骤移至main_cm7_1.c
+    // 3. 按面积从大到小排序 (需同步交换 aspect_ratio)
+    sort_lights(&cam_down);
+
+    // 4. 矫正处理 share_data_from_0: [0]=Roll, [1]=Pitch, [3]=Height
+    extern float share_data_from_0[];
+    calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0]);
 } 
 
 void image_send(void){

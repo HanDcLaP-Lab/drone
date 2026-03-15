@@ -159,4 +159,7 @@ void display_image_debug_display(void){
     ips200_show_int(40, 16*15, (int)share_data_from_0[7], 4);
     ips200_show_string(80, 16*15, "RB:");
     ips200_show_int(120, 16*15, (int)share_data_from_0[8], 4);
+
+    ips200_show_float(0, 16*16, (int)car_ground_pos.x, 2,2);
+    ips200_show_float(80, 16*16, (int)car_ground_pos.y, 2,2);
 }

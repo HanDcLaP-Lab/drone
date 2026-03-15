@@ -136,9 +136,10 @@ int main(void) {
 
             share_data_from_1[15] = 0.0f;
             Flight_Hover_Control_Task(); 
-            SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
+            //SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
             
             Float_Buffer_write(float_buffer, share_data_from_1);
+            //printf("%.2f",float_buffer[0]);
             Board_Comm_Send_Data(float_buffer);
         }
         
