@@ -110,17 +110,22 @@ int main(void)
 }
 
 // **************************** 代码区域 ****************************
-void M7_1_data_send(volatile float* data_out) { // Core 1 调用，写入 data_out (share_data_from_1)
-    data_out[0] = cam_down.centers[0][0]; 
-    data_out[1] = cam_down.centers[0][1];
-    data_out[2] = (float)cam_down.dot_num[0];
+void M7_1_data_send(volatile float* data_out) { 
+    data_out[0] = cam_down.car_center_y; 
+    data_out[1] = cam_down.car_center_x;
+    data_out[2] = (float)cam_down.car_area;
     data_out[3] = car_ground_pos.x;
     data_out[4] = car_ground_pos.y;
     data_out[5] = target_ground_pos.x;
     data_out[6] = target_ground_pos.y;
-    data_out[14] = (float)cam_down.light_number;
     
-    if (cam_down.light_number == 0) {
-        data_out[2] = 0;
+    // 统计目前画面中实际成功锁定的目标数量 (0/1/2)，下发给小车防丢失
+    uint8_t locked_count = 0;
+    if (cam_down.car_valid) locked_count++;
+    if (cam_down.target_valid) locked_count++;
+    data_out[14] = (float)locked_count;
+    
+    if (!cam_down.car_valid) {
+        data_out[2] = 0; // 丢失时仅将面积清零通知飞控即可
     }
 }

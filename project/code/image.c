@@ -33,6 +33,8 @@ void camera_init(void) {
     // 参数配置
     cam_down.threshold = THRESHOLD;   // 二值化阈值 (需根据实际场地光照调整)
     cam_down.margin_cut = 5;    // 四周裁剪 5 像素
+    cam_down.debug_max_ratio = 0.0f;
+    cam_down.debug_min_ratio = 999.0f;
 }
 
 // --- 3. 内部辅助函数 ---
@@ -163,16 +165,54 @@ static void mark_components(CameraObject *cam, uint8_t *visited) {
     cam->components_count = label - 1;
 }
 
+
 static void sort_lights(CameraObject *cam) {
+    // 默认清除上一帧的锁定状态
+    cam->car_valid = 0;
+    cam->car_area = 0;
+    cam->car_ratio = 0.0f;
+    cam->car_center_x = 0.0f;
+    cam->car_center_y = 0.0f;
+
+    cam->target_valid = 0;
+    cam->target_area = 0;
+    cam->target_ratio = 0.0f;
+    cam->target_center_x = 0.0f;
+    cam->target_center_y = 0.0f;
+
     if (cam->light_number == 0) return;
+
+
+    // =======================================================
+    // [新增]：独立测试极值记录逻辑 (只记录画面中面积最大的灯，防噪点)
+    // =======================================================
+    uint32_t max_area = 0;
+    int max_area_idx = -1;
+    for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+        if (cam->dot_num[i] > max_area) {
+            max_area = cam->dot_num[i];
+            max_area_idx = i;
+        }
+    }
+    
+    // 找到了最大的灯，更新历史极值
+    if (max_area_idx != -1) {
+        float current_max_ratio = cam->aspect_ratio[max_area_idx];
+        if (current_max_ratio > cam->debug_max_ratio) {
+            cam->debug_max_ratio = current_max_ratio;
+        }
+        // 排除掉刚好等于 100.0 的情况 (在 calculate_centroids 里设定的噪点线)
+        if (current_max_ratio < cam->debug_min_ratio && current_max_ratio < 99.0f) {
+            cam->debug_min_ratio = current_max_ratio;
+        }
+    }
+    // =======================================================
 
     int car_idx = -1;
     int target_idx = -1;
     
-    // 1. 第一轮遍历：寻找小车
-    // 小车特征：长宽方差比 (aspect_ratio) 较大。
-    // 设定阈值 1.8f 作为长方形的合理标准，选出比值最大的一个
-    float max_car_ratio = 1.8f; 
+    // 1. 寻找小车 (长宽比 > 1.8 的里面选最长的)
+    float max_car_ratio = CAR_MIN_RATIO; 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (cam->aspect_ratio[i] > max_car_ratio) {
             max_car_ratio = cam->aspect_ratio[i];
@@ -180,14 +220,31 @@ static void sort_lights(CameraObject *cam) {
         }
     }
 
-    // 2. 第二轮遍历：寻找目标
-    // 目标特征：除了小车之外面积最大的，且近似圆形 (方差比相对较小)
+    // 2. 寻找信标 (排除小车后，在动态畸变长宽比阈值内选面积最大的)
     uint32_t max_target_area = 0;
+    
+    // 计算图像物理中心坐标 (用于计算透视偏离度)
+    float img_cx = cam->width / 2.0f;
+    float img_cy = cam->height / 2.0f;
+
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
-        if (i == car_idx) continue; // 【关键修复】：直接从候选池中排除已被认定为小车的目标
+        if (i == car_idx) continue; 
         
-        // 放宽对圆形的限制，只要不属于过度细长的噪点 (如 < 2.5f) 就允许参选，选面积最大的
-        if (cam->aspect_ratio[i] < 2.5f) {
+        // 计算目标质心到画面中心的像素距离平方 (代表视角的斜度)
+        float dx = cam->centers[i][1] - img_cx;
+        float dy = cam->centers[i][0] - img_cy;
+        float dist_sq = dx * dx + dy * dy;
+        
+        // 动态阈值补偿：越靠近边缘，允许的信标形变长宽比上限越大
+        float dynamic_target_max_ratio = TARGET_BASE_MAX_RATIO + (dist_sq * TARGET_RATIO_COMP_COEF);
+        
+        // 限制补偿的绝对上限，防止无限放大后与小车混淆
+        if (dynamic_target_max_ratio > TARGET_LIMIT_MAX_RATIO) {
+            dynamic_target_max_ratio = TARGET_LIMIT_MAX_RATIO; 
+        }
+
+        // 使用算出来的动态阈值进行筛选
+        if (cam->aspect_ratio[i] < dynamic_target_max_ratio) {
             if (cam->dot_num[i] > max_target_area) {
                 max_target_area = cam->dot_num[i];
                 target_idx = i;
@@ -195,33 +252,22 @@ static void sort_lights(CameraObject *cam) {
         }
     }
 
-    // 3. 身份锁定：将结果强制填入固定位置，供 image_process 使用
-    float res_centers[2][2] = {0};
-    uint32_t res_dots[2] = {0};
-    float res_ratios[2] = {0};
-    uint8_t locked_count = 0; // [新增] 计算真正锁定的有效目标数
-
+    // 3. 将结果输出到专属的安全变量中 (不破坏原始 centers 数组)
     if (car_idx != -1) {
-        res_centers[0][0] = cam->centers[car_idx][0]; res_centers[0][1] = cam->centers[car_idx][1];
-        res_dots[0] = cam->dot_num[car_idx]; res_ratios[0] = cam->aspect_ratio[car_idx];
-        locked_count++;
-    }
-    if (target_idx != -1) {
-        res_centers[1][0] = cam->centers[target_idx][0]; res_centers[1][1] = cam->centers[target_idx][1];
-        res_dots[1] = cam->dot_num[target_idx]; res_ratios[1] = cam->aspect_ratio[target_idx];
-        locked_count++;
-    }
-
-    // 写回前两个槽位，其余清零
-    for (int i = 0; i < 2; i++) {
-        cam->centers[i][0] = res_centers[i][0]; cam->centers[i][1] = res_centers[i][1];
-        cam->dot_num[i] = res_dots[i]; cam->aspect_ratio[i] = res_ratios[i];
+        cam->car_valid = 1;
+        cam->car_center_y = cam->centers[car_idx][0];
+        cam->car_center_x = cam->centers[car_idx][1];
+        cam->car_area = cam->dot_num[car_idx];
+        cam->car_ratio = cam->aspect_ratio[car_idx];
     }
     
-    // [关键修复]：重写 light_number，仅报告真正成功锁定的身份数量
-    // 排除噪点干扰，使得下发给小车的数据中 light_num 是精确的 0/1/2
-    // 这样就能完美触发小车 car_image.c / mecnum.c 中的 lost_timer 记忆滑行与超时停车保护！
-    cam->light_number = locked_count;
+    if (target_idx != -1) {
+        cam->target_valid = 1;
+        cam->target_center_y = cam->centers[target_idx][0];
+        cam->target_center_x = cam->centers[target_idx][1];
+        cam->target_area = cam->dot_num[target_idx];
+        cam->target_ratio = cam->aspect_ratio[target_idx];
+    }
 }
 
 
@@ -279,6 +325,9 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
                 float mu02 = (float)sum_rr[i] / num - cy * cy; // Y的方差
                 float mu11 = (float)sum_rc[i] / num - cx * cy; // XY的协方差
                 
+                
+                mu02 = mu02 * (K_Y * K_Y); // Y方差需要乘 K 的平方
+                mu11 = mu11 * K_Y;         // 协方差需要乘 K 的一次方
                 // 计算特征值 (代表该连通域在最长和最短方向的散布程度)
                 float delta = sqrtf((mu20 - mu02)*(mu20 - mu02) + 4.0f * mu11 * mu11);
                 float lambda1 = (mu20 + mu02 + delta) / 2.0f; // 主轴(长边)方差
@@ -301,6 +350,7 @@ static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
     }
     cam->light_number = valid_idx;
 
+
 }
 
 
@@ -317,6 +367,7 @@ void image_processing_loop(void) {
     calculate_centroids(&cam_down, visited_buffer);
 
     // 3. 按面积从大到小排序 (需同步交换 aspect_ratio)
+    
     sort_lights(&cam_down);
 
     // 4. 矫正处理 share_data_from_0: [0]=Roll, [1]=Pitch, [3]=Height

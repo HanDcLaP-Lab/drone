@@ -280,59 +280,45 @@ void motor_pwm_init() {
 
 
 
-
-
-
 void Flight_Hover_Control_Task(void) {
-    // 这里的 Cache 操作已在 main_cm7_0 中完成，此处直接读取 share_data_from_1
-    cam_down.centers[0][0] = share_data_from_1[0];  
-    cam_down.centers[0][1] = share_data_from_1[1];  
-    cam_down.dot_num[0] = (uint32_t)share_data_from_1[2]; 
-    cam_down.light_number = (uint8_t)share_data_from_1[14];    
+    // 彻底使用局部变量，不碰 Core 1 的全局变量，杜绝脏数据
+    float car_row = share_data_from_1[0];  
+    float car_col = share_data_from_1[1];  
+    uint32_t car_area = (uint32_t)share_data_from_1[2]; 
+    uint8_t locked_lights = (uint8_t)share_data_from_1[14];    
     
-    if (cam_down.light_number >= 1 && 
-       (cam_down.dot_num[0] <= MIN_LIGHT_SIZE || cam_down.centers[0][0] <= 0 || cam_down.centers[0][1] <= 0)) {
-        cam_down.light_number = 0;
+    if (locked_lights >= 1 && 
+       (car_area <= MIN_LIGHT_SIZE || car_row <= 0 || car_col <= 0)) {
+        locked_lights = 0;
     }
 
     static float search_dir = 1.0f;
-    if (cam_down.light_number >= 1) {
-        // 直接计算像素误差
-        // [移除] 移除卡尔曼滤波。视觉数据(50Hz)本身已有较大延迟，额外的强低通滤波会加剧相位滞后，导致严重的"荡秋千"。
-        // 且质心计算本身具有均值特性，直接使用原始数据响应更快。
-        cam_down.centers[0][0] -= imu_data.pitch * ANGLE_COMP_COEF;
-        cam_down.centers[0][1] -= imu_data.roll * ANGLE_COMP_COEF;
+    if (locked_lights >= 1) {
+        // 在局部变量上做补偿运算，不改变原始图像数据
+        car_row -= imu_data.pitch * ANGLE_COMP_COEF;
+        car_col -= imu_data.roll * ANGLE_COMP_COEF;
 
-        // [新增] 高度增益修正，并将结果回写到 cam_down.centers
-        // 原理：相同物理位移在不同高度下对应的像素偏移不同。高度越高，像素偏移越小。
-        // 为了让PID参数适应不同高度，将像素误差归一化到基准高度（此处设为100cm）。
         float current_height = imu_data.z;
-        if (current_height < 40.0f) current_height = 40.0f; // 限幅防止除零或过小
-        float height_gain = current_height / 100.0f;        // 归一化增益系数
+        if (current_height < 40.0f) current_height = 40.0f; 
+        float height_gain = current_height / 100.0f;        
 
-        cam_down.centers[0][0] = IMG_CENTER_Y + (cam_down.centers[0][0] - IMG_CENTER_Y) * height_gain;
-        cam_down.centers[0][1] = IMG_CENTER_X + (cam_down.centers[0][1] - IMG_CENTER_X) * height_gain;
+        car_row = IMG_CENTER_Y + (car_row - IMG_CENTER_Y) * height_gain;
+        car_col = IMG_CENTER_X + (car_col - IMG_CENTER_X) * height_gain;
 
-        float error_row = cam_down.centers[0][0] - IMG_CENTER_Y;
-        float error_col = cam_down.centers[0][1] - IMG_CENTER_X;
-        //if(fabs(error_col) < ACCEPT_ERROR) error_col = 0;
-        //if(fabs(error_row) < ACCEPT_ERROR) error_row = 0;
-        // if(cam_down.dot_num[0] > VALID_MIN_NUM) error_row = error_col = 0;
+        float error_row = car_row - IMG_CENTER_Y;
+        float error_col = car_col - IMG_CENTER_X;
 
-        // PID 控制
         float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, CTRL_DT_CTANG);
         float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, CTRL_DT_CTANG);
 
-        if (cam_down.light_number == 1&& imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
-            // 产生恒定的角速度步进
+        if (locked_lights == 1 && imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
             flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * CTRL_DT_CTANG;
             
-            // 触碰左右极限边界时反转方向 (因为起飞是0，直接拿 target_yaw 判断即可)
             if (flight_target.target_yaw > MAX_YAW_DEV) {
-                flight_target.target_yaw = MAX_YAW_DEV; // 限幅防超调
+                flight_target.target_yaw = MAX_YAW_DEV; 
                 search_dir = -1.0f; 
             } else if (flight_target.target_yaw < -MAX_YAW_DEV) {
-                flight_target.target_yaw = -MAX_YAW_DEV; // 限幅防超调
+                flight_target.target_yaw = -MAX_YAW_DEV; 
                 search_dir = 1.0f;  
             }
         }
@@ -344,8 +330,9 @@ void Flight_Hover_Control_Task(void) {
         Nonline_PID_Reset(&pid_image_y);
         Set_Target_Attitude(0, 0, flight_target.target_yaw);
     }                                                                                                                                                        
-    
 }
+
+
 
 // 无线调参映射函数
 // ch: 通道号 (1~8), val: 上位机发送的值
