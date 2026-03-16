@@ -85,5 +85,4 @@ extern uint8 image_copy[MT9V03X_H][MT9V03X_W];
 // 函数声明
 void camera_init(void);           // 初始化
 void image_processing_loop(void); // 图像处理主循环
-void image_send(void);  //发送图像
 #endif 

@@ -65,13 +65,8 @@ static Vector3D pixelTo3DRay(double u, double v) {
 // 将相机坐标系下的射线旋转回水平坐标系 (Body/World Frame)
 // 输入 cam: x=Right, y=Forward, z=Up(Negative)
 // 输出 body: x=World_Right, y=World_Forward, z=World_Up(Negative)
-static Vector3D cameraToBody(const Vector3D *cam, double pitch_deg, double roll_deg) {
+static Vector3D cameraToBody(const Vector3D *cam, double sinp, double cosp, double sinr, double cosr) {
     Vector3D body;
-    double p = pitch_deg * M_PI / 180.0;
-    double r = roll_deg * M_PI / 180.0;
-    
-    double sinp = sin(p), cosp = cos(p);
-    double sinr = sin(r), cosr = cos(r);
 
     // 映射输入向量到中间物理坐标系 (Forward, Right, Down) 以便使用标准旋转公式
     // pixelTo3DRay 输出: x=Right (Body Y), y=Forward (Body X), z=Up
@@ -125,11 +120,17 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
     const double k = 0.15; 
     extern volatile float share_data_from_1[]; 
     
+    // 提前计算本帧统一的正余弦，避免目标循环中重复计算耗时
+    double p_rad = pitch_deg * M_PI / 180.0;
+    double r_rad = roll_deg * M_PI / 180.0;
+    double sinp = sin(p_rad), cosp = cos(p_rad);
+    double sinr = sin(r_rad), cosr = cos(r_rad);
+
     // ================== 小车 ==================
     if (cam_down.car_valid) { 
         // pixelTo3DRay 参数顺序为 (u, v) 即 (Col, Row)
         Vector3D ray_car = pixelTo3DRay((double)cam_down.car_center_x, (double)cam_down.car_center_y);
-        Vector3D body_car = cameraToBody(&ray_car, pitch_deg, roll_deg);
+        Vector3D body_car = cameraToBody(&ray_car, sinp, cosp, sinr, cosr);
         GroundPoint raw_car = projectToGround(body_car, height);
         
         car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
@@ -147,7 +148,7 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
     // ================== 信标 ==================
     if (cam_down.target_valid) { 
         Vector3D ray_target = pixelTo3DRay((double)cam_down.target_center_x, (double)cam_down.target_center_y);
-        Vector3D body_target = cameraToBody(&ray_target, pitch_deg, roll_deg);
+        Vector3D body_target = cameraToBody(&ray_target, sinp, cosp, sinr, cosr);
         GroundPoint raw_target = projectToGround(body_target, height);
         
         target_ground_pos.x = target_ground_pos.x * (1.0 - k) + raw_target.x * k;

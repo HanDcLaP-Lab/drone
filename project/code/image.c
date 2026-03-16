@@ -39,57 +39,35 @@ void camera_init(void) {
 
 // --- 3. 内部辅助函数 ---
 
-
-static uint8_t is_valid_pixel(CameraObject *cam, uint16_t r, uint16_t c, uint8_t *visited) {
-    uint32_t index = r * cam->width + c;
-    
-    return (r >= cam->margin_cut && r < (cam->height - cam->margin_cut) && 
-            c >= cam->margin_cut && c < (cam->width - cam->margin_cut) && 
-            visited[index] == 0 && 
-            cam->binarized_image[index] == 1);
-}
-
-// ==========================================
-// [新增] 8邻域极速膨胀函数 (缝合线缆遮挡造成的裂缝)
-// ==========================================
-static void fast_dilate_3x3_8_neighbor(CameraObject *cam) {
-    // 1. 清空临时缓冲区 image_copy (利用一维数组的形式快速清空)
-    memset(image_copy[0], 0, cam->width * cam->height);
-    
-    // 2. 遍历原始二值化图像 (避开最外层1个像素边界，防止指针越界)
-    for (uint16_t r = cam->margin_cut + 1; r < cam->height - cam->margin_cut - 1; r++) {
-        for (uint16_t c = cam->margin_cut + 1; c < cam->width - cam->margin_cut - 1; c++) {
-            uint32_t idx = r * cam->width + c;
-            
-            // 只要当前中心点是 1 (白点)
-            if (cam->binarized_image[idx] == 1) {
-                // 将缓冲区中的自己和周围 8 个邻居全部点亮
-                image_copy[0][idx] = 1;                   // 中心
-                image_copy[0][idx - 1] = 1;               // 左
-                image_copy[0][idx + 1] = 1;               // 右
-                image_copy[0][idx - cam->width] = 1;      // 上
-                image_copy[0][idx + cam->width] = 1;      // 下
-                
-                image_copy[0][idx - cam->width - 1] = 1;  // 左上
-                image_copy[0][idx - cam->width + 1] = 1;  // 右上
-                image_copy[0][idx + cam->width - 1] = 1;  // 左下
-                image_copy[0][idx + cam->width + 1] = 1;  // 右下
-            }
-        }
-    }
-    
-    // 3. 将膨胀后的连续图像覆盖回原数组，供后面的 DFS 搜索使用
-    memcpy(cam->binarized_image, image_copy[0], cam->width * cam->height);
-}
+// 用于保存单一连通域统计特征的结构体
+typedef struct {
+    uint32_t sum_r;
+    uint32_t sum_c;
+    uint32_t sum_rr;
+    uint32_t sum_cc;
+    uint32_t sum_rc;
+    uint32_t dot_num;
+} BlobStats;
 
 // 深度优先搜索 (DFS) - 迭代版 (防止栈溢出)
-static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, uint16_t start_r, uint16_t start_c) {
+// 【优化】同步累加计算质心和二阶矩所需的坐标数据，消除对图像的二次遍历
+static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, uint16_t start_r, uint16_t start_c, BlobStats *stats) {
     typedef struct { uint16_t r; uint16_t c; } Node;
     static Node stack[STACK_SIZE]; // 静态局部栈
     int top = -1;
 
+    // 初始化本连通域统计数据，先记录起点
+    stats->sum_r = start_r;
+    stats->sum_c = start_c;
+    stats->sum_rr = (uint32_t)start_r * start_r;
+    stats->sum_cc = (uint32_t)start_c * start_c;
+    stats->sum_rc = (uint32_t)start_r * start_c;
+    stats->dot_num = 1;
+
     // 起点入栈
     stack[++top] = (Node){start_r, start_c};
+    // 压栈即标记，防止重复入栈
+    visited[start_r * cam->width + start_c] = label;
     
     // 方向数组：上右下左
     const int dr[] = {-1, 0, 1, 0};
@@ -98,25 +76,28 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
     while (top >= 0) {
         Node curr = stack[top--];
         
-        // 再次检查 (防止重复入栈处理)
-        if (!is_valid_pixel(cam, curr.r, curr.c, visited)) continue;
-
-        // 标记访问
-        visited[curr.r * cam->width + curr.c] = label;
-
         // 搜索 4 邻域
         for (int i = 0; i < 4; i++) {
             uint16_t nr = curr.r + dr[i];
             uint16_t nc = curr.c + dc[i];
-            // 这里只做简单的边界预判，具体有效性由下一次循环的 is_valid_pixel 判断
+            // 简单的边界预判
             if (nr >= cam->margin_cut && nr < (cam->height - cam->margin_cut) &&
                 nc >= cam->margin_cut && nc < (cam->width - cam->margin_cut)) {
                 
-                // 只有亮点且未访问才入栈，减少栈占用
                 uint32_t nidx = nr * cam->width + nc;
+                // 只有亮点且未访问才入栈，减少栈占用
                 if (cam->binarized_image[nidx] == 1 && visited[nidx] == 0) {
                     if (top < STACK_SIZE - 1) {
                         stack[++top] = (Node){nr, nc};
+                        visited[nidx] = label; // 【核心修复】压栈时必须立刻标记
+                        
+                        // 同步累加该像素点的坐标和平方特征
+                        stats->sum_r += nr; 
+                        stats->sum_c += nc;
+                        stats->sum_rr += (uint32_t)nr * nr; 
+                        stats->sum_cc += (uint32_t)nc * nc; 
+                        stats->sum_rc += (uint32_t)nr * nc;
+                        stats->dot_num++;
                     }
                 }
             }
@@ -124,45 +105,94 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
     }
 }
 
-// 二值化处理
-static void binarize_image(CameraObject *cam) {
+// 【合并优化】一次遍历同时完成二值化与 8 邻域膨胀
+static void binarize_and_dilate(CameraObject *cam) {
     // 清空二值化缓冲区
     memset(cam->binarized_image, 0, cam->width * cam->height);
 
-    // 遍历图像 (避开边缘)
-    for (uint16_t i = cam->margin_cut; i < cam->height - cam->margin_cut; i++) {
-        for (uint16_t j = cam->margin_cut; j < cam->width - cam->margin_cut; j++) {
-            uint32_t idx = i * cam->width + j;
+    // 为了安全进行 8 邻域膨胀，确保最少有 1 个像素的物理边界
+    uint16_t safe_margin = cam->margin_cut > 1 ? cam->margin_cut : 1;
+
+    // 遍历图像 
+    for (uint16_t r = safe_margin; r < cam->height - safe_margin; r++) {
+        for (uint16_t c = safe_margin; c < cam->width - safe_margin; c++) {
+            uint32_t idx = r * cam->width + c;
             
             // 阈值判断
             if (cam->raw_image[idx] > cam->threshold) {
+                // 直接点亮自身与 8 邻域
                 cam->binarized_image[idx] = 1;
-            } else {
-                cam->binarized_image[idx] = 0;
+                cam->binarized_image[idx - 1] = 1;
+                cam->binarized_image[idx + 1] = 1;
+                cam->binarized_image[idx - cam->width] = 1;
+                cam->binarized_image[idx + cam->width] = 1;
+                cam->binarized_image[idx - cam->width - 1] = 1;
+                cam->binarized_image[idx - cam->width + 1] = 1;
+                cam->binarized_image[idx + cam->width - 1] = 1;
+                cam->binarized_image[idx + cam->width + 1] = 1;
             }
         }
     }
 }
 
-// 连通域标记
-static void mark_components(CameraObject *cam, uint8_t *visited) {
-    // 清空访问标记
+// 【合并优化】一次全图扫描，同时完成连通域提取、质心计算与二阶矩长宽比特征提取
+static void extract_components(CameraObject *cam, uint8_t *visited) {
+    // 清空历史状态
     memset(visited, 0, cam->width * cam->height);
+    memset(cam->dot_num, 0, sizeof(cam->dot_num));
+    memset(cam->centers, 0, sizeof(cam->centers));
+    memset(cam->aspect_ratio, 0, sizeof(cam->aspect_ratio));
 
     uint8_t label = 1;
-    for (uint16_t i = cam->margin_cut; i < cam->height - cam->margin_cut; i++) {
-        for (uint16_t j = cam->margin_cut; j < cam->width - cam->margin_cut; j++) {
-            uint32_t idx = i * cam->width + j;
+    uint8_t valid_idx = 0;
+
+    for (uint16_t r = cam->margin_cut; r < cam->height - cam->margin_cut; r++) {
+        for (uint16_t c = cam->margin_cut; c < cam->width - cam->margin_cut; c++) {
+            uint32_t idx = r * cam->width + c;
             
-            // 发现未访问的亮点
+            // 发现未访问的亮点 (新连通域的种子点)
             if (cam->binarized_image[idx] == 1 && visited[idx] == 0) {
-                dfs_iterative(cam, visited, label, i, j);
-                label++;
-                if (label >= 255) break; // label 是 uint8，防溢出
+                BlobStats stats;
+                // 跑一遍 DFS，获取该连通域的全部数学特征
+                dfs_iterative(cam, visited, label, r, c, &stats);
+                
+                if (label < 255) label++; // 最大支持254个连通域
+                
+                // 立即判断该连通域并解算，无需第二次遍历整幅图像
+                if (stats.dot_num > MIN_LIGHT_SIZE) {
+                    if (valid_idx < MAX_LIGHTS) {
+                        float cy = (float)stats.sum_r / stats.dot_num; // Row (Y)
+                        float cx = (float)stats.sum_c / stats.dot_num; // Col (X)
+                        cam->centers[valid_idx][0] = cy; 
+                        cam->centers[valid_idx][1] = cx; 
+                        cam->dot_num[valid_idx] = stats.dot_num; 
+                        
+                        // 计算协方差矩阵特征值及长宽比
+                        float mu20 = (float)stats.sum_cc / stats.dot_num - cx * cx;
+                        float mu02 = (float)stats.sum_rr / stats.dot_num - cy * cy;
+                        float mu11 = (float)stats.sum_rc / stats.dot_num - cx * cy;
+                        
+                        mu02 = mu02 * (K_Y * K_Y);
+                        mu11 = mu11 * K_Y;
+                        
+                        // 计算特征值 (散布程度)
+                        float delta = sqrtf((mu20 - mu02)*(mu20 - mu02) + 4.0f * mu11 * mu11);
+                        float lambda1 = (mu20 + mu02 + delta) / 2.0f;
+                        float lambda2 = (mu20 + mu02 - delta) / 2.0f;
+                        
+                        float ratio = 1.0f;
+                        if (lambda2 > 0.1f) ratio = lambda1 / lambda2;
+                        else ratio = 100.0f; // 如果次轴极小(纯直线)，赋予安全极值防除零
+                        
+                        cam->aspect_ratio[valid_idx] = ratio;
+                        valid_idx++;
+                    }
+                }
             }
         }
     }
     cam->components_count = label - 1;
+    cam->light_number = valid_idx;
 }
 
 
@@ -285,101 +315,13 @@ static void sort_lights(CameraObject *cam) {
     }
 }
 
-
-
-
-
-static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
-    uint32_t sum_r[MAX_DOTS] = {0};
-    uint32_t sum_c[MAX_DOTS] = {0};
-    
-    // 【新增】：用于计算二阶矩的平方和
-    uint32_t sum_rr[MAX_DOTS] = {0};
-    uint32_t sum_cc[MAX_DOTS] = {0};
-    uint32_t sum_rc[MAX_DOTS] = {0};
-    
-    memset(cam->dot_num, 0, sizeof(cam->dot_num));
-    memset(cam->centers, 0, sizeof(cam->centers));
-    memset(cam->aspect_ratio, 0, sizeof(cam->aspect_ratio)); // 清空上一帧的长宽比
-
-    // 1. 累加坐标与坐标的平方
-    for (uint16_t i = cam->margin_cut; i < cam->height - cam->margin_cut; i++) {
-        for (uint16_t j = cam->margin_cut; j < cam->width - cam->margin_cut; j++) {
-            uint8_t lbl = visited[i * cam->width + j];
-            if (lbl > 0 && lbl <= MAX_DOTS) { 
-                sum_r[lbl-1] += i;            // y
-                sum_c[lbl-1] += j;            // x
-                
-                sum_rr[lbl-1] += i * i;       // y^2
-                sum_cc[lbl-1] += j * j;       // x^2
-                sum_rc[lbl-1] += i * j;       // x*y
-                
-                cam->dot_num[lbl-1]++;
-            }
-        }
-    }
-
-    // 2. 计算质心和协方差矩阵特征值 (真实长宽比)
-    uint8_t valid_idx = 0;
-    for (int i = 0; i < cam->components_count && i < MAX_DOTS; i++) {
-        uint32_t num = cam->dot_num[i];
-        if (num > MIN_LIGHT_SIZE) {
-            if (valid_idx < MAX_LIGHTS) {
-                // 计算质心
-                float cy = (float)sum_r[i] / num; // Row (Y)
-                float cx = (float)sum_c[i] / num; // Col (X)
-                cam->centers[valid_idx][0] = cy; 
-                cam->centers[valid_idx][1] = cx; 
-                cam->dot_num[valid_idx] = num; 
-                
-                // ==========================================
-                // 【核心算法】：计算二阶中心矩与真实长宽比
-                // ==========================================
-                // 计算协方差
-                float mu20 = (float)sum_cc[i] / num - cx * cx; // X的方差
-                float mu02 = (float)sum_rr[i] / num - cy * cy; // Y的方差
-                float mu11 = (float)sum_rc[i] / num - cx * cy; // XY的协方差
-                
-                
-                mu02 = mu02 * (K_Y * K_Y); // Y方差需要乘 K 的平方
-                mu11 = mu11 * K_Y;         // 协方差需要乘 K 的一次方
-                // 计算特征值 (代表该连通域在最长和最短方向的散布程度)
-                float delta = sqrtf((mu20 - mu02)*(mu20 - mu02) + 4.0f * mu11 * mu11);
-                float lambda1 = (mu20 + mu02 + delta) / 2.0f; // 主轴(长边)方差
-                float lambda2 = (mu20 + mu02 - delta) / 2.0f; // 次轴(短边)方差
-                
-                // 真实长宽比 = sqrt(主轴方差 / 次轴方差)
-                float ratio = 1.0f;
-                if (lambda2 > 0.1f) {
-                    ratio = lambda1 / lambda2;
-                } else {
-                    ratio = 100.0f; // 如果次轴极其小(如一条1像素宽的纯直线)，赋予一个大数值
-                }
-                
-                cam->aspect_ratio[valid_idx] = ratio; // 记录该灯的长宽比
-                // ==========================================
-                
-                valid_idx++;
-            }
-        }
-    }
-    cam->light_number = valid_idx;
-
-
-}
-
-
 // --- 4. 外部调用的处理入口 ---
 void image_processing_loop(void) {
-    // 1. 二值化
-    binarize_image(&cam_down);
-    //膨胀处理
-    fast_dilate_3x3_8_neighbor(&cam_down);
-    // 2. 连通域标记
-    mark_components(&cam_down, visited_buffer);
-    
-    // 3. 计算质心
-    calculate_centroids(&cam_down, visited_buffer);
+    // 1. 二值化与膨胀一趟融合处理，免去额外内存拷贝与遍历
+    binarize_and_dilate(&cam_down);
+
+    // 2. 连通域提取与质心、特征值计算一次性完成
+    extract_components(&cam_down, visited_buffer);
 
     // 3. 按面积从大到小排序 (需同步交换 aspect_ratio)
     
@@ -389,19 +331,3 @@ void image_processing_loop(void) {
     extern float share_data_from_0[];
     calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0]);
 } 
-
-void image_send(void){
-    if(mt9v03x_finish_flag)
-    {
-        mt9v03x_finish_flag = 0;
-        //遍历赋值并放大显示 (1变255)
-        for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++)
-        {
-            // 如果是1则变为255(白)，如果是0保持0(黑)
-            image_copy[0][i] = cam_down.raw_image[i]; 
-        }
-
-        // 发送图像
-        seekfree_assistant_camera_send();
-    }
-}
