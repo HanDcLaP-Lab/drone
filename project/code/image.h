@@ -14,7 +14,7 @@
 #define M7_1_DATA_LENGTH 16
 
 #define ROI_DISTANCE 10.0f
-#define CAR_MIN_RATIO 4.5f
+#define CAR_MIN_RATIO 4.5f  //小车最小有效长宽比
 
 // =========================================================
 // [新增] 信标 (圆形灯) 动态透视畸变补偿参数
@@ -58,13 +58,13 @@ typedef struct {
     uint8_t car_valid;           // 是否锁定小车 (1:是, 0:否)
     float car_center_y;          // 小车 Row (Y)
     float car_center_x;          // 小车 Col (X)
-    uint32_t car_area;           // 小车面积
+    uint32_t car_dot_num;           // 小车面积
     float car_ratio;
 
     uint8_t target_valid;        // 是否锁定信标 (1:是, 0:否)
     float target_center_y;       // 信标 Row (Y)
     float target_center_x;       // 信标 Col (X)
-    uint32_t target_area;        // 信标面积
+    uint32_t target_dot_num;        // 信标面积
     float target_ratio;
 
     float debug_max_ratio;       // 历史记录的最大长宽比

@@ -141,13 +141,13 @@ void display_image_debug_display(void){
     }
     ips200_show_int(80, 16*10, cam_down.threshold, 3);
     ips200_show_string(0, 16*11, "L1 A:");
-    ips200_show_int(40, 16*11, cam_down.car_area, 4);
+    ips200_show_int(40, 16*11, cam_down.car_dot_num, 4);
     ips200_show_string(80, 16*11, "R:"); // Ratio 长宽比
     ips200_show_float(100, 16*11, cam_down.car_ratio, 2, 2);
 
     // 打印 2 号灯 (面积次大的灯) 的数据
     ips200_show_string(0, 16*12, "L2 A:");
-    ips200_show_int(40, 16*12, cam_down.target_area, 4);
+    ips200_show_int(40, 16*12, cam_down.target_dot_num, 4);
     ips200_show_string(80, 16*12, "R:"); 
     ips200_show_float(100, 16*12, cam_down.target_ratio, 2, 2);
 

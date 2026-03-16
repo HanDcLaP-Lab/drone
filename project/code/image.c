@@ -169,13 +169,13 @@ static void mark_components(CameraObject *cam, uint8_t *visited) {
 static void sort_lights(CameraObject *cam) {
     // 默认清除上一帧的锁定状态
     cam->car_valid = 0;
-    cam->car_area = 0;
+    cam->car_dot_num = 0;
     cam->car_ratio = 0.0f;
     cam->car_center_x = 0.0f;
     cam->car_center_y = 0.0f;
 
     cam->target_valid = 0;
-    cam->target_area = 0;
+    cam->target_dot_num = 0;
     cam->target_ratio = 0.0f;
     cam->target_center_x = 0.0f;
     cam->target_center_y = 0.0f;
@@ -257,7 +257,7 @@ static void sort_lights(CameraObject *cam) {
         cam->car_valid = 1;
         cam->car_center_y = cam->centers[car_idx][0];
         cam->car_center_x = cam->centers[car_idx][1];
-        cam->car_area = cam->dot_num[car_idx];
+        cam->car_dot_num = cam->dot_num[car_idx];
         cam->car_ratio = cam->aspect_ratio[car_idx];
     }
     
@@ -265,7 +265,7 @@ static void sort_lights(CameraObject *cam) {
         cam->target_valid = 1;
         cam->target_center_y = cam->centers[target_idx][0];
         cam->target_center_x = cam->centers[target_idx][1];
-        cam->target_area = cam->dot_num[target_idx];
+        cam->target_dot_num = cam->dot_num[target_idx];
         cam->target_ratio = cam->aspect_ratio[target_idx];
     }
 }
