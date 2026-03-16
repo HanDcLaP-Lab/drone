@@ -122,7 +122,7 @@ void M7_1_data_send(volatile float* data_out) {
     // 统计目前画面中实际成功锁定的目标数量 (0/1/2)，下发给小车防丢失
     uint8_t locked_count = 0;
     if (cam_down.car_valid) locked_count++;
-    if (cam_down.target_valid) locked_count++;
+    if (cam_down.target_valid) locked_count += 2;
     data_out[14] = (float)locked_count;
     
     if (!cam_down.car_valid) {
