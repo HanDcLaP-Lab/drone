@@ -26,10 +26,16 @@
 // 2. 畸变补偿系数：目标质心偏离画面中心距离的平方，每增加 1 个单位，上限放宽多少
 // 提示：188x120 屏幕角落距离中心的平方大概是 (94^2 + 60^2) ≈ 12436。
 // 如果系数是 0.00005，角落里最大允许长宽比就是 2.0 + 12436*0.00005 ≈ 2.62
-#define TARGET_RATIO_COMP_COEF  0.00012f
+#define TARGET_RATIO_COMP_COEF  0.00025f
 
 // 3. 绝对上限：就算偏离到屏幕最边缘，长宽比也不能超过这个值 (防止把真正的小车当成信标)
-#define TARGET_LIMIT_MAX_RATIO  3.22f
+#define TARGET_LIMIT_MAX_RATIO  5.0f
+
+
+
+#define CAR_BASE_MIN_RATIO      3.5f     // 中心基础下限：在中心时长宽比大于 3.0 即认为是小车
+#define CAR_RATIO_COMP_COEF     0.0001f  // 补偿系数：假设边缘距离平方约 12000，12000*0.0002=2.4。边缘门槛会提升到 3.0+2.4 = 5.4
+
 
 #define TARGET_MAX_RATIO 2.5f
 #define K_Y 1.2f

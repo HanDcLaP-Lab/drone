@@ -210,13 +210,29 @@ static void sort_lights(CameraObject *cam) {
 
     int car_idx = -1;
     int target_idx = -1;
+    float img_cx = cam->width / 2.0f;
+    float img_cy = cam->height / 2.0f;
+    // =========================================================
+    // 1. 寻找小车 (加入动态阈值，边缘门槛自动抬高防信标混淆)
+    // =========================================================
+    float max_car_ratio_found = 0.0f; // 记录找到的最大长宽比
     
-    // 1. 寻找小车 (长宽比 > 1.8 的里面选最长的)
-    float max_car_ratio = CAR_MIN_RATIO; 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
-        if (cam->aspect_ratio[i] > max_car_ratio) {
-            max_car_ratio = cam->aspect_ratio[i];
-            car_idx = i;
+        // 计算目标质心到画面中心的像素距离平方
+        float dx = cam->centers[i][1] - img_cx;
+        float dy = cam->centers[i][0] - img_cy;
+        float dist_sq = dx * dx + dy * dy;
+        
+        // 动态计算该位置的小车最低长宽比门槛
+        float dynamic_car_min_ratio = CAR_BASE_MIN_RATIO + (dist_sq * CAR_RATIO_COMP_COEF);
+        
+        // 只有大于当前位置的动态门槛，才有资格参与小车竞选
+        if (cam->aspect_ratio[i] > dynamic_car_min_ratio) {
+            // 在所有合格的候选者中，选出长宽比最大的那个
+            if (cam->aspect_ratio[i] > max_car_ratio_found) {
+                max_car_ratio_found = cam->aspect_ratio[i];
+                car_idx = i;
+            }
         }
     }
 
@@ -224,8 +240,7 @@ static void sort_lights(CameraObject *cam) {
     uint32_t max_target_area = 0;
     
     // 计算图像物理中心坐标 (用于计算透视偏离度)
-    float img_cx = cam->width / 2.0f;
-    float img_cy = cam->height / 2.0f;
+    
 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (i == car_idx) continue; 
