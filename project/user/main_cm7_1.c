@@ -110,17 +110,25 @@ int main(void)
 }
 
 // **************************** 代码区域 ****************************
-void M7_1_data_send(volatile float* data_out) { // Core 1 调用，写入 data_out (share_data_from_1)
-    data_out[0] = cam_down.centers[0][0]; 
-    data_out[1] = cam_down.centers[0][1];
-    data_out[2] = (float)cam_down.dot_num[0];
+void M7_1_data_send(volatile float* data_out) { 
+    // 读取独立的专属变量
+    data_out[0] = cam_down.car_center_y;   // 原来的 centers[0][0]
+    data_out[1] = cam_down.car_center_x;   // 原来的 centers[0][1]
+    data_out[2] = (float)cam_down.car_area; 
     data_out[3] = car_ground_pos.x;
     data_out[4] = car_ground_pos.y;
     data_out[5] = target_ground_pos.x;
     data_out[6] = target_ground_pos.y;
-    data_out[14] = (float)cam_down.light_number;
     
-    if (cam_down.light_number == 0) {
+    // 飞控只需知道视野内有几个有效灯(小车+信标)
+    uint8_t effective_lights = 0;
+    if (cam_down.car_valid) effective_lights++;
+    if (cam_down.target_valid) effective_lights++;
+    data_out[14] = (float)effective_lights;
+    
+    if (!cam_down.car_valid) {
+        data_out[0] = 0;
+        data_out[1] = 0;
         data_out[2] = 0;
     }
 }

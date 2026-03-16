@@ -162,4 +162,6 @@ void display_image_debug_display(void){
 
     ips200_show_float(0, 16*16, (int)car_ground_pos.x, 2,2);
     ips200_show_float(80, 16*16, (int)car_ground_pos.y, 2,2);
+    ips200_show_float(0, 16*17, (int)target_ground_pos.x, 2,2);
+    ips200_show_float(80, 16*17, (int)target_ground_pos.y, 2,2);
 }

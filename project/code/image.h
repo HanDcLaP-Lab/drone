@@ -14,27 +14,39 @@
 #define M7_1_DATA_LENGTH 16
 
 #define ROI_DISTANCE 10.0
-#define RATIO 2.5
+#define RATIO 3.5
+// --- 摄像头对象结构体 ---
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---
-    uint16_t width;             // 图像宽度
-    uint16_t height;            // 图像高度
-    uint8_t *raw_image;         // 指向原始灰度图的指针
-    uint8_t *binarized_image;   // 指向二值化图的指针
+    uint16_t width;             
+    uint16_t height;            
+    uint8_t *raw_image;         
+    uint8_t *binarized_image;   
 
     // --- 算法参数 ---
-    uint8_t threshold;          // 二值化阈值 (0-255)
-    uint8_t margin_cut;         // 四周裁剪像素 (去除镜头边缘噪点)
+    uint8_t threshold;          
+    uint8_t margin_cut;         
 
-    // --- 处理结果 ---
-    uint8_t light_number;            // 识别到的有效灯数量
-    float centers[MAX_LIGHTS][2];    // [修改] 灯光质心坐标改为 float 以提高精度
-                                     // 注意: row对应图像垂直方向，col对应图像水平方向
-    uint32_t dot_num[MAX_DOTS];      // 灯光像素点数 (面积)
-    // 【新增】：记录每个灯的真实长宽比 (无视旋转)
+    // --- 处理结果 (原始提取数据) ---
+    uint8_t light_number;            
+    float centers[MAX_LIGHTS][2];    // 纯净的原始质心数据
+    uint32_t dot_num[MAX_DOTS];      
     float aspect_ratio[MAX_LIGHTS];
-    uint8_t components_count;        // 连通域数量
+    uint8_t components_count;        
+
+    // ==========================================
+    // [新增] --- 追踪输出结果 (外部代码只读以下变量) ---
+    // ==========================================
+    uint8_t car_valid;           // 是否识别到小车 (1:有效, 0:丢失)
+    float car_center_x;          // 小车 X 坐标 (Col)
+    float car_center_y;          // 小车 Y 坐标 (Row)
+    uint32_t car_area;           // 小车面积
+
+    uint8_t target_valid;        // 是否识别到信标 (1:有效, 0:丢失)
+    float target_center_x;       // 信标 X 坐标 (Col)
+    float target_center_y;       // 信标 Y 坐标 (Row)
+    uint32_t target_area;        // 信标面积
 
 } CameraObject;
 

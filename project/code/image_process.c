@@ -117,18 +117,16 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
     return ground_pt;
 }
 
-
 // ==========================================
 // 5. 计算地面坐标主函数
 // ==========================================
-// 输出: car_ground_pos.x (前), car_ground_pos.y (右) 单位: cm (取决于height单位)
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg) {
     extern volatile float share_data_from_1[]; 
     
-    // ================== 小车 (Index 0) ==================
-    // 逻辑：只要 dot_num[0] > 0，说明 sort_lights 确认找到了小车
-    if (cam_down.dot_num[0] > 0) {
-        Vector3D ray_car = pixelTo3DRay((double)cam_down.centers[0][1], (double)cam_down.centers[0][0]);
+    // ================== 小车 ==================
+    if (cam_down.car_valid) {
+        // u对应x(Col), v对应y(Row)
+        Vector3D ray_car = pixelTo3DRay((double)cam_down.car_center_x, (double)cam_down.car_center_y);
         Vector3D body_car = cameraToBody(&ray_car, pitch_deg, roll_deg);
         GroundPoint raw_car = projectToGround(body_car, height);
         
@@ -143,34 +141,29 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         share_data_from_1[11] = body_car.y;
         share_data_from_1[12] = body_car.z;
     } else {        
-        // 未识别到小车，坐标严格归零
         car_ground_pos.x = 0.0;
         car_ground_pos.y = 0.0;
     }
     
-    // ================== 目标/信标 (Index 1) ==================
-    // 逻辑：只要 dot_num[1] > 0，说明 sort_lights 记录了信标
-    if (cam_down.dot_num[1] > 0) {
-        Vector3D ray_target = pixelTo3DRay((double)cam_down.centers[1][1], (double)cam_down.centers[1][0]);
+    // ================== 目标/信标 ==================
+    if (cam_down.target_valid) {
+        Vector3D ray_target = pixelTo3DRay((double)cam_down.target_center_x, (double)cam_down.target_center_y);
         Vector3D body_target = cameraToBody(&ray_target, pitch_deg, roll_deg);
         GroundPoint raw_target = projectToGround(body_target, height);
         
         target_ground_pos.x = raw_target.x;
         target_ground_pos.y = raw_target.y;
     } else {
-        // 未识别到目标点，坐标归零
         target_ground_pos.x = 0.0;
         target_ground_pos.y = 0.0;
     }
 
     // ================== 距离计算 ==================
-    // 只有当小车和信标【同时存在】时，才计算并更新相对距离
-    if (cam_down.dot_num[0] > 0 && cam_down.dot_num[1] > 0) {
+    if (cam_down.car_valid && cam_down.target_valid) {
         double dx = car_ground_pos.x - target_ground_pos.x;
         double dy = car_ground_pos.y - target_ground_pos.y;
         share_data_from_1[13] = (float)sqrt(dx * dx + dy * dy);
     } else {
-        // 数据不全时距离归零（或者你可以设为上一帧的值，这里归0便于判断失效）
         share_data_from_1[13] = 0.0f; 
     }
 }
