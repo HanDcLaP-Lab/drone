@@ -114,8 +114,8 @@ void M7_1_data_send(volatile float* data_out) {
     data_out[0] = cam_down.car_center_y; 
     data_out[1] = cam_down.car_center_x;
     data_out[2] = (float)cam_down.car_dot_num;
-    data_out[3] = car_ground_pos.x;
-    data_out[4] = car_ground_pos.y;
+  data_out[3] = car_ground_pos.x;
+    data_out[4] = car_ground_pos.y;  
     data_out[5] = target_ground_pos.x;
     data_out[6] = target_ground_pos.y;
     

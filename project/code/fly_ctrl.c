@@ -23,6 +23,7 @@ PID_t pid_g_yaw;
 extern volatile float share_data_from_1[];
 extern volatile float share_data_from_0[];
 static float start_up_scale = 0.0f;
+//float car_pos_sol1_0 = 0.0f,car_pos_sol1_1 = 0.0f;
 // =================== 内部辅助函数 ===================
 static float Constrain_Float(float val, float min, float max) {
     if (val > max) return max;
@@ -59,8 +60,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_pitch, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     PID_Init(&pid_g_yaw, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.15f, 0.00f, 0.205f, 0.003f, 100, 15, 6.0f);
-    Nonline_PID_Init(&pid_image_y, 0.15f, 0.00f, 0.205f, 0.003f, 100, 15, 6.0f);
+    Nonline_PID_Init(&pid_image_x, 0.08f, 0.00f, 0.00f, 0.00f, 100, 15, 6.0f);
+    Nonline_PID_Init(&pid_image_y, 0.08f, 0.00f, 0.00f, 0.00f, 100, 15, 6.0f);
 }
 
 void Flight_Unlock(void) {
@@ -278,35 +279,38 @@ void motor_pwm_init() {
     pwm_init(PWM_RB, 400, 4000);
 }
 
-
+// static void simple_image_process(float* car_row, float* car_col) {
+//         *car_row -= imu_data.pitch * ANGLE_COMP_COEF;
+//         *car_col -= imu_data.roll * ANGLE_COMP_COEF;
+// 
+//         float current_height = imu_data.z;
+//         if (current_height < 40.0f) current_height = 40.0f; 
+//         float height_gain = current_height / 100.0f;        
+// 
+//         *car_row = IMG_CENTER_Y + (*car_row - IMG_CENTER_Y) * height_gain;
+//         *car_col = IMG_CENTER_X + (*car_col - IMG_CENTER_X) * height_gain;
+// 
+// }
 
 void Flight_Hover_Control_Task(void) {
-    // 彻底使用局部变量，不碰 Core 1 的全局变量，杜绝脏数据
-    float car_row = share_data_from_1[0];  
-    float car_col = share_data_from_1[1];  
-    uint32_t car_area = (uint32_t)share_data_from_1[2]; 
+    // 使用局部变量
+    // float car_row = share_data_from_1[0];  
+    // float car_col = share_data_from_1[1];  
+    float car_pos_x = share_data_from_1[3];
+    float car_pos_y = share_data_from_1[4];
+    // uint32_t car_area = (uint32_t)share_data_from_1[2]; 
     uint8_t locked_lights = (uint8_t)share_data_from_1[14];    
-    
-    if (locked_lights >= 1 && 
-       (car_area <= MIN_LIGHT_SIZE || car_row <= 0 || car_col <= 0)) {
-        locked_lights = 0;
-    }
 
     static float search_dir = 1.0f;
-    if (locked_lights >= 1) {
+    if (locked_lights == 1 || locked_lights == 3) {
         // 在局部变量上做补偿运算，不改变原始图像数据
-        car_row -= imu_data.pitch * ANGLE_COMP_COEF;
-        car_col -= imu_data.roll * ANGLE_COMP_COEF;
+        //simple_image_process(&car_row, &car_col);
 
-        float current_height = imu_data.z;
-        if (current_height < 40.0f) current_height = 40.0f; 
-        float height_gain = current_height / 100.0f;        
+        float error_row = -car_pos_x;
+        float error_col = car_pos_y;
 
-        car_row = IMG_CENTER_Y + (car_row - IMG_CENTER_Y) * height_gain;
-        car_col = IMG_CENTER_X + (car_col - IMG_CENTER_X) * height_gain;
-
-        float error_row = car_row - IMG_CENTER_Y;
-        float error_col = car_col - IMG_CENTER_X;
+        // car_pos_sol1_0 = car_row;比较新老算法使用
+        // car_pos_sol1_1 = car_col;
 
         float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, CTRL_DT_CTANG);
         float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, CTRL_DT_CTANG);
