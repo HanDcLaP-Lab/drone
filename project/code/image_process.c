@@ -120,7 +120,7 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
 // ==========================================
 // 输出: car_ground_pos.x (前), car_ground_pos.y (右) 单位: cm (取决于height单位)
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg) {
-    const double k = 0.15; 
+    const double k = 0.5; 
     extern volatile float share_data_from_1[]; 
     
     // 提前计算本帧统一的正余弦，避免目标循环中重复计算耗时

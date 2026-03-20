@@ -172,5 +172,6 @@ void display_image_debug_display(void){
 
     ips200_show_float(0, 16*17, share_data_from_0[9], 2,2);
     ips200_show_float(80, 16*17, share_data_from_0[10], 2,2);
-    ips200_show_float(0, 16*18, share_data_from_0[11], 2,2);
+    ips200_show_float(0, 16*18, share_data_from_0[0], 2,2);
+    ips200_show_float(80, 16*18, share_data_from_0[1], 2,2);
 }

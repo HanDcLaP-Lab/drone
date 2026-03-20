@@ -164,8 +164,8 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入 data_o
     data_out[7] = motor_out.lb;
     data_out[8] = motor_out.rb;
 
-    data_out[9] = flight_target.target_pitch; 
-    data_out[10] = flight_target.target_roll;
+    data_out[9] = flight_target.target_roll; 
+    data_out[10] = flight_target.target_pitch;
     data_out[11] = flight_target.target_yaw;
 }
 
