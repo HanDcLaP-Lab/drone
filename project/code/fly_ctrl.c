@@ -312,11 +312,20 @@ void Flight_Hover_Control_Task(void) {
         // car_pos_sol1_0 = car_row;比较新老算法使用
         // car_pos_sol1_1 = car_col;
 
-        float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, CTRL_DT_CTANG);
-        float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, CTRL_DT_CTANG);
+        // 在 code/fly_ctrl.c 中修改 Flight_Hover_Control_Task
+        extern uint32_t pit0_cnt;
+        static uint32_t last_ang_cnt = 0;
+        static uint16_t real_dt_ang = 20; // 修改：默认 20ms，避免截断为 0
+        if(last_ang_cnt != 0) real_dt_ang = pit0_cnt - last_ang_cnt;
+
+        // 修改：将 last_ang_cnt 改为 real_dt_ang
+        float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, real_dt_ang / 1000.0f);
+        float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, real_dt_ang / 1000.0f);
+
+        last_ang_cnt = pit0_cnt;
 
         if (locked_lights == 1 && imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
-            flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * CTRL_DT_CTANG;
+            flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * last_ang_cnt / 1000.0f;
             
             if (flight_target.target_yaw > MAX_YAW_DEV) {
                 flight_target.target_yaw = MAX_YAW_DEV; 
