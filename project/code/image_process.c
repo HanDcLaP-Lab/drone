@@ -9,18 +9,21 @@
 // ==========================================
 // 1. 常量参数
 // ==========================================
-const double CX = 94.3964870095;
-const double CY = 56.7202594062;
+// 畸变中心 (Distortion Center)
+const double CX = 94.0532845692;
+const double CY = 59.6200034349;
 
+// 逆拉伸矩阵 (Inverse Stretch Matrix)
 const double INV_S11 = 1.0000000000;
 const double INV_S12 = 0.0000000000;
 const double INV_S21 = 0.0000000000;
 const double INV_S22 = 1.0000000000;
 
-const double A0 = 68.5826350751;
-const double A2 = -0.0051614074;
-const double A3 = 0.0000196348;
-const double A4 = -0.0000002898;
+// 映射多项式系数 (Mapping Coefficients)
+const double A0 = 75.0109988547;
+const double A2 = -0.0058158086;
+const double A3 = 0.0000239113;
+const double A4 = -0.0000003180;
 
 // 定义 3D 空间向量
 typedef struct { double x, y, z; } Vector3D;
@@ -65,13 +68,8 @@ static Vector3D pixelTo3DRay(double u, double v) {
 // 将相机坐标系下的射线旋转回水平坐标系 (Body/World Frame)
 // 输入 cam: x=Right, y=Forward, z=Up(Negative)
 // 输出 body: x=World_Right, y=World_Forward, z=World_Up(Negative)
-static Vector3D cameraToBody(const Vector3D *cam, double pitch_deg, double roll_deg) {
+static Vector3D cameraToBody(const Vector3D *cam, double sinp, double cosp, double sinr, double cosr) {
     Vector3D body;
-    double p = pitch_deg * M_PI / 180.0;
-    double r = roll_deg * M_PI / 180.0;
-    
-    double sinp = sin(p), cosp = cos(p);
-    double sinr = sin(r), cosr = cos(r);
 
     // 映射输入向量到中间物理坐标系 (Forward, Right, Down) 以便使用标准旋转公式
     // pixelTo3DRay 输出: x=Right (Body Y), y=Forward (Body X), z=Up
@@ -123,54 +121,48 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
 // ==========================================
 // 输出: car_ground_pos.x (前), car_ground_pos.y (右) 单位: cm (取决于height单位)
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg) {
+    const double k = 0.5; 
     extern volatile float share_data_from_1[]; 
     
-    // ================== 小车 (Index 0) ==================
-    // 逻辑：只要 dot_num[0] > 0，说明 sort_lights 确认找到了小车
-    if (cam_down.dot_num[0] > 0) {
-        Vector3D ray_car = pixelTo3DRay((double)cam_down.centers[0][1], (double)cam_down.centers[0][0]);
-        Vector3D body_car = cameraToBody(&ray_car, pitch_deg, roll_deg);
+    // 提前计算本帧统一的正余弦，避免目标循环中重复计算耗时
+    double p_rad = pitch_deg * M_PI / 180.0;
+    double r_rad = roll_deg * M_PI / 180.0;
+    double sinp = sin(p_rad), cosp = cos(p_rad);
+    double sinr = sin(r_rad), cosr = cos(r_rad);
+
+    // ================== 小车 ==================
+    if (cam_down.car_valid) { 
+        // pixelTo3DRay 参数顺序为 (u, v) 即 (Col, Row)
+        Vector3D ray_car = pixelTo3DRay((double)cam_down.car_center_x, (double)cam_down.car_center_y);
+        Vector3D body_car = cameraToBody(&ray_car, sinp, cosp, sinr, cosr);
         GroundPoint raw_car = projectToGround(body_car, height);
         
-        car_ground_pos.x = raw_car.x;
-        car_ground_pos.y = raw_car.y;
+        car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
+        car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
 
-        // 共享内存更新
         share_data_from_1[7] = ray_car.x;
         share_data_from_1[8] = ray_car.y;
         share_data_from_1[9] = ray_car.z;
         share_data_from_1[10] = body_car.x;
         share_data_from_1[11] = body_car.y;
         share_data_from_1[12] = body_car.z;
-    } else {        
-        // 未识别到小车，坐标严格归零
-        car_ground_pos.x = 0.0;
-        car_ground_pos.y = 0.0;
     }
-    
-    // ================== 目标/信标 (Index 1) ==================
-    // 逻辑：只要 dot_num[1] > 0，说明 sort_lights 记录了信标
-    if (cam_down.dot_num[1] > 0) {
-        Vector3D ray_target = pixelTo3DRay((double)cam_down.centers[1][1], (double)cam_down.centers[1][0]);
-        Vector3D body_target = cameraToBody(&ray_target, pitch_deg, roll_deg);
+    // 注意：若未识别到，保持上一帧位置
+
+    // ================== 信标 ==================
+    if (cam_down.target_valid) { 
+        Vector3D ray_target = pixelTo3DRay((double)cam_down.target_center_x, (double)cam_down.target_center_y);
+        Vector3D body_target = cameraToBody(&ray_target, sinp, cosp, sinr, cosr);
         GroundPoint raw_target = projectToGround(body_target, height);
         
-        target_ground_pos.x = raw_target.x;
-        target_ground_pos.y = raw_target.y;
-    } else {
-        // 未识别到目标点，坐标归零
-        target_ground_pos.x = 0.0;
-        target_ground_pos.y = 0.0;
+        target_ground_pos.x = target_ground_pos.x * (1.0 - k) + raw_target.x * k;
+        target_ground_pos.y = target_ground_pos.y * (1.0 - k) + raw_target.y * k;
     }
 
-    // ================== 距离计算 ==================
-    // 只有当小车和信标【同时存在】时，才计算并更新相对距离
-    if (cam_down.dot_num[0] > 0 && cam_down.dot_num[1] > 0) {
+    // 计算双目标直线距离
+    if (cam_down.car_valid && cam_down.target_valid) {
         double dx = car_ground_pos.x - target_ground_pos.x;
         double dy = car_ground_pos.y - target_ground_pos.y;
         share_data_from_1[13] = (float)sqrt(dx * dx + dy * dy);
-    } else {
-        // 数据不全时距离归零（或者你可以设为上一帧的值，这里归0便于判断失效）
-        share_data_from_1[13] = 0.0f; 
     }
 }

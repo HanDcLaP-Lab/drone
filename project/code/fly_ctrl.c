@@ -23,6 +23,7 @@ PID_t pid_g_yaw;
 extern volatile float share_data_from_1[];
 extern volatile float share_data_from_0[];
 static float start_up_scale = 0.0f;
+//float car_pos_sol1_0 = 0.0f,car_pos_sol1_1 = 0.0f;
 // =================== 内部辅助函数 ===================
 static float Constrain_Float(float val, float min, float max) {
     if (val > max) return max;
@@ -59,8 +60,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_pitch, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     PID_Init(&pid_g_yaw, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.15f, 0.00f, 0.205f, 0.003f, 100, 15, 6.0f);
-    Nonline_PID_Init(&pid_image_y, 0.15f, 0.00f, 0.205f, 0.003f, 100, 15, 6.0f);
+    Nonline_PID_Init(&pid_image_x, 0.059f, 0.00f, 0.134f, 0.00f, 100, 15, 6.0f);
+    Nonline_PID_Init(&pid_image_y, 0.059f, 0.00f, 0.134f, 0.00f, 100, 15, 6.0f);
 }
 
 void Flight_Unlock(void) {
@@ -278,61 +279,59 @@ void motor_pwm_init() {
     pwm_init(PWM_RB, 400, 4000);
 }
 
-
-
-
-
+// static void simple_image_process(float* car_row, float* car_col) {
+//         *car_row -= imu_data.pitch * ANGLE_COMP_COEF;
+//         *car_col -= imu_data.roll * ANGLE_COMP_COEF;
+// 
+//         float current_height = imu_data.z;
+//         if (current_height < 40.0f) current_height = 40.0f; 
+//         float height_gain = current_height / 100.0f;        
+// 
+//         *car_row = IMG_CENTER_Y + (*car_row - IMG_CENTER_Y) * height_gain;
+//         *car_col = IMG_CENTER_X + (*car_col - IMG_CENTER_X) * height_gain;
+// 
+// }
 
 void Flight_Hover_Control_Task(void) {
-    // 这里的 Cache 操作已在 main_cm7_0 中完成，此处直接读取 share_data_from_1
-    cam_down.centers[0][0] = share_data_from_1[0];  
-    cam_down.centers[0][1] = share_data_from_1[1];  
-    cam_down.dot_num[0] = (uint32_t)share_data_from_1[2]; 
-    cam_down.light_number = (uint8_t)share_data_from_1[14];    
-    
-    if (cam_down.light_number >= 1 && 
-       (cam_down.dot_num[0] <= MIN_LIGHT_SIZE || cam_down.centers[0][0] <= 0 || cam_down.centers[0][1] <= 0)) {
-        cam_down.light_number = 0;
-    }
+    // 使用局部变量
+    // float car_row = share_data_from_1[0];  
+    // float car_col = share_data_from_1[1];  
+    float car_pos_x = share_data_from_1[3];
+    float car_pos_y = share_data_from_1[4];
+    // uint32_t car_area = (uint32_t)share_data_from_1[2]; 
+    uint8_t locked_lights = (uint8_t)share_data_from_1[14];    
 
     static float search_dir = 1.0f;
-    if (cam_down.light_number >= 1) {
-        // 直接计算像素误差
-        // [移除] 移除卡尔曼滤波。视觉数据(50Hz)本身已有较大延迟，额外的强低通滤波会加剧相位滞后，导致严重的"荡秋千"。
-        // 且质心计算本身具有均值特性，直接使用原始数据响应更快。
-        cam_down.centers[0][0] -= imu_data.pitch * ANGLE_COMP_COEF;
-        cam_down.centers[0][1] -= imu_data.roll * ANGLE_COMP_COEF;
+    if (locked_lights == 1 || locked_lights == 3) {
+        // 在局部变量上做补偿运算，不改变原始图像数据
+        //simple_image_process(&car_row, &car_col);
 
-        // [新增] 高度增益修正，并将结果回写到 cam_down.centers
-        // 原理：相同物理位移在不同高度下对应的像素偏移不同。高度越高，像素偏移越小。
-        // 为了让PID参数适应不同高度，将像素误差归一化到基准高度（此处设为100cm）。
-        float current_height = imu_data.z;
-        if (current_height < 40.0f) current_height = 40.0f; // 限幅防止除零或过小
-        float height_gain = current_height / 100.0f;        // 归一化增益系数
+        float error_row = -car_pos_x;
+        float error_col = car_pos_y;
 
-        cam_down.centers[0][0] = IMG_CENTER_Y + (cam_down.centers[0][0] - IMG_CENTER_Y) * height_gain;
-        cam_down.centers[0][1] = IMG_CENTER_X + (cam_down.centers[0][1] - IMG_CENTER_X) * height_gain;
+        // car_pos_sol1_0 = car_row;比较新老算法使用
+        // car_pos_sol1_1 = car_col;
 
-        float error_row = cam_down.centers[0][0] - IMG_CENTER_Y;
-        float error_col = cam_down.centers[0][1] - IMG_CENTER_X;
-        //if(fabs(error_col) < ACCEPT_ERROR) error_col = 0;
-        //if(fabs(error_row) < ACCEPT_ERROR) error_row = 0;
-        // if(cam_down.dot_num[0] > VALID_MIN_NUM) error_row = error_col = 0;
+        // 在 code/fly_ctrl.c 中修改 Flight_Hover_Control_Task
+        extern uint32_t pit0_cnt;
+        static uint32_t last_ang_cnt = 0;
+        static uint16_t real_dt_ang = 20; // 修改：默认 20ms，避免截断为 0
+        if(last_ang_cnt != 0) real_dt_ang = pit0_cnt - last_ang_cnt;
 
-        // PID 控制
-        float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, CTRL_DT_CTANG);
-        float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, CTRL_DT_CTANG);
+        // 修改：将 last_ang_cnt 改为 real_dt_ang
+        float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, real_dt_ang / 1000.0f);
+        float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, real_dt_ang / 1000.0f);
 
-        if (cam_down.light_number == 1&& imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
-            // 产生恒定的角速度步进
-            flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * CTRL_DT_CTANG;
+        last_ang_cnt = pit0_cnt;
+
+        if (locked_lights == 1 && imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
+            flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * last_ang_cnt / 1000.0f;
             
-            // 触碰左右极限边界时反转方向 (因为起飞是0，直接拿 target_yaw 判断即可)
             if (flight_target.target_yaw > MAX_YAW_DEV) {
-                flight_target.target_yaw = MAX_YAW_DEV; // 限幅防超调
+                flight_target.target_yaw = MAX_YAW_DEV; 
                 search_dir = -1.0f; 
             } else if (flight_target.target_yaw < -MAX_YAW_DEV) {
-                flight_target.target_yaw = -MAX_YAW_DEV; // 限幅防超调
+                flight_target.target_yaw = -MAX_YAW_DEV; 
                 search_dir = 1.0f;  
             }
         }
@@ -344,8 +343,9 @@ void Flight_Hover_Control_Task(void) {
         Nonline_PID_Reset(&pid_image_y);
         Set_Target_Attitude(0, 0, flight_target.target_yaw);
     }                                                                                                                                                        
-    
 }
+
+
 
 // 无线调参映射函数
 // ch: 通道号 (1~8), val: 上位机发送的值

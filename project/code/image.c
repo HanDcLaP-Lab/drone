@@ -33,61 +33,41 @@ void camera_init(void) {
     // 参数配置
     cam_down.threshold = THRESHOLD;   // 二值化阈值 (需根据实际场地光照调整)
     cam_down.margin_cut = 5;    // 四周裁剪 5 像素
+    cam_down.debug_max_ratio = 0.0f;
+    cam_down.debug_min_ratio = 999.0f;
 }
 
 // --- 3. 内部辅助函数 ---
 
-
-static uint8_t is_valid_pixel(CameraObject *cam, uint16_t r, uint16_t c, uint8_t *visited) {
-    uint32_t index = r * cam->width + c;
-    
-    return (r >= cam->margin_cut && r < (cam->height - cam->margin_cut) && 
-            c >= cam->margin_cut && c < (cam->width - cam->margin_cut) && 
-            visited[index] == 0 && 
-            cam->binarized_image[index] == 1);
-}
-
-// ==========================================
-// [新增] 8邻域极速膨胀函数 (缝合线缆遮挡造成的裂缝)
-// ==========================================
-static void fast_dilate_3x3_8_neighbor(CameraObject *cam) {
-    // 1. 清空临时缓冲区 image_copy (利用一维数组的形式快速清空)
-    memset(image_copy[0], 0, cam->width * cam->height);
-    
-    // 2. 遍历原始二值化图像 (避开最外层1个像素边界，防止指针越界)
-    for (uint16_t r = cam->margin_cut + 1; r < cam->height - cam->margin_cut - 1; r++) {
-        for (uint16_t c = cam->margin_cut + 1; c < cam->width - cam->margin_cut - 1; c++) {
-            uint32_t idx = r * cam->width + c;
-            
-            // 只要当前中心点是 1 (白点)
-            if (cam->binarized_image[idx] == 1) {
-                // 将缓冲区中的自己和周围 8 个邻居全部点亮
-                image_copy[0][idx] = 1;                   // 中心
-                image_copy[0][idx - 1] = 1;               // 左
-                image_copy[0][idx + 1] = 1;               // 右
-                image_copy[0][idx - cam->width] = 1;      // 上
-                image_copy[0][idx + cam->width] = 1;      // 下
-                
-                image_copy[0][idx - cam->width - 1] = 1;  // 左上
-                image_copy[0][idx - cam->width + 1] = 1;  // 右上
-                image_copy[0][idx + cam->width - 1] = 1;  // 左下
-                image_copy[0][idx + cam->width + 1] = 1;  // 右下
-            }
-        }
-    }
-    
-    // 3. 将膨胀后的连续图像覆盖回原数组，供后面的 DFS 搜索使用
-    memcpy(cam->binarized_image, image_copy[0], cam->width * cam->height);
-}
+// 用于保存单一连通域统计特征的结构体
+typedef struct {
+    uint32_t sum_r;
+    uint32_t sum_c;
+    uint32_t sum_rr;
+    uint32_t sum_cc;
+    uint32_t sum_rc;
+    uint32_t dot_num;
+} BlobStats;
 
 // 深度优先搜索 (DFS) - 迭代版 (防止栈溢出)
-static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, uint16_t start_r, uint16_t start_c) {
+// 【优化】同步累加计算质心和二阶矩所需的坐标数据，消除对图像的二次遍历
+static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, uint16_t start_r, uint16_t start_c, BlobStats *stats) {
     typedef struct { uint16_t r; uint16_t c; } Node;
     static Node stack[STACK_SIZE]; // 静态局部栈
     int top = -1;
 
+    // 初始化本连通域统计数据，先记录起点
+    stats->sum_r = start_r;
+    stats->sum_c = start_c;
+    stats->sum_rr = (uint32_t)start_r * start_r;
+    stats->sum_cc = (uint32_t)start_c * start_c;
+    stats->sum_rc = (uint32_t)start_r * start_c;
+    stats->dot_num = 1;
+
     // 起点入栈
     stack[++top] = (Node){start_r, start_c};
+    // 压栈即标记，防止重复入栈
+    visited[start_r * cam->width + start_c] = label;
     
     // 方向数组：上右下左
     const int dr[] = {-1, 0, 1, 0};
@@ -96,25 +76,28 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
     while (top >= 0) {
         Node curr = stack[top--];
         
-        // 再次检查 (防止重复入栈处理)
-        if (!is_valid_pixel(cam, curr.r, curr.c, visited)) continue;
-
-        // 标记访问
-        visited[curr.r * cam->width + curr.c] = label;
-
         // 搜索 4 邻域
         for (int i = 0; i < 4; i++) {
             uint16_t nr = curr.r + dr[i];
             uint16_t nc = curr.c + dc[i];
-            // 这里只做简单的边界预判，具体有效性由下一次循环的 is_valid_pixel 判断
+            // 简单的边界预判
             if (nr >= cam->margin_cut && nr < (cam->height - cam->margin_cut) &&
                 nc >= cam->margin_cut && nc < (cam->width - cam->margin_cut)) {
                 
-                // 只有亮点且未访问才入栈，减少栈占用
                 uint32_t nidx = nr * cam->width + nc;
+                // 只有亮点且未访问才入栈，减少栈占用
                 if (cam->binarized_image[nidx] == 1 && visited[nidx] == 0) {
                     if (top < STACK_SIZE - 1) {
                         stack[++top] = (Node){nr, nc};
+                        visited[nidx] = label; // 【核心修复】压栈时必须立刻标记
+                        
+                        // 同步累加该像素点的坐标和平方特征
+                        stats->sum_r += nr; 
+                        stats->sum_c += nc;
+                        stats->sum_rr += (uint32_t)nr * nr; 
+                        stats->sum_cc += (uint32_t)nc * nc; 
+                        stats->sum_rc += (uint32_t)nr * nc;
+                        stats->dot_num++;
                     }
                 }
             }
@@ -122,317 +105,229 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
     }
 }
 
-// 二值化处理
-static void binarize_image(CameraObject *cam) {
+// 【合并优化】一次遍历同时完成二值化与 8 邻域膨胀
+static void binarize_and_dilate(CameraObject *cam) {
     // 清空二值化缓冲区
     memset(cam->binarized_image, 0, cam->width * cam->height);
 
-    // 遍历图像 (避开边缘)
-    for (uint16_t i = cam->margin_cut; i < cam->height - cam->margin_cut; i++) {
-        for (uint16_t j = cam->margin_cut; j < cam->width - cam->margin_cut; j++) {
-            uint32_t idx = i * cam->width + j;
+    // 为了安全进行 8 邻域膨胀，确保最少有 1 个像素的物理边界
+    uint16_t safe_margin = cam->margin_cut > 1 ? cam->margin_cut : 1;
+
+    // 遍历图像 
+    for (uint16_t r = safe_margin; r < cam->height - safe_margin; r++) {
+        for (uint16_t c = safe_margin; c < cam->width - safe_margin; c++) {
+            uint32_t idx = r * cam->width + c;
             
             // 阈值判断
             if (cam->raw_image[idx] > cam->threshold) {
+                // 直接点亮自身与 8 邻域
                 cam->binarized_image[idx] = 1;
-            } else {
-                cam->binarized_image[idx] = 0;
+                cam->binarized_image[idx - 1] = 1;
+                cam->binarized_image[idx + 1] = 1;
+                cam->binarized_image[idx - cam->width] = 1;
+                cam->binarized_image[idx + cam->width] = 1;
+                cam->binarized_image[idx - cam->width - 1] = 1;
+                cam->binarized_image[idx - cam->width + 1] = 1;
+                cam->binarized_image[idx + cam->width - 1] = 1;
+                cam->binarized_image[idx + cam->width + 1] = 1;
             }
         }
     }
 }
 
-// 连通域标记
-static void mark_components(CameraObject *cam, uint8_t *visited) {
-    // 清空访问标记
+// 【合并优化】一次全图扫描，同时完成连通域提取、质心计算与二阶矩长宽比特征提取
+static void extract_components(CameraObject *cam, uint8_t *visited) {
+    // 清空历史状态
     memset(visited, 0, cam->width * cam->height);
+    memset(cam->dot_num, 0, sizeof(cam->dot_num));
+    memset(cam->centers, 0, sizeof(cam->centers));
+    memset(cam->aspect_ratio, 0, sizeof(cam->aspect_ratio));
 
     uint8_t label = 1;
-    for (uint16_t i = cam->margin_cut; i < cam->height - cam->margin_cut; i++) {
-        for (uint16_t j = cam->margin_cut; j < cam->width - cam->margin_cut; j++) {
-            uint32_t idx = i * cam->width + j;
+    uint8_t valid_idx = 0;
+
+    for (uint16_t r = cam->margin_cut; r < cam->height - cam->margin_cut; r++) {
+        for (uint16_t c = cam->margin_cut; c < cam->width - cam->margin_cut; c++) {
+            uint32_t idx = r * cam->width + c;
             
-            // 发现未访问的亮点
+            // 发现未访问的亮点 (新连通域的种子点)
             if (cam->binarized_image[idx] == 1 && visited[idx] == 0) {
-                dfs_iterative(cam, visited, label, i, j);
-                label++;
-                if (label >= 255) break; // label 是 uint8，防溢出
+                BlobStats stats;
+                // 跑一遍 DFS，获取该连通域的全部数学特征
+                dfs_iterative(cam, visited, label, r, c, &stats);
+                
+                if (label < 255) label++; // 最大支持254个连通域
+                
+                // 立即判断该连通域并解算，无需第二次遍历整幅图像
+                if (stats.dot_num > MIN_LIGHT_SIZE) {
+                    if (valid_idx < MAX_LIGHTS) {
+                        float cy = (float)stats.sum_r / stats.dot_num; // Row (Y)
+                        float cx = (float)stats.sum_c / stats.dot_num; // Col (X)
+                        cam->centers[valid_idx][0] = cy; 
+                        cam->centers[valid_idx][1] = cx; 
+                        cam->dot_num[valid_idx] = stats.dot_num; 
+                        
+                        // 计算协方差矩阵特征值及长宽比
+                        float mu20 = (float)stats.sum_cc / stats.dot_num - cx * cx;
+                        float mu02 = (float)stats.sum_rr / stats.dot_num - cy * cy;
+                        float mu11 = (float)stats.sum_rc / stats.dot_num - cx * cy;
+                        
+                        mu02 = mu02 * (K_Y * K_Y);
+                        mu11 = mu11 * K_Y;
+                        
+                        // 计算特征值 (散布程度)
+                        float delta = sqrtf((mu20 - mu02)*(mu20 - mu02) + 4.0f * mu11 * mu11);
+                        float lambda1 = (mu20 + mu02 + delta) / 2.0f;
+                        float lambda2 = (mu20 + mu02 - delta) / 2.0f;
+                        
+                        float ratio = 1.0f;
+                        if (lambda2 > 0.1f) ratio = lambda1 / lambda2;
+                        else ratio = 100.0f; // 如果次轴极小(纯直线)，赋予安全极值防除零
+                        
+                        cam->aspect_ratio[valid_idx] = ratio;
+                        valid_idx++;
+                    }
+                }
             }
         }
     }
     cam->components_count = label - 1;
-}
-
-
-// [0]为小车，[1]为信标
-static void sort_lights(CameraObject *cam) {
-    // 修正变量名，保持与底层数据的真实对应：row对应Y轴([0]), col对应X轴([1])
-    static float pre_car_row = 0, pre_car_col = 0;
-    static float pre_light_row = 0, pre_light_col = 0;
-    static int car_valid_cnt = 0;
-
-    // ===================================
-    // 1. 没有识别到灯
-    // ===================================
-    if(cam->light_number == 0){
-        // 【新增】：视野内什么灯都没有，未识别到小车
-        car_valid_cnt++;
-        if(car_valid_cnt >= 3) {
-            pre_car_row = 0;
-            pre_car_col = 0;
-            car_valid_cnt = 0; // 重置计数器
-        }
-        return; 
-    }
-
-    // ===================================
-    // 2. 只识别到 1 个灯
-    // ===================================
-    if(cam->light_number == 1){
-        if(pre_car_col == 0 && pre_car_row == 0){
-            // 2.1 首帧没有任何历史记录，用长宽比来猜
-            if(cam->aspect_ratio[0] < RATIO){
-                // 长宽比小，判定为【信标】
-                cam->dot_num[1] = cam->dot_num[0];
-                cam->aspect_ratio[1] = cam->aspect_ratio[0];
-                cam->centers[1][0] = cam->centers[0][0];
-                cam->centers[1][1] = cam->centers[0][1];
-                
-                // 清空[0]，防止飞控乱追
-                cam->centers[0][0] = cam->centers[0][1] = cam->aspect_ratio[0] = cam->dot_num[0] = 0;
-                
-                // 记录信标历史坐标
-                pre_light_row = cam->centers[1][0];
-                pre_light_col = cam->centers[1][1];
-
-                // 【新增】：判定为信标，说明没找到小车
-                car_valid_cnt++;
-                if(car_valid_cnt >= 3) {
-                    pre_car_row = 0;
-                    pre_car_col = 0;
-                    car_valid_cnt = 0;
-                }
-            } else {
-                // 长宽比大，判定为【小车】
-                pre_car_row = cam->centers[0][0];
-                pre_car_col = cam->centers[0][1];
-                car_valid_cnt = 0; // 【新增】：成功找到小车，清零计数器
-            }
-        } else {
-            // 2.2 有历史记录，用坐标距离来判断是谁
-            if(fabs(cam->centers[0][0] - pre_car_row) < ROI_DISTANCE && 
-               fabs(cam->centers[0][1] - pre_car_col) < ROI_DISTANCE){
-                // 距离很近，是【小车】
-                pre_car_row = cam->centers[0][0];
-                pre_car_col = cam->centers[0][1];
-                car_valid_cnt = 0; // 【新增】：成功找到小车，清零计数器
-            } else {
-                // 距离很远，说明小车丢了，现在视野里这个是【信标】
-                cam->dot_num[1] = cam->dot_num[0];
-                cam->aspect_ratio[1] = cam->aspect_ratio[0];
-                cam->centers[1][0] = cam->centers[0][0];
-                cam->centers[1][1] = cam->centers[0][1];
-                
-                // 清空[0]
-                cam->centers[0][0] = cam->centers[0][1] = cam->aspect_ratio[0] = cam->dot_num[0] = 0;
-                
-                pre_light_row = cam->centers[1][0];
-                pre_light_col = cam->centers[1][1];
-
-                // 【新增】：判定为信标，说明没找到小车
-                car_valid_cnt++;
-                if(car_valid_cnt >= 3) {
-                    pre_car_row = 0;
-                    pre_car_col = 0;
-                    car_valid_cnt = 0;
-                }
-            }
-        }
-        return; // 处理完毕，提前退出
-    }
-
-    // ===================================
-    // 3. 识别到 2 个及以上的灯
-    // ===================================
-    if(cam->light_number > 1){
-       // 3.1 冒泡排序，按面积大到小
-       for (int i = 0; i < cam->light_number - 1; i++) {
-           for (int j = 0; j < cam->light_number - 1 - i; j++) {
-               if (cam->dot_num[j] < cam->dot_num[j+1]) {
-                   // 交换面积
-                   uint32_t temp_num = cam->dot_num[j];
-                   cam->dot_num[j] = cam->dot_num[j+1];
-                   cam->dot_num[j+1] = temp_num;
-
-                   // 交换坐标 Y (Row)
-                   float temp_row = cam->centers[j][0];
-                   cam->centers[j][0] = cam->centers[j+1][0];
-                   cam->centers[j+1][0] = temp_row;
-
-                   // 交换坐标 X (Col)
-                   float temp_col = cam->centers[j][1];
-                   cam->centers[j][1] = cam->centers[j+1][1];
-                   cam->centers[j+1][1] = temp_col;
-
-                   // 交换长宽比
-                   float temp_ratio = cam->aspect_ratio[j];
-                   cam->aspect_ratio[j] = cam->aspect_ratio[j+1];
-                   cam->aspect_ratio[j+1] = temp_ratio;
-               }
-            }
-        }
-        
-        // 3.2 综合量化评分 (距离+长宽比)
-        int score = 0;
-        score += (fabs(cam->centers[0][0] - pre_car_row) < ROI_DISTANCE) ? 1 : 0;
-        score += (fabs(cam->centers[0][1] - pre_car_col) < ROI_DISTANCE) ? 1 : 0;
-        score += (cam->aspect_ratio[0] > cam->aspect_ratio[1]) ? 1 : 0;
-
-        // 如果得分太低，且拥有有效的历史轨迹，且备选者长宽比更好，则强制更换
-        if ((score <= 1) && (pre_car_col != 0 && pre_car_row != 0 && cam->aspect_ratio[1] > cam->aspect_ratio[0])) {
-            // 交换面积
-            uint32_t temp_num = cam->dot_num[0];
-            cam->dot_num[0] = cam->dot_num[1];
-            cam->dot_num[1] = temp_num;
-            
-            // 交换坐标 Y
-            float temp_row = cam->centers[0][0];
-            cam->centers[0][0] = cam->centers[1][0];
-            cam->centers[1][0] = temp_row;
-
-            // 交换坐标 X
-            float temp_col = cam->centers[0][1];
-            cam->centers[0][1] = cam->centers[1][1];
-            cam->centers[1][1] = temp_col;
-            
-            // 交换长宽比
-            float temp_ratio = cam->aspect_ratio[0];
-            cam->aspect_ratio[0] = cam->aspect_ratio[1];
-            cam->aspect_ratio[1] = temp_ratio;
-        }
-        
-        // 3.3 最终更新所有历史坐标记录
-        pre_car_row = cam->centers[0][0];
-        pre_car_col = cam->centers[0][1];
-        pre_light_row = cam->centers[1][0];
-        pre_light_col = cam->centers[1][1];
-
-        // 【新增】：只要屏幕上有2个及以上的灯，排序机制始终能保证[0]位置分配给小车
-        car_valid_cnt = 0; 
-    }
-}
-
-
-
-
-static void calculate_centroids(CameraObject *cam, uint8_t *visited) {
-    uint32_t sum_r[MAX_DOTS] = {0};
-    uint32_t sum_c[MAX_DOTS] = {0};
-    
-    // 【新增】：用于计算二阶矩的平方和
-    uint32_t sum_rr[MAX_DOTS] = {0};
-    uint32_t sum_cc[MAX_DOTS] = {0};
-    uint32_t sum_rc[MAX_DOTS] = {0};
-    
-    memset(cam->dot_num, 0, sizeof(cam->dot_num));
-    memset(cam->centers, 0, sizeof(cam->centers));
-    memset(cam->aspect_ratio, 0, sizeof(cam->aspect_ratio)); // 清空上一帧的长宽比
-
-    // 1. 累加坐标与坐标的平方
-    for (uint16_t i = cam->margin_cut; i < cam->height - cam->margin_cut; i++) {
-        for (uint16_t j = cam->margin_cut; j < cam->width - cam->margin_cut; j++) {
-            uint8_t lbl = visited[i * cam->width + j];
-            if (lbl > 0 && lbl <= MAX_DOTS) { 
-                sum_r[lbl-1] += i;            // y
-                sum_c[lbl-1] += j;            // x
-                
-                sum_rr[lbl-1] += i * i;       // y^2
-                sum_cc[lbl-1] += j * j;       // x^2
-                sum_rc[lbl-1] += i * j;       // x*y
-                
-                cam->dot_num[lbl-1]++;
-            }
-        }
-    }
-
-    // 2. 计算质心和协方差矩阵特征值 (真实长宽比)
-    uint8_t valid_idx = 0;
-    for (int i = 0; i < cam->components_count && i < MAX_DOTS; i++) {
-        uint32_t num = cam->dot_num[i];
-        if (num > MIN_LIGHT_SIZE) {
-            if (valid_idx < MAX_LIGHTS) {
-                // 计算质心
-                float cy = (float)sum_r[i] / num; // Row (Y)
-                float cx = (float)sum_c[i] / num; // Col (X)
-                cam->centers[valid_idx][0] = cy; 
-                cam->centers[valid_idx][1] = cx; 
-                cam->dot_num[valid_idx] = num; 
-                
-                // ==========================================
-                // 【核心算法】：计算二阶中心矩与真实长宽比
-                // ==========================================
-                // 计算协方差
-                float mu20 = (float)sum_cc[i] / num - cx * cx; // X的方差
-                float mu02 = (float)sum_rr[i] / num - cy * cy; // Y的方差
-                float mu11 = (float)sum_rc[i] / num - cx * cy; // XY的协方差
-                
-                // 计算特征值 (代表该连通域在最长和最短方向的散布程度)
-                float delta = sqrtf((mu20 - mu02)*(mu20 - mu02) + 4.0f * mu11 * mu11);
-                float lambda1 = (mu20 + mu02 + delta) / 2.0f; // 主轴(长边)方差
-                float lambda2 = (mu20 + mu02 - delta) / 2.0f; // 次轴(短边)方差
-                
-                // 真实长宽比 = sqrt(主轴方差 / 次轴方差)
-                float ratio = 1.0f;
-                if (lambda2 > 0.1f) {
-                    ratio = lambda1 / lambda2;
-                } else {
-                    ratio = 100.0f; // 如果次轴极其小(如一条1像素宽的纯直线)，赋予一个大数值
-                }
-                
-                cam->aspect_ratio[valid_idx] = ratio; // 记录该灯的长宽比
-                // ==========================================
-                
-                valid_idx++;
-            }
-        }
-    }
     cam->light_number = valid_idx;
-
 }
 
+
+static void sort_lights(CameraObject *cam) {
+    // 默认清除上一帧的锁定状态
+    cam->car_valid = 0;
+    cam->car_dot_num = 0;
+    cam->car_ratio = 0.0f;
+    cam->car_center_x = 0.0f;
+    cam->car_center_y = 0.0f;
+
+    cam->target_valid = 0;
+    cam->target_dot_num = 0;
+    cam->target_ratio = 0.0f;
+    cam->target_center_x = 0.0f;
+    cam->target_center_y = 0.0f;
+
+    if (cam->light_number == 0) return;
+
+
+    // =======================================================
+    // [新增]：独立测试极值记录逻辑 (只记录画面中面积最大的灯，防噪点)
+    // =======================================================
+    uint32_t max_area = 0;
+    int max_area_idx = -1;
+    for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+        if (cam->dot_num[i] > max_area) {
+            max_area = cam->dot_num[i];
+            max_area_idx = i;
+        }
+    }
+    
+    // 找到了最大的灯，更新历史极值
+    if (max_area_idx != -1) {
+        float current_max_ratio = cam->aspect_ratio[max_area_idx];
+        if (current_max_ratio > cam->debug_max_ratio) {
+            cam->debug_max_ratio = current_max_ratio;
+        }
+        // 排除掉刚好等于 100.0 的情况 (在 calculate_centroids 里设定的噪点线)
+        if (current_max_ratio < cam->debug_min_ratio && current_max_ratio < 99.0f) {
+            cam->debug_min_ratio = current_max_ratio;
+        }
+    }
+    // =======================================================
+
+    int car_idx = -1;
+    int target_idx = -1;
+    float img_cx = cam->width / 2.0f;
+    float img_cy = cam->height / 2.0f;
+    // =========================================================
+    // 1. 寻找小车 (加入动态阈值，边缘门槛自动抬高防信标混淆)
+    // =========================================================
+    float max_car_ratio_found = 0.0f; // 记录找到的最大长宽比
+    
+    for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+        // 计算目标质心到画面中心的像素距离平方
+        float dx = cam->centers[i][1] - img_cx;
+        float dy = cam->centers[i][0] - img_cy;
+        float dist_sq = dx * dx + dy * dy;
+        
+        // 动态计算该位置的小车最低长宽比门槛
+        float dynamic_car_min_ratio = CAR_BASE_MIN_RATIO + (dist_sq * CAR_RATIO_COMP_COEF);
+        
+        // 只有大于当前位置的动态门槛，才有资格参与小车竞选
+        if (cam->aspect_ratio[i] > dynamic_car_min_ratio) {
+            // 在所有合格的候选者中，选出长宽比最大的那个
+            if (cam->aspect_ratio[i] > max_car_ratio_found) {
+                max_car_ratio_found = cam->aspect_ratio[i];
+                car_idx = i;
+            }
+        }
+    }
+
+    // 2. 寻找信标 (排除小车后，在动态畸变长宽比阈值内选面积最大的)
+    uint32_t max_target_area = 0;
+    
+    // 计算图像物理中心坐标 (用于计算透视偏离度)
+    
+
+    for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+        if (i == car_idx) continue; 
+        
+        // 计算目标质心到画面中心的像素距离平方 (代表视角的斜度)
+        float dx = cam->centers[i][1] - img_cx;
+        float dy = cam->centers[i][0] - img_cy;
+        float dist_sq = dx * dx + dy * dy;
+        
+        // 动态阈值补偿：越靠近边缘，允许的信标形变长宽比上限越大
+        float dynamic_target_max_ratio = TARGET_BASE_MAX_RATIO + (dist_sq * TARGET_RATIO_COMP_COEF);
+        
+        // 限制补偿的绝对上限，防止无限放大后与小车混淆
+        if (dynamic_target_max_ratio > TARGET_LIMIT_MAX_RATIO) {
+            dynamic_target_max_ratio = TARGET_LIMIT_MAX_RATIO; 
+        }
+
+        // 使用算出来的动态阈值进行筛选
+        if (cam->aspect_ratio[i] < dynamic_target_max_ratio) {
+            if (cam->dot_num[i] > max_target_area) {
+                max_target_area = cam->dot_num[i];
+                target_idx = i;
+            }
+        }
+    }
+
+    // 3. 将结果输出到专属的安全变量中 (不破坏原始 centers 数组)
+    if (car_idx != -1) {
+        cam->car_valid = 1;
+        cam->car_center_y = cam->centers[car_idx][0];
+        cam->car_center_x = cam->centers[car_idx][1];
+        cam->car_dot_num = cam->dot_num[car_idx];
+        cam->car_ratio = cam->aspect_ratio[car_idx];
+    }
+    
+    if (target_idx != -1) {
+        cam->target_valid = 1;
+        cam->target_center_y = cam->centers[target_idx][0];
+        cam->target_center_x = cam->centers[target_idx][1];
+        cam->target_dot_num = cam->dot_num[target_idx];
+        cam->target_ratio = cam->aspect_ratio[target_idx];
+    }
+}
 
 // --- 4. 外部调用的处理入口 ---
 void image_processing_loop(void) {
-    // 1. 二值化
-    binarize_image(&cam_down);
-    //膨胀处理
-    fast_dilate_3x3_8_neighbor(&cam_down);
-    // 2. 连通域标记
-    mark_components(&cam_down, visited_buffer);
-    
-    // 3. 计算质心
-    calculate_centroids(&cam_down, visited_buffer);
+    // 1. 二值化与膨胀一趟融合处理，免去额外内存拷贝与遍历
+    binarize_and_dilate(&cam_down);
+
+    // 2. 连通域提取与质心、特征值计算一次性完成
+    extract_components(&cam_down, visited_buffer);
 
     // 3. 按面积从大到小排序 (需同步交换 aspect_ratio)
+    
     sort_lights(&cam_down);
 
     // 4. 矫正处理 share_data_from_0: [0]=Roll, [1]=Pitch, [3]=Height
     extern float share_data_from_0[];
     calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0]);
 } 
-
-void image_send(void){
-    if(mt9v03x_finish_flag)
-    {
-        mt9v03x_finish_flag = 0;
-        //遍历赋值并放大显示 (1变255)
-        for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++)
-        {
-            // 如果是1则变为255(白)，如果是0保持0(黑)
-            image_copy[0][i] = cam_down.raw_image[i]; 
-        }
-
-        // 发送图像
-        seekfree_assistant_camera_send();
-    }
-}
