@@ -5,6 +5,9 @@ Flight_Target_t flight_target = {0};
 Motor_Output_t motor_out = {0};
 float comp_col = 0;
 float comp_row = 0;
+float debug_earth_err_x = 0;
+float debug_earth_err_y = 0;
+
 // 定义 PID 对象
 PID_t pid_height_vel;
 PID_t pid_height_pos;
@@ -54,11 +57,11 @@ void Flight_Control_Init(void) {
     // 角度环a
     Nonline_PID_Init(&pid_roll, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
     Nonline_PID_Init(&pid_pitch, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
-    Nonline_PID_Init(&pid_yaw, 1.0f, 0.4f, 0.0f, 0.03f, 6, 70, 40.0f);
+    Nonline_PID_Init(&pid_yaw, 1.5f, 0.3f, 0.0f, 0.03f, 6, 70, 40.0f);
     // 角速度环g
     PID_Init(&pid_g_roll, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     PID_Init(&pid_g_pitch, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
-    PID_Init(&pid_g_yaw, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
+    PID_Init(&pid_g_yaw, 1.36f, 0.76f, 0.01f, 100, 3500, 40.0f);
     // 视觉部分
     Nonline_PID_Init(&pid_image_x, 0.059f, 0.00f, 0.134f, 0.00f, 100, 15, 6.0f);
     Nonline_PID_Init(&pid_image_y, 0.059f, 0.00f, 0.134f, 0.00f, 100, 15, 6.0f);
@@ -292,60 +295,125 @@ void motor_pwm_init() {
 // 
 // }
 
+
 void Flight_Hover_Control_Task(void) {
-    // 使用局部变量
-    // float car_row = share_data_from_1[0];  
-    // float car_col = share_data_from_1[1];  
+    // 1. 获取目标中心坐标与锁定状态
     float car_pos_x = share_data_from_1[3];
     float car_pos_y = share_data_from_1[4];
-    // uint32_t car_area = (uint32_t)share_data_from_1[2]; 
     uint8_t locked_lights = (uint8_t)share_data_from_1[14];    
 
-    static float search_dir = 1.0f;
+    // 2. 计算真实时间差 dt (防除零)
+    extern uint32_t pit0_cnt;
+    static uint32_t last_ang_cnt = 0;
+    static uint16_t real_dt_ang = 20; 
+    if(last_ang_cnt != 0) real_dt_ang = pit0_cnt - last_ang_cnt;
+    last_ang_cnt = pit0_cnt;
+
+    // 3. 静态防抖与状态存储变量
+    static uint8_t last_locked_lights = 0; // 记录上一帧锁定状态
+    static uint32_t search_time_cnt = 0;   // 处于纯扫描状态的累计时间(ms)
+    static float search_dir = 1.0f;        // 扫描方向
+    static float base_search_yaw = 0.0f;   // 扫描基准偏航角
+
+    // ================== 新增：延时多转状态变量 ==================
+    static uint32_t over_turn_time_cnt = 0; // 延时多转计时器
+    static uint8_t is_over_turning = 0;     // 是否正在延时多转的标志
+
+    // ================== 有目标视野逻辑 ==================
     if (locked_lights == 1 || locked_lights == 3) {
-        // 在局部变量上做补偿运算，不改变原始图像数据
-        //simple_image_process(&car_row, &car_col);
+        
+        // 计算偏差坐标并进行位置 PID 解算
+        // ================= 核心修复：位置环解耦 =================
+        // 1. 获取当前航向的三角函数值
+        float yaw_rad = imu_data.yaw * 3.14159265f / 180.0f;
+        float cos_yaw = cosf(yaw_rad);
+        float sin_yaw = sinf(yaw_rad);
 
-        float error_row = -car_pos_x;
-        float error_col = car_pos_y;
+        // 2. 将机体坐标（前X，右Y）旋转到与航向无关的大地坐标（北X，东Y）
+        float earth_err_x = car_pos_x * cos_yaw - car_pos_y * sin_yaw;
+        float earth_err_y = car_pos_x * sin_yaw + car_pos_y * cos_yaw;
 
-        // car_pos_sol1_0 = car_row;比较新老算法使用
-        // car_pos_sol1_1 = car_col;
+        debug_earth_err_x = earth_err_x;
+        debug_earth_err_y = earth_err_y;
 
-        // 在 code/fly_ctrl.c 中修改 Flight_Hover_Control_Task
-        extern uint32_t pit0_cnt;
-        static uint32_t last_ang_cnt = 0;
-        static uint16_t real_dt_ang = 20; // 修改：默认 20ms，避免截断为 0
-        if(last_ang_cnt != 0) real_dt_ang = pit0_cnt - last_ang_cnt;
+        // 3. 在大地坐标系下计算 PID (消除自转产生的虚假物理移动速度)
+        float target_earth_accel_x = Nonline_PID_Calculate(&pid_image_x, earth_err_x, real_dt_ang / 1000.0f);
+        float target_earth_accel_y = Nonline_PID_Calculate(&pid_image_y, earth_err_y, real_dt_ang / 1000.0f);
 
-        // 修改：将 last_ang_cnt 改为 real_dt_ang
-        float target_pitch_val = Nonline_PID_Calculate(&pid_image_y, error_row, real_dt_ang / 1000.0f);
-        float target_roll_val = Nonline_PID_Calculate(&pid_image_x, error_col, real_dt_ang / 1000.0f);
+        // 4. 将输出的大地期望推力，反向旋转回当前的机体坐标系
+        float target_body_accel_x = target_earth_accel_x * cos_yaw + target_earth_accel_y * sin_yaw;
+        float target_body_accel_y = -target_earth_accel_x * sin_yaw + target_earth_accel_y * cos_yaw;
 
-        last_ang_cnt = pit0_cnt;
+        // 5. 映射为姿态角输出 (X控制俯仰，向前提机尾即压机头为负；Y控制横滚，向右压右翼为正)
+        float target_pitch_val = -target_body_accel_x;
+        float target_roll_val  = target_body_accel_y;
+        // ========================================================
 
+        // 逻辑A：当锁定了双目标（看到信标）
+        if (locked_lights == 3) {
+            // 边缘检测：刚从扫描(1)切换到锁定(3) 且 经历了真正的扫描
+            if (last_locked_lights == 1 && search_time_cnt > MIN_SEARCH_TIME) {
+                is_over_turning = 1;     // 触发延时多转
+                over_turn_time_cnt = 0;  // 清零多转计时器
+            }
+
+            // 【核心附加功能】如果处于多转状态，继续平滑改变偏航角
+            if (is_over_turning) {
+                over_turn_time_cnt += real_dt_ang;
+                if (over_turn_time_cnt <= ROTATE_TIME) {
+                    // 顺着原来的扫描方向，以扫描速度继续平滑旋转
+                    flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * (real_dt_ang / 1000.0f);
+                } else {
+                    is_over_turning = 0; // 500ms 结束，关闭多转状态
+                }
+            }
+
+            base_search_yaw = flight_target.target_yaw; // 实时更新基准角
+            search_time_cnt = 0; // 重置丢失扫描计时器
+        }
+
+        // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
         if (locked_lights == 1 && imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
-            flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * last_ang_cnt / 1000.0f;
             
-            if (flight_target.target_yaw > MAX_YAW_DEV) {
-                flight_target.target_yaw = MAX_YAW_DEV; 
+            is_over_turning = 0; // 【安全锁】如果在多转的 500ms 期间不慎跟丢了信标，立刻打断多转动作
+            
+            search_time_cnt += real_dt_ang; // 累加真实扫描时间 (ms)
+            
+            // 执行扫描旋转
+            flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * (real_dt_ang / 1000.0f);
+            
+            // 限幅与碰壁反弹 (基于相对基准角)
+            if (flight_target.target_yaw > base_search_yaw + MAX_YAW_DEV) {
+                flight_target.target_yaw = base_search_yaw + MAX_YAW_DEV; 
                 search_dir = -1.0f; 
-            } else if (flight_target.target_yaw < -MAX_YAW_DEV) {
-                flight_target.target_yaw = -MAX_YAW_DEV; 
+            } else if (flight_target.target_yaw < base_search_yaw - MAX_YAW_DEV) {
+                flight_target.target_yaw = base_search_yaw - MAX_YAW_DEV; 
                 search_dir = 1.0f;  
             }
         }
+
+        // 保存状态并下发姿态
+        last_locked_lights = locked_lights; 
         Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
-    } else {
+
+    } 
+    // ================== 完全丢失目标逻辑 ==================
+    else {
+        // 重置PID防积分饱和
         comp_row = IMG_CENTER_Y;
         comp_col = IMG_CENTER_X;
         Nonline_PID_Reset(&pid_image_x);
         Nonline_PID_Reset(&pid_image_y);
+        
+        // 将 Roll 和 Pitch 强制归零，防止偏角失控漂移
         Set_Target_Attitude(0, 0, flight_target.target_yaw);
+        
+        // 清理所有扫描与防抖状态
+        search_time_cnt = 0;    
+        last_locked_lights = 0; 
+        is_over_turning = 0; // 打断多转
     }                                                                                                                                                        
 }
-
-
 
 // 无线调参映射函数
 // ch: 通道号 (1~8), val: 上位机发送的值

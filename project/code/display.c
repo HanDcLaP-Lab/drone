@@ -132,14 +132,21 @@ void display_image_debug_display(void){
     ips200_displayimage03x((const uint8 *)image_copy , MT9V03X_W, MT9V03X_H);
     
     // 在屏幕下方显示状态与阈值
-    ips200_show_string(0, 16*9, "Mode: DEBUG");
+    // ips200_show_string(0, 16*9, "Mode: DEBUG");
 
-    if (current_param_idx == 0) {
-        ips200_show_string(0, 16*10, "-> Thresh:"); // 带有指示箭头代表当前高亮选中
-    } else {
-        ips200_show_string(0, 16*10, "   Thresh:"); // 未选中时用空格对齐
-    }
-    ips200_show_int(80, 16*10, cam_down.threshold, 3);
+    // if (current_param_idx == 0) {
+    //     ips200_show_string(0, 16*10, "-> Thresh:"); // 带有指示箭头代表当前高亮选中
+    // } else {
+    //     ips200_show_string(0, 16*10, "   Thresh:"); // 未选中时用空格对齐
+    // }
+    // ips200_show_int(80, 16*10, cam_down.threshold, 3);
+    ips200_show_float(0, 16*9, share_data_from_0[12], 2, 2);
+    ips200_show_float(100, 16*9, share_data_from_0[13], 2, 2);
+    ips200_show_float(0, 16*10, share_data_from_0[9], 2, 2);
+    ips200_show_float(60, 16*10, share_data_from_0[10], 2, 2);
+    ips200_show_float(120, 16*10, share_data_from_0[11], 2, 2);
+
+
     ips200_show_string(0, 16*11, "L1 A:");
     ips200_show_int(40, 16*11, cam_down.car_dot_num, 4);
     ips200_show_string(80, 16*11, "R:"); // Ratio 长宽比
@@ -167,11 +174,12 @@ void display_image_debug_display(void){
     ips200_show_string(80, 16*15, "RB:");
     ips200_show_int(120, 16*15, (int)share_data_from_0[8], 4);
 
-    ips200_show_float(0, 16*16, (int)car_ground_pos.x, 2,2);
-    ips200_show_float(80, 16*16, (int)car_ground_pos.y, 2,2);
+    ips200_show_float(0, 16*16, (int)car_ground_pos.x, 4,2);
+    ips200_show_float(80, 16*16, (int)car_ground_pos.y, 4,2);
 
-    ips200_show_float(0, 16*17, share_data_from_0[9], 2,2);
-    ips200_show_float(80, 16*17, share_data_from_0[10], 2,2);
-    ips200_show_float(0, 16*18, share_data_from_0[0], 2,2);
-    ips200_show_float(80, 16*18, share_data_from_0[1], 2,2);
+    ips200_show_float(0, 16*17, share_data_from_0[9], 4,2);
+    ips200_show_float(80, 16*17, share_data_from_0[10], 4,2);
+    ips200_show_float(0, 16*18, share_data_from_0[0], 4,2);
+    ips200_show_float(80, 16*18, share_data_from_0[1], 4 , 2);
+    ips200_show_float(0, 16*19, share_data_from_0[2], 4,2);
 }

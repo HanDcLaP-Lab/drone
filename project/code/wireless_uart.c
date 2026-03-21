@@ -120,3 +120,7 @@ void wireless_uart_output_motor(void){
     wireless_uart_send_float(imu_data.pitch);
     wireless_uart_send_string("\n");
 }
+
+void wireless_uart_output_groud(void){
+    
+}

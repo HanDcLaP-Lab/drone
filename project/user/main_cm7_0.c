@@ -167,6 +167,9 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入 data_o
     data_out[9] = flight_target.target_roll; 
     data_out[10] = flight_target.target_pitch;
     data_out[11] = flight_target.target_yaw;
+    data_out[12] = debug_earth_err_x;
+    data_out[13] = debug_earth_err_y;
+    
 }
 
 void Float_Buffer_write(float* buffer, volatile float* share_data_from_1)
