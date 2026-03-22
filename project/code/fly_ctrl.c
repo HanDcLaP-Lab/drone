@@ -58,14 +58,14 @@ void Flight_Control_Init(void) {
     // 角度环a
     Nonline_PID_Init(&pid_roll, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
     Nonline_PID_Init(&pid_pitch, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
-    Nonline_PID_Init(&pid_yaw, 1.5f, 0.3f, 0.0f, 0.03f, 6, 70, 40.0f);
+    Nonline_PID_Init(&pid_yaw, 1.5f, 0.3f, 0.0f, 0.03f, 6, 35, 40.0f);
     // 角速度环g
     PID_Init(&pid_g_roll, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     PID_Init(&pid_g_pitch, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     PID_Init(&pid_g_yaw, 1.36f, 0.76f, 0.01f, 100, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.059f, 0.00f, 0.134f, 0.00f, 100, 15, 6.0f);
-    Nonline_PID_Init(&pid_image_y, 0.059f, 0.00f, 0.134f, 0.00f, 100, 15, 6.0f);
+    Nonline_PID_Init(&pid_image_x, 0.059f, 0.007f, 0.134f, 0.00f, 1000, 15, 4.0f);
+    Nonline_PID_Init(&pid_image_y, 0.059f, 0.007f, 0.134f, 0.00f, 1000, 15, 4.0f);
 }
 
 void Flight_Unlock(void) {
@@ -333,6 +333,8 @@ void Flight_Hover_Control_Task(void) {
         // 2. 将机体坐标（前X，右Y）旋转到与航向无关的大地坐标（北X，东Y）
         float earth_err_x = car_pos_x * cos_yaw - car_pos_y * sin_yaw;
         float earth_err_y = car_pos_x * sin_yaw + car_pos_y * cos_yaw;
+        if (fabsf(earth_err_x) < MIN_ERROR) earth_err_x = 0.0f;
+        if (fabsf(earth_err_y) < MIN_ERROR) earth_err_y = 0.0f;
 
         debug_earth_err_x = earth_err_x;
         debug_earth_err_y = earth_err_y;
@@ -501,8 +503,7 @@ void Fly_Param_Update_Visual(uint8_t ch, float val) {
             pid_image_y.kd = val;
             break;
         case 4: // 视觉环 KP2
-            pid_image_x.kp2 = val;
-            pid_image_y.kp2 = val;
+            search_yaw_rate = val;
             break;
         case 5: // 角速度环 KP
             pid_g_roll.kp = val;

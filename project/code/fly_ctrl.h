@@ -28,7 +28,7 @@
 
 #define VALID_MIN_NUM 300
 #define ACCEPT_ERROR 6.0f
-
+#define MIN_ERROR 3.0f
 //扫描旋转
 #define SEARCH_YAW_RATE 0.0f  // 搜索角速度 (度/秒)
 #define MAX_YAW_DEV     90.0f  // 最大扫描范围 (度)
