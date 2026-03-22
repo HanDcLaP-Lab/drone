@@ -125,22 +125,31 @@ int main(void) {
 
         // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
+        static uint32_t vision_timeout_cnt = 0; // [新增] 视觉失联看门狗计数器
+
         if (share_data_from_1[15] != 0.0f)
         {
+            vision_timeout_cnt = 0; // 成功收到数据，喂狗清零
             
-            //vis_cnt++;
-            // if(vis_cnt == 100){
-            //     vis_cnt = 0;
-            //     wireless_uart_send_string("Done");
-            // }
-
             share_data_from_1[15] = 0.0f;
             Flight_Hover_Control_Task(); 
             SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
             
             Float_Buffer_write(float_buffer, share_data_from_1);
-            //printf("%.2f",float_buffer[0]);
             Board_Comm_Send_Data(float_buffer);
+        }
+        else 
+        {
+            // 如果 1ms 内没收到数据，计数器累加
+            vision_timeout_cnt++;
+            if (vision_timeout_cnt > 400) { // 没收到视觉数据
+                // 触发视觉失联保护：强行回平姿态，清理视觉 PID 积分，原地悬停防止乱飞
+                Nonline_PID_Reset(&pid_image_x);
+                Nonline_PID_Reset(&pid_image_y);
+                Set_Target_Attitude(0, 0, flight_target.target_yaw);
+                
+                vision_timeout_cnt = 400; // 防止计数器溢出
+            }
         }
         
         // 2. 刷入 RAM 供 Core 1 读取

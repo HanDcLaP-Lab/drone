@@ -30,10 +30,11 @@
 #define ACCEPT_ERROR 6.0f
 
 //扫描旋转
-#define SEARCH_YAW_RATE 15.0f  // 搜索角速度 (度/秒)
+#define SEARCH_YAW_RATE 0.0f  // 搜索角速度 (度/秒)
 #define MAX_YAW_DEV     90.0f  // 最大扫描范围 (度)
 #define ROTATE_TIME    500.0f   //在扫描检测到目标后继续转的时间
 #define MIN_SEARCH_TIME  120.0f   //用于状态1到3的降噪时间
+#define MIN_SWITCH_TIME 1000.0f  //无人机累计没有识别到目标开始旋转的时间，单位：ms
 //视觉传输
 extern float comp_row;
 extern float comp_col;

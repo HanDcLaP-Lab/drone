@@ -7,6 +7,7 @@ float comp_col = 0;
 float comp_row = 0;
 float debug_earth_err_x = 0;
 float debug_earth_err_y = 0;
+float search_yaw_rate = SEARCH_YAW_RATE;
 
 // 定义 PID 对象
 PID_t pid_height_vel;
@@ -352,7 +353,7 @@ void Flight_Hover_Control_Task(void) {
         // 逻辑A：当锁定了双目标（看到信标）
         if (locked_lights == 3) {
             // 边缘检测：刚从扫描(1)切换到锁定(3) 且 经历了真正的扫描
-            if (last_locked_lights == 1 && search_time_cnt > MIN_SEARCH_TIME) {
+            if (last_locked_lights == 1 && search_time_cnt > (MIN_SWITCH_TIME + MIN_SEARCH_TIME)) {
                 is_over_turning = 1;     // 触发延时多转
                 over_turn_time_cnt = 0;  // 清零多转计时器
             }
@@ -362,7 +363,7 @@ void Flight_Hover_Control_Task(void) {
                 over_turn_time_cnt += real_dt_ang;
                 if (over_turn_time_cnt <= ROTATE_TIME) {
                     // 顺着原来的扫描方向，以扫描速度继续平滑旋转
-                    flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * (real_dt_ang / 1000.0f);
+                    flight_target.target_yaw += search_dir * search_yaw_rate * (real_dt_ang / 1000.0f);
                 } else {
                     is_over_turning = 0; // 500ms 结束，关闭多转状态
                 }
@@ -373,22 +374,27 @@ void Flight_Hover_Control_Task(void) {
         }
 
         // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
+        // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
         if (locked_lights == 1 && imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
             
             is_over_turning = 0; // 【安全锁】如果在多转的 500ms 期间不慎跟丢了信标，立刻打断多转动作
             
             search_time_cnt += real_dt_ang; // 累加真实扫描时间 (ms)
             
-            // 执行扫描旋转
-            flight_target.target_yaw += search_dir * SEARCH_YAW_RATE * (real_dt_ang / 1000.0f);
-            
-            // 限幅与碰壁反弹 (基于相对基准角)
-            if (flight_target.target_yaw > base_search_yaw + MAX_YAW_DEV) {
-                flight_target.target_yaw = base_search_yaw + MAX_YAW_DEV; 
-                search_dir = -1.0f; 
-            } else if (flight_target.target_yaw < base_search_yaw - MAX_YAW_DEV) {
-                flight_target.target_yaw = base_search_yaw - MAX_YAW_DEV; 
-                search_dir = 1.0f;  
+            // 【核心修改】：连续丢失超过 1000ms (1秒) 才开始真正旋转扫描
+            // 在这 1 秒内，无人机会保持当前的 Yaw 角原地悬停，等待目标重新出现
+            if (search_time_cnt > MIN_SWITCH_TIME) {
+                // 执行扫描旋转 (使用新的可调变量 search_yaw_rate)
+                flight_target.target_yaw += search_dir * search_yaw_rate * (real_dt_ang / 1000.0f);
+                
+                // 限幅与碰壁反弹 (基于相对基准角)
+                if (flight_target.target_yaw > base_search_yaw + MAX_YAW_DEV) {
+                    flight_target.target_yaw = base_search_yaw + MAX_YAW_DEV; 
+                    search_dir = -1.0f; 
+                } else if (flight_target.target_yaw < base_search_yaw - MAX_YAW_DEV) {
+                    flight_target.target_yaw = base_search_yaw - MAX_YAW_DEV; 
+                    search_dir = 1.0f;  
+                }
             }
         }
 

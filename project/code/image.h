@@ -33,7 +33,7 @@
 
 
 
-#define CAR_BASE_MIN_RATIO      4.0f     // 中心基础下限：在中心时长宽比大于 3.0 即认为是小车
+#define CAR_BASE_MIN_RATIO      3.2f     // 中心基础下限：在中心时长宽比大于 3.0 即认为是小车
 #define CAR_RATIO_COMP_COEF     0.00006f  // 补偿系数：假设边缘距离平方约 12000，12000*0.0002=2.4。边缘门槛会提升到 3.0+2.4 = 5.4
 
 
