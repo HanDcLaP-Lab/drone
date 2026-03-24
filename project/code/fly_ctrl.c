@@ -18,7 +18,7 @@ Nonline_PID_t pid_yaw;
 
 Nonline_PID_t pid_image_x;
 Nonline_PID_t pid_image_y;
-
+Nonline_PID_t pid_image_yaw;
 PID_t pid_g_roll;
 PID_t pid_g_pitch;
 PID_t pid_g_yaw;
@@ -58,14 +58,16 @@ void Flight_Control_Init(void) {
     // 角度环a
     Nonline_PID_Init(&pid_roll, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
     Nonline_PID_Init(&pid_pitch, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
-    Nonline_PID_Init(&pid_yaw, 1.5f, 0.3f, 0.0f, 0.03f, 6, 35, 40.0f);
+    Nonline_PID_Init(&pid_yaw, 1.5f, 0.33f, 0.0f, 0.0228f, 6, 35, 40.0f);
+
+    Nonline_PID_Init(&pid_image_yaw, 0.00f, 0.00f, 0.0f, 0.0f, 0, 0.0f, 4.0f);
     // 角速度环g
     PID_Init(&pid_g_roll, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     PID_Init(&pid_g_pitch, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
-    PID_Init(&pid_g_yaw, 1.36f, 0.76f, 0.01f, 100, 3500, 40.0f);
+    PID_Init(&pid_g_yaw, 1.36f, 0.42f, 0.011f, 100, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.059f, 0.007f, 0.134f, 0.00f, 1000, 15, 4.0f);
-    Nonline_PID_Init(&pid_image_y, 0.059f, 0.007f, 0.134f, 0.00f, 1000, 15, 4.0f);
+    Nonline_PID_Init(&pid_image_x, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 15, 4.0f);
+    Nonline_PID_Init(&pid_image_y, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 15, 4.0f);
 }
 
 void Flight_Unlock(void) {
@@ -78,6 +80,7 @@ void Flight_Unlock(void) {
     Nonline_PID_Reset(&pid_roll);
     Nonline_PID_Reset(&pid_pitch);
     Nonline_PID_Reset(&pid_yaw);
+    Nonline_PID_Reset(&pid_image_yaw);
     PID_Reset(&pid_g_roll);
     PID_Reset(&pid_g_pitch);
     PID_Reset(&pid_g_yaw);
@@ -302,6 +305,10 @@ void Flight_Hover_Control_Task(void) {
     float car_pos_x = share_data_from_1[3];
     float car_pos_y = share_data_from_1[4];
     uint8_t locked_lights = (uint8_t)share_data_from_1[14];    
+    if (locked_lights == 1 || locked_lights == 3) {
+        car_pos_x = car_pos_x - CAM_OFFSET_X;
+        car_pos_y = car_pos_y - CAM_OFFSET_Y;
+    } 
 
     // 2. 计算真实时间差 dt (防除零)
     extern uint32_t pit0_cnt;
@@ -311,26 +318,23 @@ void Flight_Hover_Control_Task(void) {
     last_ang_cnt = pit0_cnt;
 
     // 3. 静态防抖与状态存储变量
-    static uint8_t last_locked_lights = 0; // 记录上一帧锁定状态
-    static uint32_t search_time_cnt = 0;   // 处于纯扫描状态的累计时间(ms)
-    static float search_dir = 1.0f;        // 扫描方向
-    static float base_search_yaw = 0.0f;   // 扫描基准偏航角
-
-    // ================== 新增：延时多转状态变量 ==================
-    static uint32_t over_turn_time_cnt = 0; // 延时多转计时器
-    static uint8_t is_over_turning = 0;     // 是否正在延时多转的标志
+    static uint8_t last_locked_lights = 0; 
+    static uint32_t search_time_cnt = 0;   
+    static float search_dir = 1.0f;        
+    static float base_search_yaw = 0.0f;   
+    
+    // 【新增】：边缘停留相关的状态变量
+    static uint8_t is_pausing = 0;         // 是否正在边缘停留
+    static uint32_t edge_pause_cnt = 0;    // 边缘停留计时器 (ms)
 
     // ================== 有目标视野逻辑 ==================
     if (locked_lights == 1 || locked_lights == 3) {
         
-        // 计算偏差坐标并进行位置 PID 解算
-        // ================= 核心修复：位置环解耦 =================
-        // 1. 获取当前航向的三角函数值
+        // ================= 位置环解耦 =================
         float yaw_rad = imu_data.yaw * 3.14159265f / 180.0f;
         float cos_yaw = cosf(yaw_rad);
         float sin_yaw = sinf(yaw_rad);
 
-        // 2. 将机体坐标（前X，右Y）旋转到与航向无关的大地坐标（北X，东Y）
         float earth_err_x = car_pos_x * cos_yaw - car_pos_y * sin_yaw;
         float earth_err_y = car_pos_x * sin_yaw + car_pos_y * cos_yaw;
         if (fabsf(earth_err_x) < MIN_ERROR) earth_err_x = 0.0f;
@@ -339,87 +343,86 @@ void Flight_Hover_Control_Task(void) {
         debug_earth_err_x = earth_err_x;
         debug_earth_err_y = earth_err_y;
 
-        // 3. 在大地坐标系下计算 PID (消除自转产生的虚假物理移动速度)
         float target_earth_accel_x = Nonline_PID_Calculate(&pid_image_x, earth_err_x, real_dt_ang / 1000.0f);
         float target_earth_accel_y = Nonline_PID_Calculate(&pid_image_y, earth_err_y, real_dt_ang / 1000.0f);
 
-        // 4. 将输出的大地期望推力，反向旋转回当前的机体坐标系
         float target_body_accel_x = target_earth_accel_x * cos_yaw + target_earth_accel_y * sin_yaw;
         float target_body_accel_y = -target_earth_accel_x * sin_yaw + target_earth_accel_y * cos_yaw;
 
-        // 5. 映射为姿态角输出 (X控制俯仰，向前提机尾即压机头为负；Y控制横滚，向右压右翼为正)
         float target_pitch_val = -target_body_accel_x;
         float target_roll_val  = target_body_accel_y;
         // ========================================================
 
         // 逻辑A：当锁定了双目标（看到信标）
         if (locked_lights == 3) {
-            // 边缘检测：刚从扫描(1)切换到锁定(3) 且 经历了真正的扫描
-            if (last_locked_lights == 1 && search_time_cnt > (MIN_SWITCH_TIME + MIN_SEARCH_TIME)) {
-                is_over_turning = 1;     // 触发延时多转
-                over_turn_time_cnt = 0;  // 清零多转计时器
-            }
+            
+            float target_px_x = share_data_from_1[7]; 
+            float yaw_error = target_px_x - IMG_CENTER_X; 
+            
+            float yaw_pid_out = Nonline_PID_Calculate(&pid_image_yaw, yaw_error, real_dt_ang / 1000.0f);
+            flight_target.target_yaw += yaw_pid_out;
 
-            // 【核心附加功能】如果处于多转状态，继续平滑改变偏航角
-            if (is_over_turning) {
-                over_turn_time_cnt += real_dt_ang;
-                if (over_turn_time_cnt <= ROTATE_TIME) {
-                    // 顺着原来的扫描方向，以扫描速度继续平滑旋转
-                    flight_target.target_yaw += search_dir * search_yaw_rate * (real_dt_ang / 1000.0f);
-                } else {
-                    is_over_turning = 0; // 500ms 结束，关闭多转状态
-                }
-            }
-
-            base_search_yaw = flight_target.target_yaw; // 实时更新基准角
-            search_time_cnt = 0; // 重置丢失扫描计时器
+            base_search_yaw = flight_target.target_yaw; 
+            
+            // 只要看见信标，彻底打断所有的扫描和停留状态
+            search_time_cnt = 0; 
+            is_pausing = 0;      
         }
 
-        // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
         // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
         if (locked_lights == 1 && imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
             
-            is_over_turning = 0; // 【安全锁】如果在多转的 500ms 期间不慎跟丢了信标，立刻打断多转动作
+            search_time_cnt += real_dt_ang; 
             
-            search_time_cnt += real_dt_ang; // 累加真实扫描时间 (ms)
-            
-            // 【核心修改】：连续丢失超过 1000ms (1秒) 才开始真正旋转扫描
-            // 在这 1 秒内，无人机会保持当前的 Yaw 角原地悬停，等待目标重新出现
-            if (search_time_cnt > MIN_SWITCH_TIME) {
-                // 执行扫描旋转 (使用新的可调变量 search_yaw_rate)
-                flight_target.target_yaw += search_dir * search_yaw_rate * (real_dt_ang / 1000.0f);
+            if (search_time_cnt > 300) { 
                 
-                // 限幅与碰壁反弹 (基于相对基准角)
-                if (flight_target.target_yaw > base_search_yaw + MAX_YAW_DEV) {
-                    flight_target.target_yaw = base_search_yaw + MAX_YAW_DEV; 
-                    search_dir = -1.0f; 
-                } else if (flight_target.target_yaw < base_search_yaw - MAX_YAW_DEV) {
-                    flight_target.target_yaw = base_search_yaw - MAX_YAW_DEV; 
-                    search_dir = 1.0f;  
+                // 【核心修改】：加入边缘停留等待逻辑
+                if (is_pausing) {
+                    // 1. 如果处于停留状态，锁死 target_yaw，让飞机机体有时间转到位
+                    edge_pause_cnt += real_dt_ang;
+                    
+                    if (edge_pause_cnt > WAIT_TIME) { // 停留  (你可以根据实际情况调大或调小)
+                        is_pausing = 0;         // 停留结束
+                        search_dir = -search_dir; // 反转方向，开始往回扫
+                    }
+                } 
+                else {
+                    // 2. 正常执行扫描旋转
+                    flight_target.target_yaw += search_dir * search_yaw_rate * (real_dt_ang / 1000.0f);
+                    
+                    // 3. 碰壁检测：一旦达到边界，立即触发停留状态，而不是马上反转
+                    if (flight_target.target_yaw > base_search_yaw + MAX_YAW_DEV) {
+                        flight_target.target_yaw = base_search_yaw + MAX_YAW_DEV; 
+                        is_pausing = 1;     // 触发停留
+                        edge_pause_cnt = 0; // 重置停留计时
+                    } else if (flight_target.target_yaw < base_search_yaw - MAX_YAW_DEV) {
+                        flight_target.target_yaw = base_search_yaw - MAX_YAW_DEV; 
+                        is_pausing = 1;     // 触发停留
+                        edge_pause_cnt = 0; // 重置停留计时
+                    }
                 }
             }
         }
 
-        // 保存状态并下发姿态
         last_locked_lights = locked_lights; 
         Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
 
     } 
     // ================== 完全丢失目标逻辑 ==================
     else {
-        // 重置PID防积分饱和
         comp_row = IMG_CENTER_Y;
         comp_col = IMG_CENTER_X;
         Nonline_PID_Reset(&pid_image_x);
         Nonline_PID_Reset(&pid_image_y);
+        Nonline_PID_Reset(&pid_image_yaw); 
         
-        // 将 Roll 和 Pitch 强制归零，防止偏角失控漂移
         Set_Target_Attitude(0, 0, flight_target.target_yaw);
         
         // 清理所有扫描与防抖状态
         search_time_cnt = 0;    
         last_locked_lights = 0; 
-        is_over_turning = 0; // 打断多转
+        is_pausing = 0;         // 【新增】清理停留状态
+        edge_pause_cnt = 0;
     }                                                                                                                                                        
 }
 
@@ -519,6 +522,58 @@ void Fly_Param_Update_Visual(uint8_t ch, float val) {
             pid_g_roll.kd = val;
             pid_g_pitch.kd = val;
             pid_g_yaw.kd = val * 0.5f;
+            break;
+        case 8:
+            if(0.5 <= val && val < 1.5){
+                wireless_uart_send_string("land\r\n");
+                flight_target.cur_state = pre_landing; 
+            }else if(val >=1.5 && val <=2.5){
+                wireless_uart_send_string("emergency stop\r\n");
+                Flight_Lock();
+            }else if(val <= 0.5 && val >= -0.5){
+                if (imu_data.is_calibrated) {
+                    Flight_Unlock();
+                } else {
+                    flight_target.is_armed = 2; 
+                }
+                flight_target.cur_state = normal;
+                start_up_scale = 0;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+
+void Fly_Param_Update_yaw(uint8_t ch, float val) {
+    switch (ch) {
+        case 1: // 视觉环 KP
+            pid_yaw.kp = val;
+            break;
+        case 2: // 视觉环 KI
+            pid_yaw.ki = val;
+            break;
+        case 3: // 视觉环 KD
+            pid_yaw.kp2 = val;
+            break;
+        case 4: // 视觉环 KP2
+            search_yaw_rate = val;
+            break;
+        case 5: // 角速度环 KP
+            // pid_g_roll.kp = val;
+            // pid_g_pitch.kp = val;
+            pid_g_yaw.kp = val;
+            break;
+        case 6: // 角速度环 KI
+            // pid_g_roll.ki = val;
+            // pid_g_pitch.ki = val;
+            pid_g_yaw.ki = val;
+            break;
+        case 7: // 角速度环 KD
+            // pid_g_roll.kd = val;
+            // pid_g_pitch.kd = val;
+            pid_g_yaw.kd = val;
             break;
         case 8:
             if(0.5 <= val && val < 1.5){

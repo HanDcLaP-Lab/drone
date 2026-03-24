@@ -8,7 +8,20 @@
 #define MAX_LIGHTS 20       // 最大识别灯光数量
 #define MAX_DOTS 10         // 最大记录的连通域数量
 #define THRESHOLD 130      //二值化阈值设置
-#define MIN_LIGHT_SIZE  12   //灯最小判定大小
+
+// =========================================================
+// [新增] 面积动态补偿参数 (解决边缘灯光变小的问题)
+// =========================================================
+// 1. 基础最小面积 (画面中心的灯必须大于这个面积才算有效)
+#define BASE_MIN_AREA 20.0f
+
+// 2. 门槛衰减系数：距离中心越远，允许的提取门槛越低
+// 假设屏幕角落距离中心的平方约为 12000，系数 0.0005 会让角落阈值降低 6个像素
+#define AREA_COMP_COEF 0.0005f
+
+// 3. 绝对下限：无论多靠边缘，都绝不接受小于该值的连通域，防止单像素噪点
+#define ABS_MIN_AREA 12.0f
+
 
 #define UART_DATA_LENGTH 8  // 数组数据长度
 #define M7_1_DATA_LENGTH 16
@@ -36,8 +49,10 @@
 #define CAR_BASE_MIN_RATIO      3.2f     // 中心基础下限：在中心时长宽比大于 3.0 即认为是小车
 #define CAR_RATIO_COMP_COEF     0.00006f  // 补偿系数：假设边缘距离平方约 12000，12000*0.0002=2.4。边缘门槛会提升到 3.0+2.4 = 5.4
 
+#define EDGE_SAFE_MARGIN_X 15.0f
+#define EDGE_SAFE_MARGIN_Y 0.0f
 
-#define K_Y 1.2f
+#define K_Y 1.11f
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---

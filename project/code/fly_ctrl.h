@@ -28,13 +28,18 @@
 
 #define VALID_MIN_NUM 300
 #define ACCEPT_ERROR 6.0f
-#define MIN_ERROR 3.0f
+#define MIN_ERROR 2.0f
 //扫描旋转
 #define SEARCH_YAW_RATE 0.0f  // 搜索角速度 (度/秒)
 #define MAX_YAW_DEV     90.0f  // 最大扫描范围 (度)
 #define ROTATE_TIME    500.0f   //在扫描检测到目标后继续转的时间
 #define MIN_SEARCH_TIME  120.0f   //用于状态1到3的降噪时间
 #define MIN_SWITCH_TIME 1000.0f  //无人机累计没有识别到目标开始旋转的时间，单位：ms
+#define WAIT_TIME   1000.0f  //在边缘等待的时间
+// ================= 新增：摄像头物理偏心补偿 =================
+    // 摄像头位于 IMU 后方 2cm，因此 X 轴补偿为 -2.0f
+    #define CAM_OFFSET_X   0.0f  
+    #define CAM_OFFSET_Y   0.0f  // 假设左右居中无偏移
 //视觉传输
 extern float comp_row;
 extern float comp_col;
@@ -102,4 +107,5 @@ void Flight_Hover_Control_Task(void);
 // [code/fly_ctrl.h] 在 "函数声明" 区域添加
 void Fly_Param_Update(uint8_t ch, float val);
 void Fly_Param_Update_Visual(uint8_t ch, float val);
+void Fly_Param_Update_yaw(uint8_t ch, float val) ;
 #endif
