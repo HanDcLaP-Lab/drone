@@ -60,7 +60,7 @@ void Flight_Control_Init(void) {
     Nonline_PID_Init(&pid_pitch, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
     Nonline_PID_Init(&pid_yaw, 1.5f, 0.33f, 0.0f, 0.0228f, 6, 35, 40.0f);
 
-    Nonline_PID_Init(&pid_image_yaw, 0.00f, 0.00f, 0.0f, 0.0f, 0, 0.0f, 4.0f);
+    Nonline_PID_Init(&pid_image_yaw, 1.0f, 0.00f, 0.0f, 0.0f, 0, 60.0f, 4.0f);
     // 角速度环g
     PID_Init(&pid_g_roll, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     PID_Init(&pid_g_pitch, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
@@ -354,17 +354,43 @@ void Flight_Hover_Control_Task(void) {
         // ========================================================
 
         // 逻辑A：当锁定了双目标（看到信标）
+        // 逻辑A：当锁定了双目标（看到信标）
         if (locked_lights == 3) {
             
-            float target_px_x = share_data_from_1[7]; 
-            float yaw_error = target_px_x - IMG_CENTER_X; 
+            // 【核心修改】：读取经过物理校正和姿态逆解算的地面坐标 (单位：厘米)
+            // share_data_from_1[5] 是 target_ground_pos.x (前方距离)
+            // share_data_from_1[6] 是 target_ground_pos.y (右方距离)
+            // 减去摄像头的物理安装偏移量，得到信标相对于飞机实际重心的坐标
+            float target_pos_x = share_data_from_1[5] - CAM_OFFSET_X; 
+            float target_pos_y = share_data_from_1[6] - CAM_OFFSET_Y; 
             
-            float yaw_pid_out = Nonline_PID_Calculate(&pid_image_yaw, yaw_error, real_dt_ang / 1000.0f);
-            flight_target.target_yaw += yaw_pid_out;
+            // 计算目标距离飞机重心的绝对物理直线距离 (厘米)
+            float distance = sqrtf(target_pos_x * target_pos_x + target_pos_y * target_pos_y);
+            
+            // 【修改】：物理死区判断 
+            // 这里的死区单位变成了“厘米”，例如设定为 20.0f (即允许信标在机身 20cm 半径内自由活动而不转机头)
+            if (distance < TARGET_ACC_DISTANCE) {
+                // 处于物理死区内：停止偏航追踪，重置 PID 积分
+                Nonline_PID_Reset(&pid_image_yaw); 
+            } else {
+                // 【真实角度解算】：
+                // 在经过 image_process.c 校正后的物理坐标系中，X 是正前方，Y 是正右方。
+                // 刚好符合标准极坐标和无人机航向系的定义！
+                // atan2f(Y, X) 算出的角度，向右为正，向左为负，完美匹配飞控的 Yaw 逻辑。
+                float yaw_error = atan2f(target_pos_y, target_pos_x) * 180.0f / 3.14159265f;
+                
+                if(yaw_error > 90) yaw_error -= 180;
+                if(yaw_error < -90) yaw_error += 180;
+                if(fabs(yaw_error) < YAW_MIN_ERROR) yaw_error = 0;
 
+                // 将解算出的真实角度误差送入 PID
+                float yaw_pid_out = Nonline_PID_Calculate(&pid_image_yaw, yaw_error, real_dt_ang / 1000.0f) * real_dt_ang / 1000.0f;
+                
+                flight_target.target_yaw += yaw_pid_out;
+            }
+
+            // 无论转不转，都实时更新扫描基准角，且清理防抖计时器
             base_search_yaw = flight_target.target_yaw; 
-            
-            // 只要看见信标，彻底打断所有的扫描和停留状态
             search_time_cnt = 0; 
             is_pausing = 0;      
         }

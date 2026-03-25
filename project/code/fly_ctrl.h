@@ -36,6 +36,9 @@
 #define MIN_SEARCH_TIME  120.0f   //用于状态1到3的降噪时间
 #define MIN_SWITCH_TIME 1000.0f  //无人机累计没有识别到目标开始旋转的时间，单位：ms
 #define WAIT_TIME   1000.0f  //在边缘等待的时间
+
+#define TARGET_ACC_DISTANCE 100.0f
+#define YAW_MIN_ERROR  10.0f
 // ================= 新增：摄像头物理偏心补偿 =================
     // 摄像头位于 IMU 后方 2cm，因此 X 轴补偿为 -2.0f
     #define CAM_OFFSET_X   0.0f  

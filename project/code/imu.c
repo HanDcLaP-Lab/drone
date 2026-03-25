@@ -7,7 +7,7 @@ IMU_Data_t imu_data = {0};
 // 内部算法变量
 static float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f; // 四元数
 static float exInt = 0.0f, eyInt = 0.0f, ezInt = 0.0f;   // 积分误差
-
+static float prev_raw_yaw = 0.0f;
 // 陀螺仪校准相关
 static double offset_gx = 0, offset_gy = 0, offset_gz = 0;
 static double sum_gx = 0, sum_gy = 0, sum_gz = 0;
@@ -299,6 +299,8 @@ void IMU_Update_Loop(void) {
             imu_data.is_calibrated = 1;
             imu_data.z = 0.0f;
             imu_data.vz = 0.0f; // 校准完成，速度清零
+            imu_data.yaw = 0.0f;
+            prev_raw_yaw = 0.0f;
         }
         return; 
     }
@@ -341,7 +343,25 @@ void IMU_Update_Loop(void) {
     imu_data.roll  -= IMU_MOUNT_ADJUST_ROLL;
     imu_data.pitch -= IMU_MOUNT_ADJUST_PITCH;
     
-    imu_data.yaw = atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
+    // 【修改】：使用增量法实现 Yaw 的连续累加
+    // 1. 算出现有四元数对应的标准欧拉角 (-180 到 180)
+    float raw_yaw = atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
+    
+    // 2. 计算这一帧与上一帧的差值
+    float delta_yaw = raw_yaw - prev_raw_yaw;
+    
+    // 3. 处理 180 度和 -180 度处的跳变边界 (保证拿到的永远是转过的真实物理小角度)
+    if (delta_yaw > 180.0f) {
+        delta_yaw -= 360.0f;
+    } else if (delta_yaw < -180.0f) {
+        delta_yaw += 360.0f;
+    }
+    
+    // 4. 将真实的转动差值累加到全局的连续 Yaw 变量中
+    imu_data.yaw += delta_yaw;
+    
+    // 5. 更新历史值供下一帧使用
+    prev_raw_yaw = raw_yaw;
 
     Navigation_Update(map_ax, map_ay, map_az);
 }
