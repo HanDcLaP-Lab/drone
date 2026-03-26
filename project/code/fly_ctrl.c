@@ -353,78 +353,85 @@ void Flight_Hover_Control_Task(void) {
         float target_roll_val  = target_body_accel_y;
         // ========================================================
 
-        // 逻辑A：当锁定了双目标（看到信标）
+       // 逻辑A：当锁定了双目标（看到信标）
         // 逻辑A：当锁定了双目标（看到信标）
         if (locked_lights == 3) {
             
-            // 【核心修改】：读取经过物理校正和姿态逆解算的地面坐标 (单位：厘米)
-            // share_data_from_1[5] 是 target_ground_pos.x (前方距离)
-            // share_data_from_1[6] 是 target_ground_pos.y (右方距离)
-            // 减去摄像头的物理安装偏移量，得到信标相对于飞机实际重心的坐标
             float target_pos_x = share_data_from_1[5] - CAM_OFFSET_X; 
             float target_pos_y = share_data_from_1[6] - CAM_OFFSET_Y; 
             
-            // 计算目标距离飞机重心的绝对物理直线距离 (厘米)
             float distance = sqrtf(target_pos_x * target_pos_x + target_pos_y * target_pos_y);
             
-            // 【修改】：物理死区判断 
-            // 这里的死区单位变成了“厘米”，例如设定为 20.0f (即允许信标在机身 20cm 半径内自由活动而不转机头)
-            if (distance < TARGET_ACC_DISTANCE) {
-                // 处于物理死区内：停止偏航追踪，重置 PID 积分
-                Nonline_PID_Reset(&pid_image_yaw); 
-            } else {
-                // 【真实角度解算】：
-                // 在经过 image_process.c 校正后的物理坐标系中，X 是正前方，Y 是正右方。
-                // 刚好符合标准极坐标和无人机航向系的定义！
-                // atan2f(Y, X) 算出的角度，向右为正，向左为负，完美匹配飞控的 Yaw 逻辑。
-                float yaw_error = atan2f(target_pos_y, target_pos_x) * 180.0f / 3.14159265f;
+            // 当距离超出物理死区时才进行角度跟踪
+            if (distance >= TARGET_ACC_DISTANCE) {
                 
+                // 1. 算出目标相对于机头的相对夹角
+                float yaw_error = - atan2f(target_pos_x, target_pos_y) * 180.0f / 3.14159265f;
+                
+                // 2. 依然保留极其优秀的“机尾就近对准”逻辑
                 if(yaw_error > 90) yaw_error -= 180;
                 if(yaw_error < -90) yaw_error += 180;
-                if(fabs(yaw_error) < YAW_MIN_ERROR) yaw_error = 0;
-
-                // 将解算出的真实角度误差送入 PID
-                float yaw_pid_out = Nonline_PID_Calculate(&pid_image_yaw, yaw_error, real_dt_ang / 1000.0f) * real_dt_ang / 1000.0f;
                 
-                flight_target.target_yaw += yaw_pid_out;
+                // 3. 角度死区判定：如果偏角大于 10 度，才更新目标航向
+                if(fabs(yaw_error) >= YAW_MIN_ERROR) {
+                    
+                    // 【核心修改：几何直接赋值法】
+                    // 目标绝对航向 = 当前实际航向 + 相对误差角
+                    flight_target.target_yaw = imu_data.yaw + yaw_error;
+                    
+                    // 4. 叠加全局硬限幅保护 (防止线缆缠绕或狂转)
+                    if (flight_target.target_yaw > TWO_MAX_YAW_DEV) {
+                        flight_target.target_yaw = TWO_MAX_YAW_DEV;
+                    } else if (flight_target.target_yaw < -TWO_MAX_YAW_DEV) {
+                        flight_target.target_yaw = -TWO_MAX_YAW_DEV;
+                    }
+                }
             }
+            // 如果 distance < TARGET_ACC_DISTANCE，啥也不做，死死稳住当前 target_yaw
 
-            // 无论转不转，都实时更新扫描基准角，且清理防抖计时器
+            // 实时更新扫描基准，清理扫描状态机
             base_search_yaw = flight_target.target_yaw; 
             search_time_cnt = 0; 
             is_pausing = 0;      
         }
 
         // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
+        // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
         if (locked_lights == 1 && imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
             
+            // （这行可以保留，虽然不用它做中心点了，但记录一下无妨）
+            if (last_locked_lights != 1) {
+                base_search_yaw = flight_target.target_yaw;
+            }
+
             search_time_cnt += real_dt_ang; 
             
             if (search_time_cnt > 300) { 
                 
-                // 【核心修改】：加入边缘停留等待逻辑
                 if (is_pausing) {
-                    // 1. 如果处于停留状态，锁死 target_yaw，让飞机机体有时间转到位
                     edge_pause_cnt += real_dt_ang;
-                    
-                    if (edge_pause_cnt > WAIT_TIME) { // 停留  (你可以根据实际情况调大或调小)
-                        is_pausing = 0;         // 停留结束
-                        search_dir = -search_dir; // 反转方向，开始往回扫
+                    if (edge_pause_cnt > WAIT_TIME) {
+                        is_pausing = 0;         
+                        search_dir = -search_dir; 
                     }
                 } 
                 else {
-                    // 2. 正常执行扫描旋转
                     flight_target.target_yaw += search_dir * search_yaw_rate * (real_dt_ang / 1000.0f);
                     
-                    // 3. 碰壁检测：一旦达到边界，立即触发停留状态，而不是马上反转
-                    if (flight_target.target_yaw > base_search_yaw + MAX_YAW_DEV) {
-                        flight_target.target_yaw = base_search_yaw + MAX_YAW_DEV; 
+                    // 【核心修改】：彻底抛弃动态范围压缩，采用全局全景固定的绝对扫描边界
+                    // 这保证了只要丢了信标，飞机必定会把前方的半圆形 (-90 到 90) 毫无死角地刮一遍
+                    float current_upper_bound = 90.0f;
+                    float current_lower_bound = -90.0f;
+                    
+                    // 碰壁检测 
+                    if (flight_target.target_yaw > current_upper_bound) {
+                        flight_target.target_yaw = current_upper_bound; 
                         is_pausing = 1;     // 触发停留
-                        edge_pause_cnt = 0; // 重置停留计时
-                    } else if (flight_target.target_yaw < base_search_yaw - MAX_YAW_DEV) {
-                        flight_target.target_yaw = base_search_yaw - MAX_YAW_DEV; 
+                        edge_pause_cnt = 0; 
+                    } else if (flight_target.target_yaw < current_lower_bound) {
+                        flight_target.target_yaw = current_lower_bound; 
                         is_pausing = 1;     // 触发停留
-                        edge_pause_cnt = 0; // 重置停留计时
+                        edge_pause_cnt = 0; 
                     }
                 }
             }
