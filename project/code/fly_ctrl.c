@@ -60,11 +60,11 @@ void Flight_Control_Init(void) {
     Nonline_PID_Init(&pid_pitch, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
     Nonline_PID_Init(&pid_yaw, 1.5f, 0.33f, 0.0f, 0.0228f, 6, 35, 40.0f);
 
-    Nonline_PID_Init(&pid_image_yaw, 1.0f, 0.00f, 0.0f, 0.0f, 0, 60.0f, 4.0f);
+    //Nonline_PID_Init(&pid_image_yaw, 1.0f, 0.00f, 0.0f, 0.0f, 0, 60.0f, 4.0f);
     // 角速度环g
     PID_Init(&pid_g_roll, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     PID_Init(&pid_g_pitch, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
-    PID_Init(&pid_g_yaw, 1.36f, 0.42f, 0.011f, 100, 3500, 40.0f);
+    PID_Init(&pid_g_yaw, 1.36f, 0.7f, 0.011f, 100, 3500, 40.0f);
     // 视觉部分
     Nonline_PID_Init(&pid_image_x, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 15, 4.0f);
     Nonline_PID_Init(&pid_image_y, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 15, 4.0f);
@@ -322,6 +322,7 @@ void Flight_Hover_Control_Task(void) {
     static uint32_t search_time_cnt = 0;   
     static float search_dir = 1.0f;        
     static float base_search_yaw = 0.0f;   
+    static uint8_t has_seen_beacon = 0;
     
     // 【新增】：边缘停留相关的状态变量
     static uint8_t is_pausing = 0;         // 是否正在边缘停留
@@ -356,7 +357,7 @@ void Flight_Hover_Control_Task(void) {
        // 逻辑A：当锁定了双目标（看到信标）
         // 逻辑A：当锁定了双目标（看到信标）
         if (locked_lights == 3) {
-            
+            has_seen_beacon = 1;
             float target_pos_x = share_data_from_1[5] - CAM_OFFSET_X; 
             float target_pos_y = share_data_from_1[6] - CAM_OFFSET_Y; 
             
@@ -397,7 +398,7 @@ void Flight_Hover_Control_Task(void) {
 
         // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
         // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
-        if (locked_lights == 1 && imu_data.z > 0.85 * TARGET_HEIGHT_CM) {
+        if (locked_lights == 1 && has_seen_beacon == 1) {
             
             // （这行可以保留，虽然不用它做中心点了，但记录一下无妨）
             if (last_locked_lights != 1) {
@@ -456,6 +457,7 @@ void Flight_Hover_Control_Task(void) {
         last_locked_lights = 0; 
         is_pausing = 0;         // 【新增】清理停留状态
         edge_pause_cnt = 0;
+        has_seen_beacon = 0;
     }                                                                                                                                                        
 }
 
@@ -468,40 +470,43 @@ void Fly_Param_Update(uint8_t ch, float val) {
         case 1: // 角度环 KP
             pid_roll.kp = val;
             pid_pitch.kp = val;
-            pid_yaw.kp = val * 0.5f; // Yaw 参数为 Roll 的 0.5 倍
+            //pid_yaw.kp = val * 0.5f; // Yaw 参数为 Roll 的 0.5 倍
             break;
             
         case 2: // 角度环 KI
             pid_roll.ki = val;
             pid_pitch.ki = val;
-            pid_yaw.ki = val * 0.5f;
+            //pid_yaw.ki = val * 0.5f;
             break;
             
         case 3: // 角速度环 KP
-            pid_g_roll.kp = val;
-            pid_g_pitch.kp = val;
-            pid_g_yaw.kp = val * 0.5f;
+            pid_roll.kd = val;
+            pid_pitch.kd = val;
+            //pid_g_yaw.kp = val * 0.5f;
             break;
 
         // === 第二组：角速度环 (PID) ===
         // 包含 kp, kd (通常速度环 ki 给 0 或很小，这里只调 kp, kd)
         case 4: // 角速度环 KI
-            pid_g_roll.ki = val;
-            pid_g_pitch.ki = val;
-            pid_g_yaw.ki = val * 0.5f;
+            // pid_g_roll.ki = val;
+            // pid_g_pitch.ki = val;
+            //pid_g_yaw.ki = val * 0.5f;
+            search_yaw_rate = val;
             break;
             
         case 5: // 角速度环 KD
-            pid_g_roll.kd = val;
-            pid_g_pitch.kd = val;
-            pid_g_yaw.kd = val * 0.5f;
+            pid_g_roll.kp = val;
+            pid_g_pitch.kp = val;
+            //pid_g_yaw.kd = val * 0.5f;
             break;
         
         case 6:
-            flight_target.target_roll = val;
+            pid_g_roll.ki = val;
+            pid_g_pitch.ki = val;
             break;
         case 7:
-            flight_target.target_pitch = val;
+            pid_g_roll.kd = val;
+            pid_g_pitch.kd = val;
             break;
         case 8:
             if(val == 1){
@@ -594,18 +599,18 @@ void Fly_Param_Update_yaw(uint8_t ch, float val) {
             search_yaw_rate = val;
             break;
         case 5: // 角速度环 KP
-            // pid_g_roll.kp = val;
-            // pid_g_pitch.kp = val;
+            pid_g_roll.kp = val;
+            pid_g_pitch.kp = val;
             pid_g_yaw.kp = val;
             break;
         case 6: // 角速度环 KI
-            // pid_g_roll.ki = val;
-            // pid_g_pitch.ki = val;
+            pid_g_roll.ki = val;
+            pid_g_pitch.ki = val;
             pid_g_yaw.ki = val;
             break;
         case 7: // 角速度环 KD
-            // pid_g_roll.kd = val;
-            // pid_g_pitch.kd = val;
+            pid_g_roll.kd = val;
+            pid_g_pitch.kd = val;
             pid_g_yaw.kd = val;
             break;
         case 8:
