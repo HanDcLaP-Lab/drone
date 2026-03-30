@@ -82,6 +82,7 @@ int main(void) {
         Kalman_Init(&K_ax, 0.001f, 0.1f, 0);
         Kalman_Init(&K_ay, 0.001f, 0.1f, 0);
         Kalman_Init(&K_az, 0.001f, 0.1f, 9.8f);
+        
 
         // 2. 初始化底层传感器与执行器
         imu_init();
@@ -116,7 +117,7 @@ int main(void) {
                 // 将参数应用到 PID (通道号 = 索引 + 1)
                 // seekfree_assistant_parameter[i] 是接收到的浮点数值
                 //Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]); 
-                Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]);
+                Fly_Param_Update_yaw(i + 1, seekfree_assistant_parameter[i]);
                 
                 // 可选：通过无线串口回传确认，告诉上位机收到并更新了
                 // wireless_uart_send_string("Param Updated\r\n");

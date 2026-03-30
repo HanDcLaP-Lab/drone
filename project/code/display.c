@@ -72,9 +72,9 @@ void display_motor_output_display()
     ips200_show_float(160,16*16 , pid_image_x.kp2, 4 , 2);
     
     ips200_show_string(0,16*17,"x:");
-    ips200_show_float(40,16*17, share_data_from_1[3], 4, 2);
+    ips200_show_float(40,16*17, share_data_from_1[9], 4, 2);
     ips200_show_string(120,16*17,"y:");
-    ips200_show_float(160,16*17, share_data_from_1[4], 4, 2);
+    ips200_show_float(160,16*17, share_data_from_1[12], 4, 2);
 }
 
 void display_image_display(void){

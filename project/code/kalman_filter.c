@@ -3,6 +3,8 @@
 #include "zf_common_headfile.h"
 
 KalmanFilter1 K_w_ax,K_w_ay,K_groll,K_gpitch,K_gyaw,K_ax,K_ay,K_az; // 卡尔曼定义
+KalmanFilter1 K_car_x, K_car_y;
+KalmanFilter1 K_target_x, K_target_y;
 void Kalman_Init(KalmanFilter1* kf, float q, float r, float initial_value) {
     kf->q = q;
     kf->r = r;

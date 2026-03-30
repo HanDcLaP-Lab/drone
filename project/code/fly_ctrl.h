@@ -12,7 +12,7 @@
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 100.0f  // 目标高度
 #define LAND_HEIGHT 10.0f       // 着陆高度
-#define HOVER_THROTTLE 3800    // 基础悬停油门 
+#define HOVER_THROTTLE 4100    // 基础悬停油门 
 #define MAX_PWM 5800
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 6.0f  // 最大倾角限制 (度) 
@@ -28,7 +28,7 @@
 
 #define VALID_MIN_NUM 300
 #define ACCEPT_ERROR 6.0f
-#define MIN_ERROR 2.0f
+#define MIN_ERROR 0.0f
 //扫描旋转
 #define SEARCH_YAW_RATE 0.0f  // 搜索角速度 (度/秒)
 #define MAX_YAW_DEV     90.0f  // 最大扫描范围 (度)
@@ -91,7 +91,7 @@ extern Flight_Target_t flight_target;
 extern Motor_Output_t motor_out;
 extern float debug_earth_err_x;
 extern float debug_earth_err_y;
-
+extern float o_out_yaw;
 // =================== 函数声明 ===================
 void Flight_Control_Init(void);
 void Flight_Control_Angle(void);

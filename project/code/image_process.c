@@ -122,6 +122,7 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg) {
     const double k = 0.5; 
     extern volatile float share_data_from_1[]; 
+    static float k_car_ground_pos_x,k_car_ground_pos_y = 0;
     
     // 提前计算本帧统一的正余弦，避免目标循环中重复计算耗时
     double p_rad = pitch_deg * M_PI / 180.0;
@@ -135,16 +136,19 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         Vector3D ray_car = pixelTo3DRay((double)cam_down.car_center_x, (double)cam_down.car_center_y);
         Vector3D body_car = cameraToBody(&ray_car, sinp, cosp, sinr, cosr);
         GroundPoint raw_car = projectToGround(body_car, height);
+
+        k_car_ground_pos_x = Kalman_Update(&K_car_x, raw_car.x);
+        k_car_ground_pos_y = Kalman_Update(&K_car_y, raw_car.y);
         
         car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
         car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
 
         share_data_from_1[7] = ray_car.x;
         share_data_from_1[8] = ray_car.y;
-        share_data_from_1[9] = ray_car.z;
+        share_data_from_1[9] = k_car_ground_pos_x;
         share_data_from_1[10] = body_car.x;
         share_data_from_1[11] = body_car.y;
-        share_data_from_1[12] = body_car.z;
+        share_data_from_1[12] = k_car_ground_pos_y;
     }
     // 注意：若未识别到，保持上一帧位置
 

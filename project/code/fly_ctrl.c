@@ -8,7 +8,7 @@ float comp_row = 0;
 float debug_earth_err_x = 0;
 float debug_earth_err_y = 0;
 float search_yaw_rate = SEARCH_YAW_RATE;
-
+float o_out_yaw = 0;
 // 定义 PID 对象
 PID_t pid_height_vel;
 PID_t pid_height_pos;
@@ -64,10 +64,10 @@ void Flight_Control_Init(void) {
     // 角速度环g
     PID_Init(&pid_g_roll, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
     PID_Init(&pid_g_pitch, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
-    PID_Init(&pid_g_yaw, 1.36f, 0.7f, 0.011f, 100, 3500, 40.0f);
+    PID_Init(&pid_g_yaw, 4.54f, 1.32f, 0.002f, 100, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 15, 4.0f);
-    Nonline_PID_Init(&pid_image_y, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 15, 4.0f);
+    Nonline_PID_Init(&pid_image_x, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_y, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 6.0 , 10.0f);
 }
 
 void Flight_Unlock(void) {
@@ -197,7 +197,9 @@ static void Flight_Control_Rate(float *out_roll, float *out_pitch, float *out_ya
 
     // Yaw PID
     float yaw_err = flight_target.target_g_yaw - imu_data.gyaw;
+   
     *out_yaw = PID_Calculate(&pid_g_yaw, yaw_err, CTRL_DT_CTLOOP);
+    o_out_yaw = *out_yaw;
 }
 
 /**
@@ -302,8 +304,8 @@ void motor_pwm_init() {
 
 void Flight_Hover_Control_Task(void) {
     // 1. 获取目标中心坐标与锁定状态
-    float car_pos_x = share_data_from_1[3];
-    float car_pos_y = share_data_from_1[4];
+    float car_pos_x = share_data_from_1[9];
+    float car_pos_y = share_data_from_1[12];
     uint8_t locked_lights = (uint8_t)share_data_from_1[14];    
     if (locked_lights == 1 || locked_lights == 3) {
         car_pos_x = car_pos_x - CAM_OFFSET_X;
@@ -599,18 +601,12 @@ void Fly_Param_Update_yaw(uint8_t ch, float val) {
             search_yaw_rate = val;
             break;
         case 5: // 角速度环 KP
-            pid_g_roll.kp = val;
-            pid_g_pitch.kp = val;
             pid_g_yaw.kp = val;
             break;
         case 6: // 角速度环 KI
-            pid_g_roll.ki = val;
-            pid_g_pitch.ki = val;
             pid_g_yaw.ki = val;
             break;
         case 7: // 角速度环 KD
-            pid_g_roll.kd = val;
-            pid_g_pitch.kd = val;
             pid_g_yaw.kd = val;
             break;
         case 8:

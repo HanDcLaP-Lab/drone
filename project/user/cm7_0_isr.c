@@ -40,6 +40,7 @@
 
 uint32_t pit0_cnt = 0;
 uint16_t target = 0;
+uint16_t has_stopped = 0;
 // **************************** PIT中断函数 (1ms一次) ****************************
 void pit0_ch0_isr() {
     pit_isr_flag_clear(PIT_CH0);
@@ -48,6 +49,13 @@ void pit0_ch0_isr() {
     IMU_Update_Loop();
 
     Flight_Control_Loop(); 
+    if(fabs(imu_data.pitch) > 21.0 || fabs(imu_data.roll) > 21.0){
+        if(has_stopped == 0){
+            wireless_uart_send_string("emergency stop\r\n");
+        }
+        Flight_Lock();
+        has_stopped = 1;
+    }
     
     motor_pwm_set();
 
@@ -57,6 +65,7 @@ void pit0_ch1_isr()
 {
     pit_isr_flag_clear(PIT_CH1);
 
+    
     // 悬停控制任务
     //Flight_Hover_Control_Task(); 
     
@@ -66,6 +75,16 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
 
+    wireless_uart_send_float(imu_data.yaw);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_yaw);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.gyaw);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_g_yaw);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(o_out_yaw);
+    wireless_uart_send_string("\n");
     //wireless_uart_output_status();
     //wireless_uart_output_pid();
     //wireless_uart_output_imu();
