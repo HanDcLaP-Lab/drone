@@ -11,6 +11,7 @@ typedef struct {
 
 // 全局变量，存储计算后的地面坐标 (供 M7_1_data_send 使用)
 extern GroundPoint car_ground_pos;
+extern GroundPoint k_car_ground_pos;
 extern GroundPoint target_ground_pos;
 
 // 计算地面坐标主函数

@@ -127,7 +127,7 @@ int main(void) {
         // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
         static uint32_t vision_timeout_cnt = 0; // [新增] 视觉失联看门狗计数器
-
+        static uint32_t print_cnt = 0; 
         if (share_data_from_1[15] != 0.0f)
         {
             vision_timeout_cnt = 0; // 成功收到数据，喂狗清零
@@ -143,6 +143,7 @@ int main(void) {
         {
             // 如果 1ms 内没收到数据，计数器累加
             vision_timeout_cnt++;
+            
             if (vision_timeout_cnt > 400) { // 没收到视觉数据
                 // 触发视觉失联保护：强行回平姿态，清理视觉 PID 积分，原地悬停防止乱飞
                 Nonline_PID_Reset(&pid_image_x);
@@ -156,7 +157,16 @@ int main(void) {
         // 2. 刷入 RAM 供 Core 1 读取
         M7_0_data_send(share_data_from_0);
         SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
-        
+        print_cnt++;
+        if(print_cnt == 100){
+        // wireless_uart_send_float(imu_data.yaw);
+        // wireless_uart_send_string(",");
+        // wireless_uart_send_float(share_data_from_1[9]);
+        // wireless_uart_send_string(",");
+        // wireless_uart_send_float(share_data_from_1[12]);
+        // wireless_uart_send_string("\n");
+        print_cnt = 0;
+        }
         system_delay_ms(1); // 稍微延时
     }
 }

@@ -12,8 +12,8 @@
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 120.0f  // 目标高度
 #define LAND_HEIGHT 10.0f       // 着陆高度
-#define HOVER_THROTTLE 4300    // 基础悬停油门 
-#define MAX_PWM 5800
+#define HOVER_THROTTLE 4350    // 基础悬停油门 
+#define MAX_PWM 6000
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 6.0f  // 最大倾角限制 (度) 
 #define CTRL_DT_CTLOOP 0.001  // 飞控控制周期
@@ -42,8 +42,8 @@
 #define YAW_MIN_ERROR  5.0f
 // ================= 新增：摄像头物理偏心补偿 =================
     // 摄像头位于 IMU 后方 2cm，因此 X 轴补偿为 -2.0f
-    #define CAM_OFFSET_X   0.0f  
-    #define CAM_OFFSET_Y   0.0f  // 假设左右居中无偏移
+    #define CAM_OFFSET_X   5.0f  
+    #define CAM_OFFSET_Y   -2.0f  // 假设左右居中无偏移
 //视觉传输
 extern float comp_row;
 extern float comp_col;
