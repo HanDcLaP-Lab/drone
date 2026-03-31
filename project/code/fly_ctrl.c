@@ -56,15 +56,15 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_height_pos, 0.5f, 0.15f, 0.0f, 30, 30, 40.0f);
     PID_Init(&pid_height_vel, 24.0f, 0.0f, 0.2f, 80, 1000, 40.0f);
     // 角度环a
-    Nonline_PID_Init(&pid_roll, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
-    Nonline_PID_Init(&pid_pitch, 4.5f, 0.8f, 0.0f, 0.05f, 20, 150, 40.0f);
+    Nonline_PID_Init(&pid_roll, 4.832f, 0.568f, 0.0f, 0.05f, 20, 150, 40.0f);
+    Nonline_PID_Init(&pid_pitch, 4.832f, 0.568f, 0.0f, 0.05f, 20, 150, 40.0f);
     Nonline_PID_Init(&pid_yaw, 1.5f, 0.33f, 0.0f, 0.0228f, 6, 35, 40.0f);
 
     //Nonline_PID_Init(&pid_image_yaw, 1.0f, 0.00f, 0.0f, 0.0f, 0, 60.0f, 4.0f);
     // 角速度环g
-    PID_Init(&pid_g_roll, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
-    PID_Init(&pid_g_pitch, 2.73f, 1.52f, 0.11f, 100, 3500, 40.0f);
-    PID_Init(&pid_g_yaw, 4.54f, 1.32f, 0.002f, 100, 3500, 40.0f);
+    PID_Init(&pid_g_roll, 2.984f, 1.538f, 0.13f, 100, 3500, 40.0f);
+    PID_Init(&pid_g_pitch, 2.984f, 1.538f, 0.13f, 100, 3500, 40.0f);
+    PID_Init(&pid_g_yaw, 4.54f, 1.32f, 0.00f, 100, 3500, 40.0f);
     // 视觉部分
     Nonline_PID_Init(&pid_image_x, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 6.0 , 10.0f);
     Nonline_PID_Init(&pid_image_y, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 6.0 , 10.0f);
@@ -482,8 +482,8 @@ void Fly_Param_Update(uint8_t ch, float val) {
             break;
             
         case 3: // 角速度环 KP
-            pid_roll.kd = val;
-            pid_pitch.kd = val;
+            pid_image_x.kp = val;
+            pid_image_y.kp = val;
             //pid_g_yaw.kp = val * 0.5f;
             break;
 
