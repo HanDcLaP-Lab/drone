@@ -38,12 +38,12 @@ static float Constrain_Float(float val, float min, float max) {
 }
 
 // 角度误差处理 (处理 -180 到 180 跳变)
-static float Get_Angle_Error(float target, float current) {
-    float error = target - current;
-    while (error > 180.0f) error -= 360.0f;
-    while (error < -180.0f) error += 360.0f;
-    return error;
-}
+// static float Get_Angle_Error(float target, float current) {
+//     float error = target - current;
+//     while (error > 180.0f) error -= 360.0f;
+//     while (error < -180.0f) error += 360.0f;
+//     return error;
+// }
 
 // =================== 核心控制逻辑 ===================
 
