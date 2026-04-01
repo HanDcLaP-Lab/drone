@@ -9,6 +9,8 @@ float debug_earth_err_x = 0;
 float debug_earth_err_y = 0;
 float search_yaw_rate = SEARCH_YAW_RATE;
 float o_out_yaw = 0;
+float camera_offset_x = 0;
+float camera_offset_y = 0;
 // 定义 PID 对象
 PID_t pid_height_vel;
 PID_t pid_height_pos;
@@ -58,16 +60,18 @@ void Flight_Control_Init(void) {
     // 角度环a
     Nonline_PID_Init(&pid_roll, 9.079f, 0.568f, 0.0f, 0.05f, 20, 150, 40.0f);
     Nonline_PID_Init(&pid_pitch, 9.079f, 0.568f, 0.0f, 0.05f, 20, 150, 40.0f);
-    Nonline_PID_Init(&pid_yaw, 1.5f, 0.33f, 0.0f, 0.0228f, 6, 35, 40.0f);
+    Nonline_PID_Init(&pid_yaw, 1.5f, 0.33f, 0.0f, 0.0228f, 6, 45, 40.0f);
 
     //Nonline_PID_Init(&pid_image_yaw, 1.0f, 0.00f, 0.0f, 0.0f, 0, 60.0f, 4.0f);
     // 角速度环g
     PID_Init(&pid_g_roll, 2.777f, 1.538f, 0.135f, 100, 3500, 40.0f);
     PID_Init(&pid_g_pitch, 2.777f, 1.538f, 0.135f, 100, 3500, 40.0f);
-    PID_Init(&pid_g_yaw, 4.54f, 1.32f, 0.00f, 120, 3500, 40.0f);
+    PID_Init(&pid_g_yaw, 4.54f, 1.32f, 0.00f, 150, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 6.0 , 10.0f);
-    Nonline_PID_Init(&pid_image_y, 0.059f, 0.006f, 0.133f, 0.00f, 1000, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_x, 0.06f, 0.008f, 0.125f, 0.00f, 50, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_y, 0.06f, 0.008f, 0.125f, 0.00f, 50, 6.0 , 10.0f);
+    camera_offset_x = CAM_OFFSET_X;
+    camera_offset_y = CAM_OFFSET_Y;
 }
 
 void Flight_Unlock(void) {
@@ -155,7 +159,7 @@ void Flight_Control_Angle(void) {
     // 1. 计算误差 (绝对系)
     float roll_error = flight_target.target_roll - imu_data.roll;
     float pitch_error = flight_target.target_pitch - imu_data.pitch;
-    float yaw_error = Get_Angle_Error(flight_target.target_yaw, imu_data.yaw);
+    float yaw_error = flight_target.target_yaw - imu_data.yaw;
 
     // 2. PID 计算 (输出即视为机体角速度目标，基于小角度假设)
     flight_target.target_g_roll = Nonline_PID_Calculate(&pid_roll, roll_error, CTRL_DT_CTLOOP);
@@ -308,8 +312,8 @@ void Flight_Hover_Control_Task(void) {
     float car_pos_y = share_data_from_1[12];
     uint8_t locked_lights = (uint8_t)share_data_from_1[14];    
     if (locked_lights == 1 || locked_lights == 3) {
-        car_pos_x = car_pos_x - CAM_OFFSET_X;
-        car_pos_y = car_pos_y - CAM_OFFSET_Y;
+        car_pos_x = car_pos_x - camera_offset_x;
+        car_pos_y = car_pos_y - camera_offset_y;
     } 
 
     // 2. 计算真实时间差 dt (防除零)
@@ -321,20 +325,26 @@ void Flight_Hover_Control_Task(void) {
 
     // 3. 静态防抖与状态存储变量
     static uint8_t last_locked_lights = 0; 
-    static uint32_t search_time_cnt = 0;   
-    static float search_dir = 1.0f;        
-    static float base_search_yaw = 0.0f;   
+    //static uint32_t search_time_cnt = 0;   
+    //static float search_dir = 1.0f;        
+    //static float base_search_yaw = 0.0f;   
     static uint8_t has_seen_beacon = 0;
     
+    static int8_t search_seq_idx = 0;      // 搜索序列索引 (0~3)
+    static uint32_t search_wait_timer = 0; // 停留计时器 (ms)
+    static uint8_t is_turning = 0;         // 是否正在转向中 (0:停留计时, 1:转向中)
+    const float search_yaw_seq[8] = {45.0 , 90.0f , 45.0 , 0.0f, -45.0 , -90.0f, -45.0 , 0.0f}; // 目标跳变序列
     // 【新增】：边缘停留相关的状态变量
-    static uint8_t is_pausing = 0;         // 是否正在边缘停留
-    static uint32_t edge_pause_cnt = 0;    // 边缘停留计时器 (ms)
+    //static uint8_t is_pausing = 0;         // 是否正在边缘停留
+   // static uint32_t edge_pause_cnt = 0;    // 边缘停留计时器 (ms)
 
     // ================== 有目标视野逻辑 ==================
     if (locked_lights == 1 || locked_lights == 3) {
         
         // ================= 位置环解耦 =================
-        float yaw_rad = imu_data.yaw * 3.14159265f / 180.0f;
+        //float yaw_rad = imu_data.yaw * 3.14159265f / 180.0f;
+        float snapshot_yaw = share_data_from_1[8];
+        float yaw_rad = snapshot_yaw * 3.14159265f / 180.0f;
         float cos_yaw = cosf(yaw_rad);
         float sin_yaw = sinf(yaw_rad);
 
@@ -360,8 +370,8 @@ void Flight_Hover_Control_Task(void) {
         // 逻辑A：当锁定了双目标（看到信标）
         if (locked_lights == 3) {
             has_seen_beacon = 1;
-            float target_pos_x = share_data_from_1[5] - CAM_OFFSET_X; 
-            float target_pos_y = share_data_from_1[6] - CAM_OFFSET_Y; 
+            float target_pos_x = share_data_from_1[5] - camera_offset_x; 
+            float target_pos_y = share_data_from_1[6] - camera_offset_y; 
             
             float distance = sqrtf(target_pos_x * target_pos_x + target_pos_y * target_pos_y);
             
@@ -393,49 +403,44 @@ void Flight_Hover_Control_Task(void) {
             // 如果 distance < TARGET_ACC_DISTANCE，啥也不做，死死稳住当前 target_yaw
 
             // 实时更新扫描基准，清理扫描状态机
-            base_search_yaw = flight_target.target_yaw; 
-            search_time_cnt = 0; 
-            is_pausing = 0;      
+            //base_search_yaw = flight_target.target_yaw; 
+            //search_time_cnt = 0; 
+            //is_pausing = 0;      
+            search_seq_idx = 0;       // 重置方向序列
+            search_wait_timer = 0;    // 重置3秒计时器
+            is_turning = 0;           // 重置为停留状态（一旦丢灯，将首先在原地等3秒）
         }
 
-        // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
-        // 逻辑B：仅看到单目标（只看到小车），执行扫描寻找信标
+        // 逻辑B：仅看到单目标（小车），执行 3秒定角停留 + 定向跳变扫描
         if (locked_lights == 1 && has_seen_beacon == 1) {
             
-            // （这行可以保留，虽然不用它做中心点了，但记录一下无妨）
-            if (last_locked_lights != 1) {
-                base_search_yaw = flight_target.target_yaw;
-            }
-
-            search_time_cnt += real_dt_ang; 
-            
-            if (search_time_cnt > 300) { 
+            if (!is_turning) {
+                // 状态1：已到达目标航向（或刚刚丢灯），正在原地停留计时
+                search_wait_timer += real_dt_ang;
                 
-                if (is_pausing) {
-                    edge_pause_cnt += real_dt_ang;
-                    if (edge_pause_cnt > WAIT_TIME) {
-                        is_pausing = 0;         
-                        search_dir = -search_dir; 
-                    }
-                } 
-                else {
-                    flight_target.target_yaw += search_dir * search_yaw_rate * (real_dt_ang / 1000.0f);
+                if (search_wait_timer >= 3000) { // 连续只有小车满 3 秒 (3000ms)
                     
-                    // 【核心修改】：彻底抛弃动态范围压缩，采用全局全景固定的绝对扫描边界
-                    // 这保证了只要丢了信标，飞机必定会把前方的半圆形 (-90 到 90) 毫无死角地刮一遍
-                    float current_upper_bound = 90.0f;
-                    float current_lower_bound = -90.0f;
+                    // 1. 获取序列中下一个目标航向
+                    flight_target.target_yaw = search_yaw_seq[search_seq_idx];
                     
-                    // 碰壁检测 
-                    if (flight_target.target_yaw > current_upper_bound) {
-                        flight_target.target_yaw = current_upper_bound; 
-                        is_pausing = 1;     // 触发停留
-                        edge_pause_cnt = 0; 
-                    } else if (flight_target.target_yaw < current_lower_bound) {
-                        flight_target.target_yaw = current_lower_bound; 
-                        is_pausing = 1;     // 触发停留
-                        edge_pause_cnt = 0; 
+                    // 2. 序列索引步进，0-1-2-3 循环
+                    search_seq_idx++;
+                    if (search_seq_idx > 7) {
+                        search_seq_idx = 0;
                     }
+                    
+                    // 3. 切换为转向状态
+                    is_turning = 1; 
+                }
+            } else {
+                // 状态2：正在向新的 target_yaw 旋转
+                // 计算当前航向与目标的真实偏差 (内部自带处理 +-180度跳变)
+                float yaw_diff = flight_target.target_yaw - imu_data.yaw;
+                
+                // 当偏角小于 5 度，认为机头已经成功对准了目标角度
+                if (fabsf(yaw_diff) < 5.0f) {
+                    is_turning = 0;          // 停止转向，切换为停留状态
+                    search_wait_timer = 0;   // 重新开始 3 秒计时
                 }
             }
         }
@@ -445,6 +450,7 @@ void Flight_Hover_Control_Task(void) {
 
     } 
     // ================== 完全丢失目标逻辑 ==================
+   // ================== 完全丢失目标逻辑 ==================
     else {
         comp_row = IMG_CENTER_Y;
         comp_col = IMG_CENTER_X;
@@ -455,12 +461,14 @@ void Flight_Hover_Control_Task(void) {
         Set_Target_Attitude(0, 0, flight_target.target_yaw);
         
         // 清理所有扫描与防抖状态
-        search_time_cnt = 0;    
         last_locked_lights = 0; 
-        is_pausing = 0;         // 【新增】清理停留状态
-        edge_pause_cnt = 0;
         has_seen_beacon = 0;
-    }                                                                                                                                                        
+        
+        // 【清理新的状态机变量】
+        search_seq_idx = 0;
+        search_wait_timer = 0;
+        is_turning = 0;
+    }                                                                                                                                                                                         
 }
 
 // 无线调参映射函数
@@ -482,9 +490,12 @@ void Fly_Param_Update(uint8_t ch, float val) {
             break;
             
         case 3: // 角速度环 KP
+            // pid_image_x.kp = val;
+            // pid_image_y.kp = val;
+            //pid_g_yaw.kp = val * 0.5f;
+            //camera_offset_x = val;
             pid_image_x.kp = val;
             pid_image_y.kp = val;
-            //pid_g_yaw.kp = val * 0.5f;
             break;
 
         // === 第二组：角速度环 (PID) ===
@@ -493,18 +504,22 @@ void Fly_Param_Update(uint8_t ch, float val) {
             // pid_g_roll.ki = val;
             // pid_g_pitch.ki = val;
             //pid_g_yaw.ki = val * 0.5f;
-            search_yaw_rate = val;
+            //search_yaw_rate = val;
+            //camera_offset_y = val;pid_image_x.kp = val;
+            pid_image_x.kd = val;
+            pid_image_y.kd = val;
             break;
             
         case 5: // 角速度环 KD
-            pid_g_roll.kp = val;
-            pid_g_pitch.kp = val;
+            // pid_g_roll.kp = val;
+            // pid_g_pitch.kp = val;
+
             //pid_g_yaw.kd = val * 0.5f;
+            pid_yaw.kp = val;
             break;
         
         case 6:
-            pid_g_roll.ki = val;
-            pid_g_pitch.ki = val;
+            pid_yaw.ki = val;
             break;
         case 7:
             pid_g_roll.kd = val;
@@ -601,13 +616,16 @@ void Fly_Param_Update_yaw(uint8_t ch, float val) {
             search_yaw_rate = val;
             break;
         case 5: // 角速度环 KP
-            pid_g_yaw.kp = val;
+            pid_image_x.kp = val;
+            pid_image_y.kp = val;
             break;
         case 6: // 角速度环 KI
-            pid_g_yaw.ki = val;
+            pid_image_x.ki = val;
+            pid_image_y.ki = val;
             break;
         case 7: // 角速度环 KD
-            pid_g_yaw.kd = val;
+            pid_image_x.kd = val;
+            pid_image_y.kd = val;
             break;
         case 8:
             if(0.5 <= val && val < 1.5){

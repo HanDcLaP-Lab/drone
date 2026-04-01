@@ -67,8 +67,8 @@ int main(void)
 
     camera_init();
     // 建议初始参数：Q=0.5 (信任小车本身的连续运动), R=10.0 (视觉噪点较大)
-    Kalman_Init(&K_car_x, 1.0f, 5.0f, 0.0f);
-    Kalman_Init(&K_car_y, 1.0f, 5.0f, 0.0f);
+    Kalman_Init(&K_car_x, 1.0f, 0.5f, 0.0f);
+    Kalman_Init(&K_car_y, 1.0f, 0.5f, 0.0f);
     // Kalman_Init(&K_target_x, 0.1f, 15.0f, 0.0f); // 信标通常是静止的，Q可以给小一点，R给大一点让它更死区
     // Kalman_Init(&K_target_y, 0.1f, 15.0f, 0.0f);
     system_delay_ms(2000);
@@ -128,7 +128,7 @@ void M7_1_data_send(volatile float* data_out) {
     if (cam_down.car_valid) locked_count++;
     if (cam_down.target_valid) locked_count += 2;
     data_out[14] = (float)locked_count;
-    
+    data_out[8] = share_data_from_0[2];
     if (!cam_down.car_valid) {
         data_out[2] = 0; // 丢失时仅将面积清零通知飞控即可
     }

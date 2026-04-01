@@ -121,7 +121,7 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
 // ==========================================
 // 输出: car_ground_pos.x (前), car_ground_pos.y (右) 单位: cm (取决于height单位)
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg) {
-    const double k = 0.5; 
+    const double k = 0.8; 
     extern volatile float share_data_from_1[]; 
     //static float k_car_ground_pos_x,k_car_ground_pos_y = 0;
     
@@ -144,10 +144,10 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
         car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
 
-        share_data_from_1[7] = ray_car.x;
-        share_data_from_1[8] = ray_car.y;
+        share_data_from_1[7] = raw_car.x;
+        //share_data_from_1[8] = ray_car.y;
         share_data_from_1[9] = k_car_ground_pos.x;
-        share_data_from_1[10] = body_car.x;
+        share_data_from_1[10] = k_car_ground_pos.x;
         share_data_from_1[11] = body_car.y;
         share_data_from_1[12] = k_car_ground_pos.y;
     }

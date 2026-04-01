@@ -30,7 +30,7 @@
 #define ACCEPT_ERROR 6.0f
 #define MIN_ERROR 0.0f
 //扫描旋转
-#define SEARCH_YAW_RATE 0.0f  // 搜索角速度 (度/秒)
+#define SEARCH_YAW_RATE 15.0f  // 搜索角速度 (度/秒)
 #define MAX_YAW_DEV     90.0f  // 最大扫描范围 (度)
 #define TWO_MAX_YAW_DEV   120.0f  //计算出的最大偏航角
 #define ROTATE_TIME    500.0f   //在扫描检测到目标后继续转的时间
@@ -42,8 +42,8 @@
 #define YAW_MIN_ERROR  5.0f
 // ================= 新增：摄像头物理偏心补偿 =================
     // 摄像头位于 IMU 后方 2cm，因此 X 轴补偿为 -2.0f
-    #define CAM_OFFSET_X   5.0f  
-    #define CAM_OFFSET_Y   -2.0f  // 假设左右居中无偏移
+    #define CAM_OFFSET_X   6.97f  
+    #define CAM_OFFSET_Y   -2.76f  // 假设左右居中无偏移
 //视觉传输
 extern float comp_row;
 extern float comp_col;

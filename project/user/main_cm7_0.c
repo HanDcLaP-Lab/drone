@@ -95,7 +95,7 @@ int main(void) {
 
         // 3. 启动周期中断
         pit_ms_init(PIT_CH1, 20); //图像
-        pit_ms_init(PIT_CH2, 400); //打印
+        pit_ms_init(PIT_CH2, 50); //打印
         system_delay_ms(1000);     // 等待传感器数据稳定
 
         pit_ms_init(PIT_CH0, 1);   // 开启核心飞控中断 (1ms)
