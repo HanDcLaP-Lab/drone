@@ -131,6 +131,11 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
     double sinp = sin(p_rad), cosp = cos(p_rad);
     double sinr = sin(r_rad), cosr = cos(r_rad);
 
+    // [修正1] 获取拍照瞬间的偏航角，用于将相对坐标转为绝对坐标进行卡尔曼滤波
+    extern volatile float share_data_from_0[];
+    double snapshot_yaw_rad = share_data_from_0[2] * M_PI / 180.0;
+    double sinyaw = sin(snapshot_yaw_rad), cosyaw = cos(snapshot_yaw_rad);
+
     // ================== 小车 ==================
     if (cam_down.car_valid) { 
         // pixelTo3DRay 参数顺序为 (u, v) 即 (Col, Row)
@@ -138,9 +143,18 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         Vector3D body_car = cameraToBody(&ray_car, sinp, cosp, sinr, cosr);
         GroundPoint raw_car = projectToGround(body_car, height);
 
-        k_car_ground_pos.x = Kalman_Update(&K_car_x, raw_car.x);
-        k_car_ground_pos.y = Kalman_Update(&K_car_y, raw_car.y);
+        // [核心修复] 将相对于机头的 XY 旋转为大地绝对坐标 North/East 后再滤波
+        // 防止机体旋转时相对坐标波动导致卡尔曼滤波产生巨大滞后
+        double raw_earth_x = raw_car.x * cosyaw - raw_car.y * sinyaw;
+        double raw_earth_y = raw_car.x * sinyaw + raw_car.y * cosyaw;
+
+        double k_earth_x = Kalman_Update(&K_car_x, raw_earth_x);
+        double k_earth_y = Kalman_Update(&K_car_y, raw_earth_y);
         
+        // 滤波结束后再转回相对于机头的坐标，保持与飞控代码的接口兼容
+        k_car_ground_pos.x = k_earth_x * cosyaw + k_earth_y * sinyaw;
+        k_car_ground_pos.y = -k_earth_x * sinyaw + k_earth_y * cosyaw;
+
         car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
         car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
 

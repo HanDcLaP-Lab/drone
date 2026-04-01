@@ -68,8 +68,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_pitch, 2.777f, 1.538f, 0.135f, 100, 3500, 40.0f);
     PID_Init(&pid_g_yaw, 4.54f, 1.32f, 0.00f, 150, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.06f, 0.008f, 0.125f, 0.00f, 50, 6.0 , 10.0f);
-    Nonline_PID_Init(&pid_image_y, 0.06f, 0.008f, 0.125f, 0.00f, 50, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_x, 0.081f, 0.014f, 0.074f, 0.00f, 50, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_y, 0.081f, 0.014f, 0.074f, 0.00f, 50, 6.0 , 10.0f);
     camera_offset_x = CAM_OFFSET_X;
     camera_offset_y = CAM_OFFSET_Y;
 }
@@ -359,8 +359,13 @@ void Flight_Hover_Control_Task(void) {
         float target_earth_accel_x = Nonline_PID_Calculate(&pid_image_x, earth_err_x, real_dt_ang / 1000.0f);
         float target_earth_accel_y = Nonline_PID_Calculate(&pid_image_y, earth_err_y, real_dt_ang / 1000.0f);
 
-        float target_body_accel_x = target_earth_accel_x * cos_yaw + target_earth_accel_y * sin_yaw;
-        float target_body_accel_y = -target_earth_accel_x * sin_yaw + target_earth_accel_y * cos_yaw;
+        // [修正3] 将地球系算出的推力转回当前机体去执行时，必须使用此时此刻的即时偏航角
+        float cur_yaw_rad = imu_data.yaw * 3.14159265f / 180.0f;
+        float cur_cos_yaw = cosf(cur_yaw_rad);
+        float cur_sin_yaw = sinf(cur_yaw_rad);
+
+        float target_body_accel_x = target_earth_accel_x * cur_cos_yaw + target_earth_accel_y * cur_sin_yaw;
+        float target_body_accel_y = -target_earth_accel_x * cur_sin_yaw + target_earth_accel_y * cur_cos_yaw;
 
         float target_pitch_val = -target_body_accel_x;
         float target_roll_val  = target_body_accel_y;
@@ -506,8 +511,8 @@ void Fly_Param_Update(uint8_t ch, float val) {
             //pid_g_yaw.ki = val * 0.5f;
             //search_yaw_rate = val;
             //camera_offset_y = val;pid_image_x.kp = val;
-            pid_image_x.kd = val;
-            pid_image_y.kd = val;
+            pid_image_x.ki = val;
+            pid_image_y.ki = val;
             break;
             
         case 5: // 角速度环 KD
@@ -515,11 +520,13 @@ void Fly_Param_Update(uint8_t ch, float val) {
             // pid_g_pitch.kp = val;
 
             //pid_g_yaw.kd = val * 0.5f;
-            pid_yaw.kp = val;
+            //pid_yaw.kp = val;
+            pid_image_x.kd = val;
+            pid_image_y.kd = val;
             break;
         
         case 6:
-            pid_yaw.ki = val;
+            pid_yaw.kp = val;
             break;
         case 7:
             pid_g_roll.kd = val;
