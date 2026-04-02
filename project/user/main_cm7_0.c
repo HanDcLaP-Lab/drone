@@ -194,6 +194,8 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入 data_o
 
 void Float_Buffer_write(float* buffer, volatile float* share_data_from_1)
 {
+    for(int i = 0; i < 8; i++) buffer[i] = 0.0f; //清空传递数组
+
     buffer[0] = share_data_from_1[3];
     buffer[1] = share_data_from_1[4];
     buffer[2] = share_data_from_1[5];
