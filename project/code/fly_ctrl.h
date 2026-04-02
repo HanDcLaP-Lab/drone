@@ -40,10 +40,13 @@
 
 #define TARGET_ACC_DISTANCE 100.0f
 #define YAW_MIN_ERROR  5.0f
+
+#define ROLL_OFFSET 240.0f
+#define PITCH_OFFSET -38.5
 // ================= 新增：摄像头物理偏心补偿 =================
     // 摄像头位于 IMU 后方 2cm，因此 X 轴补偿为 -2.0f
-    #define CAM_OFFSET_X   6.97f  
-    #define CAM_OFFSET_Y   -2.76f  // 假设左右居中无偏移
+    #define CAM_OFFSET_X   10.0f  
+    #define CAM_OFFSET_Y   -4.0f  // 假设左右居中无偏移
 //视觉传输
 extern float comp_row;
 extern float comp_col;

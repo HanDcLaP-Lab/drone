@@ -215,16 +215,16 @@ static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pi
 
     // 混控算法 (X型四旋翼)
     // LF (左前, CW): Base + Pitch + Roll - Yaw
-    motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll + out_yaw) * start_up_scale);
+    motor_out.lf = (int16_t)((base_throttle + out_pitch + PITCH_OFFSET + out_roll + out_yaw + ROLL_OFFSET) * start_up_scale);
 
     // RF (右前, CCW): Base + Pitch - Roll + Yaw
-    motor_out.rf = (int16_t)((base_throttle + out_pitch - out_roll - out_yaw) * start_up_scale);
+    motor_out.rf = (int16_t)((base_throttle + out_pitch + PITCH_OFFSET - out_roll - out_yaw - ROLL_OFFSET) * start_up_scale);
 
     // LB (左后, CCW): Base - Pitch + Roll + Yaw
-    motor_out.lb = (int16_t)((base_throttle - out_pitch + out_roll - out_yaw) * start_up_scale);
+    motor_out.lb = (int16_t)((base_throttle - out_pitch - PITCH_OFFSET + out_roll - out_yaw + ROLL_OFFSET) * start_up_scale);
 
     // RB (右后, CW): Base - Pitch - Roll - Yaw
-    motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll + out_yaw) * start_up_scale);
+    motor_out.rb = (int16_t)((base_throttle - out_pitch - PITCH_OFFSET - out_roll + out_yaw - ROLL_OFFSET) * start_up_scale);
 
     // 输出限幅
     int16_t* motors = (int16_t*)&motor_out.rf;
@@ -333,7 +333,7 @@ void Flight_Hover_Control_Task(void) {
     static int8_t search_seq_idx = 0;      // 搜索序列索引 (0~3)
     static uint32_t search_wait_timer = 0; // 停留计时器 (ms)
     static uint8_t is_turning = 0;         // 是否正在转向中 (0:停留计时, 1:转向中)
-    const float search_yaw_seq[8] = {45.0 , 90.0f , 45.0 , 0.0f, -45.0 , -90.0f, -45.0 , 0.0f}; // 目标跳变序列
+    const float search_yaw_seq[8] = {40.0 , 80.0f , 40.0 , 0.0f, -40.0 , -80.0f, -40.0 , 0.0f}; // 目标跳变序列
     // 【新增】：边缘停留相关的状态变量
     //static uint8_t is_pausing = 0;         // 是否正在边缘停留
    // static uint32_t edge_pause_cnt = 0;    // 边缘停留计时器 (ms)
@@ -374,7 +374,7 @@ void Flight_Hover_Control_Task(void) {
        // 逻辑A：当锁定了双目标（看到信标）
         // 逻辑A：当锁定了双目标（看到信标）
         if (locked_lights == 3) {
-            has_seen_beacon = 1;
+            if(imu_data.z > 0.8 * TARGET_HEIGHT_CM)has_seen_beacon = 1;
             float target_pos_x = share_data_from_1[5] - camera_offset_x; 
             float target_pos_y = share_data_from_1[6] - camera_offset_y; 
             
@@ -423,7 +423,7 @@ void Flight_Hover_Control_Task(void) {
                 // 状态1：已到达目标航向（或刚刚丢灯），正在原地停留计时
                 search_wait_timer += real_dt_ang;
                 
-                if (search_wait_timer >= 3000) { // 连续只有小车满 3 秒 (3000ms)
+                if (search_wait_timer >= 4000) { // 连续只有小车满 3 秒 (3000ms)
                     
                     // 1. 获取序列中下一个目标航向
                     flight_target.target_yaw = search_yaw_seq[search_seq_idx];
@@ -443,7 +443,7 @@ void Flight_Hover_Control_Task(void) {
                 float yaw_diff = flight_target.target_yaw - imu_data.yaw;
                 
                 // 当偏角小于 5 度，认为机头已经成功对准了目标角度
-                if (fabsf(yaw_diff) < 5.0f) {
+                if (fabsf(yaw_diff) < 3.0f) {
                     is_turning = 0;          // 停止转向，切换为停留状态
                     search_wait_timer = 0;   // 重新开始 3 秒计时
                 }

@@ -109,26 +109,30 @@ void wireless_uart_output_yaw(void){
 }
 
 void wireless_uart_output_motor(void){
-    wireless_uart_send_float(o_out_yaw);
-    wireless_uart_send_string(",");
-    wireless_uart_send_float(flight_target.target_yaw);
-    wireless_uart_send_string(",");
-    // wireless_uart_send_float(motor_out.lb);
+    // wireless_uart_send_float(o_out_yaw);
     // wireless_uart_send_string(",");
-    // wireless_uart_send_float(motor_out.rb);
+    // wireless_uart_send_float(flight_target.target_yaw);
     // wireless_uart_send_string(",");
-    extern float share_data_from_1[];
-    wireless_uart_send_float(share_data_from_1[9]);
+    wireless_uart_send_float(motor_out.lf);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(share_data_from_1[12]);     
+    wireless_uart_send_float(motor_out.rf);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(imu_data.roll);
+    wireless_uart_send_float(motor_out.lb);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(imu_data.pitch);     
+    wireless_uart_send_float(motor_out.rb);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(imu_data.yaw);
-    wireless_uart_send_string(",");
-    wireless_uart_send_float(imu_data.z);
+    //extern float share_data_from_1[];
+    // wireless_uart_send_float(share_data_from_1[9]);
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_float(share_data_from_1[12]);     
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_float(imu_data.roll);
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_float(imu_data.pitch);     
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_float(imu_data.yaw);
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_float(imu_data.z);
     wireless_uart_send_string("\n");
 }
 
