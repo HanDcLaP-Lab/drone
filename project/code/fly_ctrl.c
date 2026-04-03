@@ -58,8 +58,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_height_pos, 0.58f, 0.15f, 0.0f, 30, 30, 40.0f);
     PID_Init(&pid_height_vel, 24.0f, 0.0f, 0.2f, 80, 1000, 40.0f);
     // 角度环a
-    Nonline_PID_Init(&pid_roll, 9.079f, 0.568f, 0.0f, 0.05f, 20, 150, 40.0f);
-    Nonline_PID_Init(&pid_pitch, 9.079f, 0.568f, 0.0f, 0.05f, 20, 150, 40.0f);
+    Nonline_PID_Init(&pid_roll, 9.079f, 0.365f, 0.0f, 0.05f, 20, 150, 40.0f);
+    Nonline_PID_Init(&pid_pitch, 9.079f, 0.365f, 0.0f, 0.05f, 20, 150, 40.0f);
     Nonline_PID_Init(&pid_yaw, 1.5f, 0.33f, 0.0f, 0.0228f, 6, 45, 40.0f);
 
     //Nonline_PID_Init(&pid_image_yaw, 1.0f, 0.00f, 0.0f, 0.0f, 0, 60.0f, 4.0f);
@@ -68,8 +68,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_pitch, 2.777f, 1.538f, 0.135f, 100, 3500, 40.0f);
     PID_Init(&pid_g_yaw, 4.54f, 1.32f, 0.00f, 150, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.07f, 0.011f, 0.0771f, 0.00f, 50, 6.0 , 10.0f);
-    Nonline_PID_Init(&pid_image_y, 0.07f, 0.011f, 0.0771f, 0.00f, 50, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_x, 0.079f, 0.0107f, 0.0772f, 0.00f, 50, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_y, 0.079f, 0.0107f, 0.0772f, 0.00f, 50, 6.0 , 10.0f);
     camera_offset_x = CAM_OFFSET_X;
     camera_offset_y = CAM_OFFSET_Y;
 }

@@ -358,7 +358,7 @@ static void sort_lights(CameraObject *cam) {
 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (i == car_idx) continue; 
-        
+        if(cam->dot_num[i] < 20) continue;
         // 计算目标质心到画面中心的像素距离平方 
         float dx = cam->centers[i][1] - img_cx;
         float dy = cam->centers[i][0] - img_cy;
