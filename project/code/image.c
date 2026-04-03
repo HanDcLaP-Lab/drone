@@ -38,7 +38,41 @@ void camera_init(void) {
 }
 
 // --- 3. 内部辅助函数 ---
+/**
+ * @brief 简单估计目标在地面上的相对物理坐标（忽略机体倾角）
+ * * @param u        目标在图像中的 Col (X像素)
+ * @param v        目标在图像中的 Row (Y像素)
+ * @param height   当前无人机的飞行高度 (cm)
+ * @param out_x    输出: 目标相对于无人机正下方的【前向】距离 (cm)
+ * @param out_y    输出: 目标相对于无人机正下方的【右向】距离 (cm)
+ * @param out_dist 输出: 目标离机头正下方的直线总距离 (cm)
+ */
+void Estimate_Distance_Simple(float u, float v, float height, float *out_x, float *out_y, float *out_dist) {
+    
+    // 1. 计算以画面中心为原点的像素坐标
+    // 图像 Row(v) 往下是正，但在物理世界前方是正，所以 Y 轴取反
+    float px = u - CAM_CX;          // X轴：向右为正
+    float py = -(v - CAM_CY);       // Y轴：向前为正
 
+    // 2. 计算像素距离平方 (rho2) 和像素距离 (rho)
+    float rho2 = px * px + py * py;
+    float rho = sqrtf(rho2);
+
+    // 3. 计算畸变多项式 Z 轴 (相当于该像素点处的“虚拟焦距”)
+    // 公式: z = A0 + A2*rho^2 + A3*rho^3 + A4*rho^4
+    float z_poly = CAM_A0 + CAM_A2 * rho2 + CAM_A3 * rho2 * rho + CAM_A4 * rho2 * rho2;
+
+    // 4. 相似三角形投影计算比例系数 scale
+    // 物理距离与像素距离的比例 = 当前高度 / 虚拟焦距
+    float scale = height / z_poly;
+
+    // 5. 算出具体的物理坐标和距离
+    *out_x = py * scale;                     // 前向距离 (cm)
+    *out_y = px * scale;                     // 右向距离 (cm)
+    if (out_dist != NULL) {
+        *out_dist = rho * scale;             // 目标到正下方的直线距离 (cm)
+    }
+}
 // 用于保存单一连通域统计特征的结构体
 typedef struct {
     uint32_t sum_r;
@@ -171,10 +205,10 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
                 float dist_sq = dx * dx + dy * dy;
                 
                 // 动态计算该位置的最小面积门槛 (越靠边缘要求越低)
-                float dynamic_min_area = BASE_MIN_AREA - (dist_sq * AREA_COMP_COEF);
-                if (dynamic_min_area < ABS_MIN_AREA) {
-                    dynamic_min_area = ABS_MIN_AREA; // 兜底绝对下限
-                }
+                float dynamic_min_area = 1;
+                // if (dynamic_min_area < ABS_MIN_AREA) {
+                //     dynamic_min_area = ABS_MIN_AREA; // 兜底绝对下限
+                // }
 
                 // 立即判断该连通域并解算 (使用动态面积门槛)
                 if (stats.dot_num > dynamic_min_area) {
@@ -228,7 +262,40 @@ static void sort_lights(CameraObject *cam) {
 
     if (cam->light_number == 0) return;
 
+    // =======================================================
+    // 1. 获取当前无人机高度 (用于简单距离估算)
+    // =======================================================
+    extern volatile float share_data_from_0[];
+    float current_height = share_data_from_0[3];
+    if (current_height < 30.0f) current_height = 30.0f; // 防除零及贴地保护
 
+    float phys_dist_sq[MAX_LIGHTS] = {0};
+    uint8_t is_valid_blob[MAX_LIGHTS] = {0};
+
+    // =======================================================
+    // 2. 计算简单物理距离，并做【面积动态过滤】
+    // =======================================================
+    for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+        float out_x, out_y, out_dist;
+        
+        // 调用简单估算接口
+        // 注意传参：centers[i][1] 是 Col(X), centers[i][0] 是 Row(Y)
+        Estimate_Distance_Simple(cam->centers[i][1], cam->centers[i][0], 
+                                 current_height, &out_x, &out_y, &out_dist);
+        
+        // 记录物理距离的平方 (单位：平方厘米)
+        phys_dist_sq[i] = out_dist * out_dist;
+
+        // 【核心修改】：使用物理距离计算动态面积下限！
+        if(out_dist > 150.0f) cam->dot_num[i] *= (out_dist / 100.0f);
+        float dynamic_min_area = BASE_MIN_AREA;
+        
+
+        // 只有面积在当前物理距离下达标的点，才允许进入后续竞选
+        if (cam->dot_num[i] >= dynamic_min_area) {
+            is_valid_blob[i] = 1;
+        }
+    }
     // =======================================================
     // [新增]：独立测试极值记录逻辑 (只记录画面中面积最大的灯，防噪点)
     // =======================================================

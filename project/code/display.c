@@ -165,8 +165,8 @@ void display_image_debug_display(void){
     ips200_show_float(130, 16*13, cam_down.debug_min_ratio, 3, 2);
 
     
-    ips200_show_string(0, 16*14, "LF:");
-    ips200_show_int(40, 16*14, (int)share_data_from_0[5], 4);
+    ips200_show_string(0, 16*14, "z:");
+    ips200_show_int(40, 16*14, (int)share_data_from_0[3], 4);
     ips200_show_string(80, 16*14, "RF:");
     ips200_show_int(120, 16*14, (int)share_data_from_0[6], 4);
     ips200_show_string(0, 16*15, "LB:");
