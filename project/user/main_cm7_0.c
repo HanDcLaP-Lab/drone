@@ -60,6 +60,7 @@ __root __no_init volatile float share_data_from_0[M7_1_DATA_LENGTH]; // Core 0 �
 #define LED1 (P19_0)
 #define UART_KEY (P19_2)
 int vis_cnt = 0;
+// int send_cnt = 0;
 int main(void) {
     clock_init(SYSTEM_CLOCK_250M);  // 时钟配置及系统初始化<务必保留>
     debug_init();                   // 调试串口信息初始化
@@ -137,7 +138,11 @@ int main(void) {
             SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
             
             Float_Buffer_write(float_buffer, share_data_from_1);
+            //send_cnt++;
+            //if(send_cnt == 10){
             Board_Comm_Send_Data(float_buffer);
+            //   send_cnt = 0;
+            //}
         }
         else 
         {
@@ -194,8 +199,8 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入 data_o
 
 void Float_Buffer_write(float* buffer, volatile float* share_data_from_1)
 {
-    buffer[0] = share_data_from_1[3];
-    buffer[1] = share_data_from_1[4];
+    buffer[0] = share_data_from_1[9];
+    buffer[1] = share_data_from_1[12];
     buffer[2] = share_data_from_1[5];
     buffer[3] = share_data_from_1[6];
     buffer[4] = imu_data.yaw;

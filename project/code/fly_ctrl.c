@@ -68,8 +68,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_pitch, 2.777f, 1.538f, 0.135f, 100, 3500, 40.0f);
     PID_Init(&pid_g_yaw, 4.54f, 1.32f, 0.00f, 150, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.081f, 0.014f, 0.074f, 0.00f, 50, 6.0 , 10.0f);
-    Nonline_PID_Init(&pid_image_y, 0.081f, 0.014f, 0.074f, 0.00f, 50, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_x, 0.07f, 0.011f, 0.0771f, 0.00f, 50, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_y, 0.07f, 0.011f, 0.0771f, 0.00f, 50, 6.0 , 10.0f);
     camera_offset_x = CAM_OFFSET_X;
     camera_offset_y = CAM_OFFSET_Y;
 }
@@ -333,7 +333,7 @@ void Flight_Hover_Control_Task(void) {
     static int8_t search_seq_idx = 0;      // 搜索序列索引 (0~3)
     static uint32_t search_wait_timer = 0; // 停留计时器 (ms)
     static uint8_t is_turning = 0;         // 是否正在转向中 (0:停留计时, 1:转向中)
-    const float search_yaw_seq[8] = {40.0 , 80.0f , 40.0 , 0.0f, -40.0 , -80.0f, -40.0 , 0.0f}; // 目标跳变序列
+    const float search_yaw_seq[8] = {35.0 , 70.0f , 35.0 , 0.0f, -35.0 , -70.0f, -35.0 , 0.0f}; // 目标跳变序列
     // 【新增】：边缘停留相关的状态变量
     //static uint8_t is_pausing = 0;         // 是否正在边缘停留
    // static uint32_t edge_pause_cnt = 0;    // 边缘停留计时器 (ms)
@@ -374,7 +374,7 @@ void Flight_Hover_Control_Task(void) {
        // 逻辑A：当锁定了双目标（看到信标）
         // 逻辑A：当锁定了双目标（看到信标）
         if (locked_lights == 3) {
-            if(imu_data.z > 0.8 * TARGET_HEIGHT_CM)has_seen_beacon = 1;
+            if(imu_data.z > 0.85 * TARGET_HEIGHT_CM)has_seen_beacon = 1;
             float target_pos_x = share_data_from_1[5] - camera_offset_x; 
             float target_pos_y = share_data_from_1[6] - camera_offset_y; 
             
@@ -385,7 +385,7 @@ void Flight_Hover_Control_Task(void) {
                 
                 // 1. 算出目标相对于机头的相对夹角
                 float yaw_error = - atan2f(target_pos_x, target_pos_y) * 180.0f / 3.14159265f;
-                
+                yaw_error += YAW_OFFSET;
                 // 2. 依然保留极其优秀的“机尾就近对准”逻辑
                 if(yaw_error > 90) yaw_error -= 180;
                 if(yaw_error < -90) yaw_error += 180;
@@ -423,7 +423,7 @@ void Flight_Hover_Control_Task(void) {
                 // 状态1：已到达目标航向（或刚刚丢灯），正在原地停留计时
                 search_wait_timer += real_dt_ang;
                 
-                if (search_wait_timer >= 4000) { // 连续只有小车满 3 秒 (3000ms)
+                if (search_wait_timer >= 5000) { // 连续只有小车满 3 秒 (3000ms)
                     
                     // 1. 获取序列中下一个目标航向
                     flight_target.target_yaw = search_yaw_seq[search_seq_idx];
