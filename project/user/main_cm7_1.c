@@ -108,8 +108,6 @@ int main(void)
                 frame_cnt = 0;
                 //printf("100");
             }
-            //UART
-            //uart_write_buffer(TEST_UART, (const uint8_t *)uart_data, sizeof(uart_data));
         }
     }
 }
@@ -123,7 +121,7 @@ void M7_1_data_send(volatile float* data_out) {
     data_out[4] = car_ground_pos.y;  
     data_out[5] = target_ground_pos.x;
     data_out[6] = target_ground_pos.y;
-    // 统计目前画面中实际成功锁定的目标数量 (0/1/2)，下发给小车防丢失
+    
     uint8_t locked_count = 0;
     if (cam_down.car_valid) locked_count++;
     if (cam_down.target_valid) locked_count += 2;

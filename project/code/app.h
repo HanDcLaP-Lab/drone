@@ -3,6 +3,8 @@
 
 #include "zf_common_headfile.h"
 
+#define M7_1_DATA_LENGTH 16
+
 // 定义无人机的最高层级运行模式
 typedef enum {
     DRONE_STATE_DEBUG = 0,      // 调试模式 (上电默认，电机不转或受限，可串口调参)

@@ -17,37 +17,22 @@
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 6.0f  // 最大倾角限制 (度) 
 #define CTRL_DT_CTLOOP 0.001  // 飞控控制周期
-#define CTRL_DT_CTANG 0.02   // 视觉控制周期
 
-// 视觉控制增益
-// 广角镜头单位角度对应的像素位移较小，过大的系数会导致过度补偿引起绕圈震荡
-#define ANGLE_COMP_COEF 1.47f  //位姿对像素的补偿
-
-#define IMG_CENTER_X (MT9V03X_W / 2.0f)
-#define IMG_CENTER_Y (MT9V03X_H / 2.0f)
-
-#define VALID_MIN_NUM 300
-#define ACCEPT_ERROR 6.0f
-#define MIN_ERROR 0.0f
+#define MIN_ERROR 0.0f  //飞机跟踪小车的死区设置
 //扫描旋转
 #define SEARCH_YAW_RATE 15.0f  // 搜索角速度 (度/秒)
-#define MAX_YAW_DEV     90.0f  // 最大扫描范围 (度)
 #define TWO_MAX_YAW_DEV   100.0f  //计算出的最大偏航角
-#define ROTATE_TIME    500.0f   //在扫描检测到目标后继续转的时间
-#define MIN_SEARCH_TIME  120.0f   //用于状态1到3的降噪时间
-#define MIN_SWITCH_TIME 1000.0f  //无人机累计没有识别到目标开始旋转的时间，单位：ms
-#define WAIT_TIME   1000.0f  //在边缘等待的时间
 
-#define YAW_OFFSET 6.0f
-#define TARGET_ACC_DISTANCE 100.0f
-#define YAW_MIN_ERROR  5.0f
+#define YAW_OFFSET 6.0f    //为了防止信标被线挡住，让无人机偏过的角度
+#define TARGET_ACC_DISTANCE 100.0f    //为了防止无人机与信标很近时yaw变化大，角度跟踪的最小距离
+#define YAW_MIN_ERROR  5.0f    //角度跟踪设置的小死区
 
-#define ROLL_OFFSET 240.0f
-#define PITCH_OFFSET -38.5
+#define ROLL_OFFSET 240.0f      //补偿重心偏移
+#define PITCH_OFFSET -38.5f      //补偿重心偏移
 // ================= 新增：摄像头物理偏心补偿 =================
     // 摄像头位于 IMU 后方 2cm，因此 X 轴补偿为 -2.0f
-    #define CAM_OFFSET_X   10.0f  
-    #define CAM_OFFSET_Y   -4.0f  // 假设左右居中无偏移
+#define CAM_OFFSET_X   10.0f  
+#define CAM_OFFSET_Y   -4.0f  // 假设左右居中无偏移
 //视觉传输
 extern float comp_row;
 extern float comp_col;

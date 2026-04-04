@@ -29,21 +29,13 @@ PID_t pid_g_yaw;
 extern volatile float share_data_from_1[];
 extern volatile float share_data_from_0[];
 static float start_up_scale = 0.0f;
-//float car_pos_sol1_0 = 0.0f,car_pos_sol1_1 = 0.0f;
+
 // =================== 内部辅助函数 ===================
 static float Constrain_Float(float val, float min, float max) {
     if (val > max) return max;
     if (val < min) return min;
     return val;
 }
-
-// 角度误差处理 (处理 -180 到 180 跳变)
-// static float Get_Angle_Error(float target, float current) {
-//     float error = target - current;
-//     while (error > 180.0f) error -= 360.0f;
-//     while (error < -180.0f) error += 360.0f;
-//     return error;
-// }
 
 // =================== 核心控制逻辑 ===================
 
@@ -250,7 +242,6 @@ void Flight_Control_Loop(void) {
         Flight_Lock();
         return;
     }
-    // 注意: is_armed == 2 (等待校准) 时也会继续执行，但 start_up_scale 为 0，电机不转，安全。
 
     // 5. 高度环控制 (计算基础油门)
     int16_t base_throttle = Flight_Control_Height();
@@ -291,20 +282,6 @@ void motor_pwm_init() {
     pwm_init(PWM_RF, 400, 4000);
     pwm_init(PWM_RB, 400, 4000);
 }
-
-// static void simple_image_process(float* car_row, float* car_col) {
-//         *car_row -= imu_data.pitch * ANGLE_COMP_COEF;
-//         *car_col -= imu_data.roll * ANGLE_COMP_COEF;
-// 
-//         float current_height = imu_data.z;
-//         if (current_height < 40.0f) current_height = 40.0f; 
-//         float height_gain = current_height / 100.0f;        
-// 
-//         *car_row = IMG_CENTER_Y + (*car_row - IMG_CENTER_Y) * height_gain;
-//         *car_col = IMG_CENTER_X + (*car_col - IMG_CENTER_X) * height_gain;
-// 
-// }
-
 
 void Flight_Hover_Control_Task(void) {
     // 1. 获取目标中心坐标与锁定状态

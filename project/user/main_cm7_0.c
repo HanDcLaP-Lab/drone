@@ -44,6 +44,15 @@
 
 // **************************** 代码区域 ****************************
 
+#define PIT_NUM0 (PIT_CH0)
+#define PIT_NUM1 (PIT_CH1)
+#define PIT_NUM2 (PIT_CH2)
+
+#define LED1 (P19_0)
+#define UART_KEY (P19_2)
+
+
+
 void M7_0_data_send(volatile float* data_out);
 void Float_Buffer_write(float* buffer, volatile float* share_data_from_1);
 float float_buffer[UART_DATA_LENGTH] = {0};
@@ -53,12 +62,7 @@ __root __no_init volatile float share_data_from_1[M7_1_DATA_LENGTH]; // Core 1 �
 #pragma location = 0x28001040  // 偏移64字节，确保与上面数组不在同一个Cache Line (32字节)
 __root __no_init volatile float share_data_from_0[M7_1_DATA_LENGTH]; // Core 0 写 -> Core 1 读 (IMU数据)
 
-#define PIT_NUM0 (PIT_CH0)
-#define PIT_NUM1 (PIT_CH1)
-#define PIT_NUM2 (PIT_CH2)
 
-#define LED1 (P19_0)
-#define UART_KEY (P19_2)
 int vis_cnt = 0;
 // int send_cnt = 0;
 int main(void) {

@@ -3,7 +3,8 @@
 
 #include "zf_common_headfile.h"
 
-
+#define IMG_CENTER_X (MT9V03X_W / 2.0f)
+#define IMG_CENTER_Y (MT9V03X_H / 2.0f)
 #define CAM_CX 94.0532845f
 #define CAM_CY 59.6200034f
 #define CAM_A0 75.0109988f
@@ -13,28 +14,13 @@
 // 宏定义
 #define STACK_SIZE 4096     // DFS 栈大小
 #define MAX_LIGHTS 20       // 最大识别灯光数量
-#define MAX_DOTS 10         // 最大记录的连通域数量
 #define THRESHOLD 130      //二值化阈值设置
 
 // =========================================================
 // [新增] 面积动态补偿参数 (解决边缘灯光变小的问题)
 // =========================================================
-// 1. 基础最小面积 (画面中心的灯必须大于这个面积才算有效)
+// 1. 最小面积 (灯必须大于这个面积才算有效)
 #define BASE_MIN_AREA 28.0f
-
-// 2. 门槛衰减系数：距离中心越远，允许的提取门槛越低
-// 假设屏幕角落距离中心的平方约为 12000，系数 0.0005 会让角落阈值降低 6个像素
-//#define AREA_COMP_COEF 0.0005f
-
-// 3. 绝对下限：无论多靠边缘，都绝不接受小于该值的连通域，防止单像素噪点
-//#define ABS_MIN_AREA 12.0f
-
-
-#define UART_DATA_LENGTH 8  // 数组数据长度
-#define M7_1_DATA_LENGTH 16
-
-#define ROI_DISTANCE 10.0f
-#define CAR_MIN_RATIO 4.5f  //小车最小有效长宽比
 
 // =========================================================
 // [新增] 信标 (圆形灯) 动态透视畸变补偿参数
@@ -50,8 +36,6 @@
 
 // 3. 绝对上限：就算偏离到屏幕最边缘，长宽比也不能超过这个值 (防止把真正的小车当成信标)
 #define TARGET_LIMIT_MAX_RATIO  5.0f
-
-
 
 #define CAR_BASE_MIN_RATIO      3.2f     // 中心基础下限：在中心时长宽比大于 3.0 即认为是小车
 #define CAR_RATIO_COMP_COEF     0.00006f  // 补偿系数：假设边缘距离平方约 12000，12000*0.0002=2.4。边缘门槛会提升到 3.0+2.4 = 5.4
@@ -79,9 +63,6 @@ typedef struct {
     float aspect_ratio[MAX_LIGHTS];
     uint8_t components_count;        
 
-    // ==========================================
-    // [新增] --- 追踪结果输出 (外部业务只读以下变量) ---
-    // ==========================================
     uint8_t car_valid;           // 是否锁定小车 (1:是, 0:否)
     float car_center_y;          // 小车 Row (Y)
     float car_center_x;          // 小车 Col (X)
