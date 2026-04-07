@@ -29,9 +29,7 @@ const double A4 = -0.0000003180;
 typedef struct { double x, y, z; } Vector3D;
 
 // 全局变量定义
-GroundPoint car_ground_pos = {0.0, 0.0};
-GroundPoint k_car_ground_pos = {0.0, 0.0};
-GroundPoint target_ground_pos = {0.0, 0.0};
+GroundPos pos = {0};
 
 // ==========================================
 // 2. 核心算法：像素坐标 -> 3D 空间射线 (指向地面)
@@ -119,51 +117,41 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
 // ==========================================
 // 5. 计算地面坐标主函数
 // ==========================================
-// 输出: car_ground_pos.x (前), car_ground_pos.y (右) 单位: cm (取决于height单位)
-void calculate_ground_positions(double height, double pitch_deg, double roll_deg) {
+// 输出: pos.car.x (前), pos.car.y (右) 单位: cm (取决于height单位)
+void calculate_ground_positions(double height, double pitch_deg, double roll_deg, double yaw_deg) {
     const double k = 0.8; 
-    extern volatile float share_data_from_1[]; 
-    //static float k_car_ground_pos_x,k_car_ground_pos_y = 0;
     
     // 提前计算本帧统一的正余弦，避免目标循环中重复计算耗时
     double p_rad = pitch_deg * M_PI / 180.0;
     double r_rad = roll_deg * M_PI / 180.0;
+    double y_rad = yaw_deg * M_PI / 180.0;
     double sinp = sin(p_rad), cosp = cos(p_rad);
     double sinr = sin(r_rad), cosr = cos(r_rad);
+    double siny = sin(y_rad), cosy = cos(y_rad);
 
-    // [修正1] 获取拍照瞬间的偏航角，用于将相对坐标转为绝对坐标进行卡尔曼滤波
-    extern volatile float share_data_from_0[];
-    double snapshot_yaw_rad = share_data_from_0[2] * M_PI / 180.0;
-    double sinyaw = sin(snapshot_yaw_rad), cosyaw = cos(snapshot_yaw_rad);
-
+    
     // ================== 小车 ==================
     if (cam_down.car_valid) { 
         // pixelTo3DRay 参数顺序为 (u, v) 即 (Col, Row)
         Vector3D ray_car = pixelTo3DRay((double)cam_down.car_center_x, (double)cam_down.car_center_y);
         Vector3D body_car = cameraToBody(&ray_car, sinp, cosp, sinr, cosr);
-        GroundPoint raw_car = projectToGround(body_car, height);
+        pos.raw_car = projectToGround(body_car, height);
 
-        // [核心修复] 将相对于机头的 XY 旋转为大地绝对坐标 North/East 后再滤波
+        // 将相对于机头的 XY 旋转为大地绝对坐标 North/East 后再滤波
         // 防止机体旋转时相对坐标波动导致卡尔曼滤波产生巨大滞后
-        double raw_earth_x = raw_car.x * cosyaw - raw_car.y * sinyaw;
-        double raw_earth_y = raw_car.x * sinyaw + raw_car.y * cosyaw;
+        double raw_earth_x = pos.raw_car.x * cosy - pos.raw_car.y * siny;
+        double raw_earth_y = pos.raw_car.x * siny + pos.raw_car.y * cosy;
 
         double k_earth_x = Kalman_Update(&K_car_x, raw_earth_x);
         double k_earth_y = Kalman_Update(&K_car_y, raw_earth_y);
         
         // 滤波结束后再转回相对于机头的坐标，保持与飞控代码的接口兼容
-        k_car_ground_pos.x = k_earth_x * cosyaw + k_earth_y * sinyaw;
-        k_car_ground_pos.y = -k_earth_x * sinyaw + k_earth_y * cosyaw;
+        pos.k_car.x = k_earth_x * cosy + k_earth_y * siny;
+        pos.k_car.y = -k_earth_x * siny + k_earth_y * cosy;
 
-        car_ground_pos.x = car_ground_pos.x * (1.0 - k) + raw_car.x * k;
-        car_ground_pos.y = car_ground_pos.y * (1.0 - k) + raw_car.y * k;
+        pos.car.x = pos.car.x * (1.0 - k) + pos.raw_car.x * k;
+        pos.car.y = pos.car.y * (1.0 - k) + pos.raw_car.y * k;
 
-        share_data_from_1[7] = raw_car.x;
-        //share_data_from_1[8] = ray_car.y;
-        share_data_from_1[9] = k_car_ground_pos.x;
-        share_data_from_1[10] = k_car_ground_pos.x;
-        share_data_from_1[11] = body_car.y;
-        share_data_from_1[12] = k_car_ground_pos.y;
     }
     // 注意：若未识别到，保持上一帧位置
 
@@ -171,16 +159,16 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
     if (cam_down.target_valid) { 
         Vector3D ray_target = pixelTo3DRay((double)cam_down.target_center_x, (double)cam_down.target_center_y);
         Vector3D body_target = cameraToBody(&ray_target, sinp, cosp, sinr, cosr);
-        GroundPoint raw_target = projectToGround(body_target, height);
+        pos.raw_target = projectToGround(body_target, height);
         
-        target_ground_pos.x = target_ground_pos.x * (1.0 - k) + raw_target.x * k;
-        target_ground_pos.y = target_ground_pos.y * (1.0 - k) + raw_target.y * k;
+        pos.target.x = pos.target.x * (1.0 - k) + pos.raw_target.x * k;
+        pos.target.y = pos.target.y * (1.0 - k) + pos.raw_target.y * k;
     }
 
     // 计算双目标直线距离
     if (cam_down.car_valid && cam_down.target_valid) {
-        double dx = car_ground_pos.x - target_ground_pos.x;
-        double dy = car_ground_pos.y - target_ground_pos.y;
-        share_data_from_1[13] = (float)sqrt(dx * dx + dy * dy);
+        double dx = pos.car.x - pos.target.x;
+        double dy = pos.car.y - pos.target.y;
+        dataC.car_target_dist = (float)sqrt(dx * dx + dy * dy);
     }
 }

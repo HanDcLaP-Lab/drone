@@ -8,7 +8,6 @@ uint8_t visited_buffer[MT9V03X_H * MT9V03X_W];
 uint8 image_copy[MT9V03X_H][MT9V03X_W];
 // 定义全局实例
 CameraObject cam_down;
-extern float m7_1_data[M7_1_DATA_LENGTH];
 
 // --- 2. 初始化函数 ---
 void camera_init(void) {
@@ -265,7 +264,6 @@ static void sort_lights(CameraObject *cam) {
     // =======================================================
     // 1. 获取当前无人机高度 (用于简单距离估算)
     // =======================================================
-    extern volatile float share_data_from_0[];
     float current_height = share_data_from_0[3];
     if (current_height < 30.0f) current_height = 30.0f; // 防除零及贴地保护
 
@@ -415,6 +413,5 @@ void image_processing_loop(void) {
     sort_lights(&cam_down);
 
     // 4. 矫正处理 share_data_from_0: [0]=Roll, [1]=Pitch, [3]=Height
-    extern float share_data_from_0[];
-    calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0]);
+    calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0], share_data_from_0[2]);
 } 

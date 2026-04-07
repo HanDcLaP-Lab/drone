@@ -114,7 +114,8 @@
 #include "image.h"
 #include "display.h"
 #include "image_process.h"
-#include "board_comm.h"
+#include "image_ctrl.h"
+#include "data_complex.h"
 #include "key_switch.h"
 #include "app.h"
 

@@ -51,17 +51,7 @@
 #define LED1 (P19_0)
 #define UART_KEY (P19_2)
 
-
-
-void M7_0_data_send(volatile float* data_out);
-void Float_Buffer_write(float* buffer, volatile float* share_data_from_1);
 float float_buffer[UART_DATA_LENGTH] = {0};
-#pragma location = 0x28001000  
-__root __no_init volatile float share_data_from_1[M7_1_DATA_LENGTH]; // Core 1 写 -> Core 0 读 (视觉数据)
-
-#pragma location = 0x28001040  // 偏移64字节，确保与上面数组不在同一个Cache Line (32字节)
-__root __no_init volatile float share_data_from_0[M7_1_DATA_LENGTH]; // Core 0 写 -> Core 1 读 (IMU数据)
-
 
 int vis_cnt = 0;
 // int send_cnt = 0;
@@ -97,6 +87,8 @@ int main(void) {
         Board_Comm_Init();
         motor_pwm_init(); 
         Flight_Control_Init();
+        dataC.camera_offset_x = CAM_OFFSET_X;
+        dataC.camera_offset_y = CAM_OFFSET_Y;
 
         // 3. 启动周期中断
         pit_ms_init(PIT_CH1, 20); //图像
@@ -181,32 +173,3 @@ int main(void) {
 }
 
 // **************************** 代码区域 ****************************
-void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入 data_out (share_data_from_0)
-    data_out[0] = imu_data.roll; 
-    data_out[1] = imu_data.pitch;
-    data_out[2] = imu_data.yaw;
-
-    data_out[3] = imu_data.z;
-    data_out[4] = (float)current_drone_state;
-    data_out[5] = motor_out.lf;
-    data_out[6] = motor_out.rf;
-    data_out[7] = motor_out.lb;
-    data_out[8] = motor_out.rb;
-
-    data_out[9] = flight_target.target_roll; 
-    data_out[10] = flight_target.target_pitch;
-    data_out[11] = flight_target.target_yaw;
-    data_out[12] = debug_earth_err_x;
-    data_out[13] = debug_earth_err_y;
-    
-}
-
-void Float_Buffer_write(float* buffer, volatile float* share_data_from_1)
-{
-    buffer[0] = share_data_from_1[9];
-    buffer[1] = share_data_from_1[12];
-    buffer[2] = share_data_from_1[5];
-    buffer[3] = share_data_from_1[6];
-    buffer[4] = imu_data.yaw;
-    buffer[5] = share_data_from_1[14];
-}

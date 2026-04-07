@@ -50,14 +50,6 @@
 #define PIT_NUM4 (PIT_CH11)
 
 int32_t image_cnt = 0;
-void M7_1_data_send(volatile float* data_out);
-
-#pragma location = 0x28001000                                                   
-volatile float share_data_from_1[M7_1_DATA_LENGTH] = {0};      // Core 1 写 -> Core 0 读
-
-#pragma location = 0x28001040
-volatile float share_data_from_0[M7_1_DATA_LENGTH] = {0};      // Core 0 写 -> Core 1 读
-
 
 
 int main(void)
@@ -113,21 +105,3 @@ int main(void)
 }
 
 // **************************** 代码区域 ****************************
-void M7_1_data_send(volatile float* data_out) { 
-    data_out[0] = cam_down.car_center_y; 
-    data_out[1] = cam_down.car_center_x;
-    data_out[2] = (float)cam_down.car_dot_num;
-    data_out[3] = car_ground_pos.x;
-    data_out[4] = car_ground_pos.y;  
-    data_out[5] = target_ground_pos.x;
-    data_out[6] = target_ground_pos.y;
-    
-    uint8_t locked_count = 0;
-    if (cam_down.car_valid) locked_count++;
-    if (cam_down.target_valid) locked_count += 2;
-    data_out[14] = (float)locked_count;
-    data_out[8] = share_data_from_0[2];
-    if (!cam_down.car_valid) {
-        data_out[2] = 0; // 丢失时仅将面积清零通知飞控即可
-    }
-}

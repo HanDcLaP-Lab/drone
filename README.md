@@ -8,7 +8,7 @@ lf,rb电机顺时针转;rf,lb电机逆时针转
 
 pitch：机头向上，即前段高后端低时为正，此时应表示为向后飞，反之为负  
 roll:左端高右端低为正，此时应表示向右飞，反之为负  
-yaw:向顺时针为正，逆时针为负[已修改，符合右手系]  
+yaw:向顺时针为正，逆时针为负
 实测前倾与右倾时相应符合逻辑  
 
 图传画面上方为前进方向，当前相机垂直向下  
@@ -27,7 +27,7 @@ cam_down.centers[0][1]表示从左到右数的列数，在最左方为0
 120  
 其中行数小为目标在前，列数小为目标在左  
 
-xx_ground_pos计算结果中，以无人机投影为原点，无人机的前进方向在地面的投影方向为x轴正方向，无人机右侧方向在地面的投影方向为y轴正方向  
+pos.xx计算结果中，以无人机投影为原点，无人机的前进方向在地面的投影方向为x轴正方向，无人机右侧方向在地面的投影方向为y轴正方向  
 
 #### 控制逻辑
 现在通过“视觉环->角度环->角速度环”三串级结构控制飞行状态  
@@ -37,62 +37,6 @@ xx_ground_pos计算结果中，以无人机投影为原点，无人机的前进�
 如有最后一个参数，通常代表字符长度。一个字符大约占据x方向10个像素，y方向16个像素。  
 https://github.com/but0n/Avem.git  
                                                    
-### 传输数组
-
-#### `share_data_from_1` (Core 1 写入，Core 0 读取)
-
-该数组用于 Core 1 传递给 Core 0。
-
-| 索引 | 内容描述 | 来源/用途 |
-| :--- | :--- | :--- |
-| [0] | cam_down.centers[0][0] (Car Y) | 视觉：识别到的第一个目标（小车）的像素 Y 坐标 |
-| [1] | cam_down.centers[0][1] (Car X) | 视觉：识别到的第一个目标（小车）的像素 X 坐标 |
-| [2] | (float)cam_down.dot_num[0] (Car Area) | 视觉：识别到的第一个目标（小车）的像素点数量（面积）。若无目标则为 0。 |
-| [3] | car_ground_pos.x | 计算：小车在地面坐标系中的 X 坐标 (右侧) |
-| [4] | car_ground_pos.y | 计算：小车在地面坐标系中的 Y 坐标 (前方) |
-| [5] | target_ground_pos.x | 计算：第二个目标在地面坐标系中的 X 坐标 (右侧) |
-| [6] | target_ground_pos.y | 计算：第二个目标在地面坐标系中的 Y 坐标 (前方) |
-| [7] | ray_car.x | 调试：小车在相机坐标系中的射线 X 分量 (右) |
-| [8] | ray_car.y | 调试：小车在相机坐标系中的射线 Y 分量 (前) |
-| [9] | ray_car.z | 调试：小车在相机坐标系中的射线 Z 分量 (上/负下) |
-| [10] | body_car.x | 调试：小车在机体坐标系中的射线 X 分量 (右) |
-| [11] | body_car.y | 调试：小车在机体坐标系中的射线 Y 分量 (前) |
-| [12] | body_car.z | 调试：小车在机体坐标系中的射线 Z 分量 (上/负下) |
-| [13] | distance(car, target) | 计算：小车与目标在地面坐标系下的欧几里得距离 |
-| [14] | cam_down.light_number | 计算：检测到的有效灯数 |
-| [15] | 未使用 | |
-
-#### `share_data_from_0` (Core 0 写入，Core 1 读取)
-
-该数组用于 Core 0 传递给 Core 1。
-
-| 索引 | 内容描述 | 来源/用途 |
-| :--- | :--- | :--- |
-| [0] | imu_data.roll | IMU：横滚角 (Roll) |
-| [1] | imu_data.pitch | IMU：俯仰角 (Pitch) |
-| [2] | imu_data.yaw | IMU：偏航角 (Yaw) |
-| [3] | imu_data.z | IMU：Z 轴位置 (高度) |
-| [4] | (float)current_drone_state |调试：无人机状态|
-| [5] | motor_out.lf | CONTROL：左前输出值|
-| [6] | motor_out.rf | CONTROL：右前输出值|
-| [7] | motor_out.lb | CONTROL：左后输出值|
-| [8] | motor_out.rb | CONTROL：右后输出值|
-| ... | ... | |
-| [15] | 未使用 | |
-
-#### `uart_data`
-
-
-| 索引 | 内容描述 | 来源/用途 |
-| :--- | :--- | :--- |
-| 0 | car_ground_pos.x | 计算：小车在地面坐标系中的 X 坐标 |
-| 1 | car_ground_pos.y | 计算：小车在地面坐标系中的 Y 坐标 |
-| 2 | target_ground_pos.x | 计算：目标在地面坐标系中的 X 坐标 (若未识别到目标则为 0) |
-| 3 | target_ground_pos.y | 计算：目标在地面坐标系中的 Y 坐标 |
-| 4 | imu_data.yaw | IMU：无人机的偏航角 (Yaw)，来自 Core 0 共享数据 |
-| 5 |cam_down.light_number | 计算：检测到的有效灯数 |
-| 6 | |  |
-| 7 | |  |
 
 ## 更新日志
 **1.12**  
@@ -310,3 +254,14 @@ lb:4320   rb:3840
 
 **4.4**
 校赛完赛，稍微整理了仓库
+
+**4.7a**
+调整文件结构和函数位置，使之更符合直觉
+现在传参变量定义和赋值均在data_complex.c，两个share_data数组现为全局变量
+将部分小的且需传递的变量集合至结构体dataC并定义在data_complex.h
+拆分Flight_Hover_Control_Task至image_control
+集合所有GroundPoint变量至结构体pos
+调参函数转移至app.c
+将start_up_scale移至结构体flight_target中
+解决按键文件注释编码乱码的问题
+优化其它规范性问题

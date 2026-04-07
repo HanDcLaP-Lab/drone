@@ -1,5 +1,5 @@
-#ifndef _FLIGHT_CTRL_H
-#define _FLIGHT_CTRL_H
+#ifndef _FLY_CTRL_H
+#define _FLY_CTRL_H
 
 #include "zf_common_headfile.h"
 
@@ -33,9 +33,6 @@
     // 摄像头位于 IMU 后方 2cm，因此 X 轴补偿为 -2.0f
 #define CAM_OFFSET_X   10.0f  
 #define CAM_OFFSET_Y   -4.0f  // 假设左右居中无偏移
-//视觉传输
-extern float comp_row;
-extern float comp_col;
 
 //--------------------飞行状态----------------------//
 typedef enum {
@@ -61,6 +58,7 @@ typedef struct {
 
     uint8_t is_armed;
     STATE cur_state;
+    float start_up_scale;
 } Flight_Target_t;
 
 // ===================== 输出结构体 =====================
@@ -78,9 +76,6 @@ typedef struct {
 // =================== 全局变量 ===================
 extern Flight_Target_t flight_target;
 extern Motor_Output_t motor_out;
-extern float debug_earth_err_x;
-extern float debug_earth_err_y;
-extern float o_out_yaw;
 // =================== 函数声明 ===================
 void Flight_Control_Init(void);
 void Flight_Control_Angle(void);
@@ -92,13 +87,4 @@ void Flight_Lock(void);
 void motor_pwm_set(void);
 void motor_pwm_init(void);
 
-/**
- * @brief 自动悬停控制逻辑封装
- * @note 内部处理视觉补偿、姿态设定及 PID 计算
- */
-void Flight_Hover_Control_Task(void);
-// [code/fly_ctrl.h] 在 "函数声明" 区域添加
-void Fly_Param_Update(uint8_t ch, float val);
-void Fly_Param_Update_Visual(uint8_t ch, float val);
-void Fly_Param_Update_yaw(uint8_t ch, float val) ;
 #endif

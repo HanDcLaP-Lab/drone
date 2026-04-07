@@ -121,7 +121,6 @@ void wireless_uart_output_motor(void){
     wireless_uart_send_string(",");
     wireless_uart_send_float(motor_out.rb);
     wireless_uart_send_string(",");
-    //extern float share_data_from_1[];
     // wireless_uart_send_float(share_data_from_1[9]);
     // wireless_uart_send_string(",");
     // wireless_uart_send_float(share_data_from_1[12]);     
@@ -137,7 +136,6 @@ void wireless_uart_output_motor(void){
 }
 
 void wireless_uart_output_groud(void){
-    extern float share_data_from_1[];
     wireless_uart_send_float(share_data_from_1[7]);
     wireless_uart_send_string(",");
     wireless_uart_send_float(share_data_from_1[9]);     
