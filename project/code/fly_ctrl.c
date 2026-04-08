@@ -3,6 +3,7 @@
 // =================== 全局变量定义 ===================
 Flight_Target_t flight_target = {0};
 Motor_Output_t motor_out = {0};
+Motor_Offsset_t motor_offset = {0};
 // 定义 PID 对象
 PID_t pid_height_vel;
 PID_t pid_height_pos;
@@ -189,17 +190,21 @@ static void Flight_Control_Rate(float *out_roll, float *out_pitch, float *out_ya
 static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pitch, float out_yaw) {
 
     // 混控算法 (X型四旋翼)
+    motor_offset.lf = (int16_t)( PITCH_OFFSET + ROLL_OFFSET);
+    motor_offset.rf = (int16_t)( PITCH_OFFSET - ROLL_OFFSET);
+    motor_offset.lb = (int16_t)(-PITCH_OFFSET + ROLL_OFFSET);
+    motor_offset.rb = (int16_t)(-PITCH_OFFSET - ROLL_OFFSET);
     // LF (左前, CW): Base + Pitch + Roll - Yaw
-    motor_out.lf = (int16_t)((base_throttle + out_pitch + PITCH_OFFSET + out_roll + out_yaw + ROLL_OFFSET) * flight_target.start_up_scale);
+    motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll + out_yaw + motor_offset.lf) * flight_target.start_up_scale);
 
     // RF (右前, CCW): Base + Pitch - Roll + Yaw
-    motor_out.rf = (int16_t)((base_throttle + out_pitch + PITCH_OFFSET - out_roll - out_yaw - ROLL_OFFSET) * flight_target.start_up_scale);
+    motor_out.rf = (int16_t)((base_throttle + out_pitch - out_roll - out_yaw + motor_offset.rf) * flight_target.start_up_scale);
 
     // LB (左后, CCW): Base - Pitch + Roll + Yaw
-    motor_out.lb = (int16_t)((base_throttle - out_pitch - PITCH_OFFSET + out_roll - out_yaw + ROLL_OFFSET) * flight_target.start_up_scale);
+    motor_out.lb = (int16_t)((base_throttle - out_pitch + out_roll - out_yaw + motor_offset.lb) * flight_target.start_up_scale);
 
     // RB (右后, CW): Base - Pitch - Roll - Yaw
-    motor_out.rb = (int16_t)((base_throttle - out_pitch - PITCH_OFFSET - out_roll + out_yaw - ROLL_OFFSET) * flight_target.start_up_scale);
+    motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll + out_yaw + motor_offset.rb) * flight_target.start_up_scale);
 
     // 输出限幅
     int16_t* motors = (int16_t*)&motor_out.rf;

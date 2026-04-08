@@ -22,3 +22,15 @@ float Kalman_Update(KalmanFilter1* kf, float measurement) {
     kf->p = (1 - kf->k) * kf->p;                    // 更新误差协方差
     return kf->x;
 }
+
+void main_kalman_init(void){
+    // 初始化卡尔曼滤波参数
+        Kalman_Init(&K_w_ax, 1e-3f, 0.01f, 0);
+        Kalman_Init(&K_w_ay, 1e-3f, 0.01f, 0);
+        Kalman_Init(&K_groll, 1e-3f, 1e-3f, 0);
+        Kalman_Init(&K_gpitch, 1e-3f, 1e-3f, 0);
+        Kalman_Init(&K_gyaw, 1e-3f, 1e-3f, 0);
+        Kalman_Init(&K_ax, 0.001f, 0.05f, 0);
+        Kalman_Init(&K_ay, 0.001f, 0.05f, 0);
+        Kalman_Init(&K_az, 0.001f, 0.05f, 9.8f);
+}

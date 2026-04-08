@@ -73,9 +73,17 @@ typedef struct {
     int16_t lf;  // 左前
 } Motor_Output_t;  //此项于fly_ctrl.c初始化为0
 
+typedef struct {
+    int16_t rf;  // 右前
+    int16_t rb;  // 右后
+    int16_t lb;  // 左后
+    int16_t lf;  // 左前
+} Motor_Offsset_t;  //此项于fly_ctrl.c初始化为0
+
 // =================== 全局变量 ===================
 extern Flight_Target_t flight_target;
 extern Motor_Output_t motor_out;
+extern Motor_Offsset_t motor_offset;
 // =================== 函数声明 ===================
 void Flight_Control_Init(void);
 void Flight_Control_Angle(void);

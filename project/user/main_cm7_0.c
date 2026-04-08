@@ -68,17 +68,7 @@ int main(void) {
     SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
 
     { //初始化
-        // 1. 初始化卡尔曼滤波参数
-        Kalman_Init(&K_w_ax, 1e-3f, 0.01f, 0);
-        Kalman_Init(&K_w_ay, 1e-3f, 0.01f, 0);
-        Kalman_Init(&K_groll, 1e-3f, 0.01f, 0);
-        Kalman_Init(&K_gpitch, 1e-3f, 0.01f, 0);
-        Kalman_Init(&K_gyaw, 1e-3f, 0.01f, 0);
-        Kalman_Init(&K_ax, 0.001f, 0.1f, 0);
-        Kalman_Init(&K_ay, 0.001f, 0.1f, 0);
-        Kalman_Init(&K_az, 0.001f, 0.1f, 9.8f);
-        
-
+        main_kalman_init();
         // 2. 初始化底层传感器与执行器
         imu_init();
         tof_init();
