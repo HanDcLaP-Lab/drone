@@ -132,18 +132,6 @@ static void Flight_State_Update(void) {
     }
 }
 
-void Flight_Control_Angle(void) {
-    // 1. 计算误差 (绝对系)
-    float roll_error = flight_target.target_roll - imu_data.roll;
-    float pitch_error = flight_target.target_pitch - imu_data.pitch;
-    float yaw_error = flight_target.target_yaw - imu_data.yaw;
-
-    // 2. PID 计算 (输出即视为机体角速度目标，基于小角度假设)
-    flight_target.target_g_roll = Nonline_PID_Calculate(&pid_roll, roll_error, CTRL_DT_CTLOOP);
-    flight_target.target_g_pitch = Nonline_PID_Calculate(&pid_pitch, pitch_error, CTRL_DT_CTLOOP);
-    flight_target.target_g_yaw = Nonline_PID_Calculate(&pid_yaw, yaw_error, CTRL_DT_CTLOOP);
-}
-
 /**
  * @brief 高度环控制 (串级PID: 位置 -> 速度 -> 油门)
  * @return 基础油门值 (base_throttle)
@@ -160,7 +148,30 @@ static int16_t Flight_Control_Height(void) {
     float climb_rate_error = target_climb_rate - imu_data.vz;
     float throttle_adj = PID_Calculate(&pid_height_vel, climb_rate_error, CTRL_DT_CTLOOP);
 
-    return HOVER_THROTTLE + (int16_t)throttle_adj;
+    
+    // 倾角补偿
+    float roll_rad = imu_data.roll * (PI / 180.0f);
+    float pitch_rad = imu_data.pitch * (PI / 180.0f);
+    float cos_tilt = cosf(roll_rad) * cosf(pitch_rad);
+    float compensation_factor = 1.0f;
+    if (cos_tilt > 0.1f) { // 避免除以过小的数
+        compensation_factor = 1.0f / cos_tilt;
+    }
+    // 限制补偿系数
+    compensation_factor = Constrain_Float(compensation_factor, 1.0f, 1.5f); 
+    return (int16_t)((HOVER_THROTTLE + throttle_adj) * compensation_factor);
+}
+
+void Flight_Control_Angle(void) {
+    // 1. 计算误差 (绝对系)
+    float roll_error = flight_target.target_roll - imu_data.roll;
+    float pitch_error = flight_target.target_pitch - imu_data.pitch;
+    float yaw_error = flight_target.target_yaw - imu_data.yaw;
+
+    // 2. PID 计算 (输出即视为机体角速度目标，基于小角度假设)
+    flight_target.target_g_roll = Nonline_PID_Calculate(&pid_roll, roll_error, CTRL_DT_CTLOOP);
+    flight_target.target_g_pitch = Nonline_PID_Calculate(&pid_pitch, pitch_error, CTRL_DT_CTLOOP);
+    flight_target.target_g_yaw = Nonline_PID_Calculate(&pid_yaw, yaw_error, CTRL_DT_CTLOOP);
 }
 
 /**
@@ -270,5 +281,3 @@ void motor_pwm_init() {
     pwm_init(PWM_RF, 400, 4000);
     pwm_init(PWM_RB, 400, 4000);
 }
-
-

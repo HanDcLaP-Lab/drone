@@ -158,7 +158,7 @@ int main(void) {
         // wireless_uart_send_string("\n");
         print_cnt = 0;
         }
-        system_delay_ms(1); // 稍微延时
+        system_delay_us(400); // 稍微延时
     }
 }
 
