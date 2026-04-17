@@ -2,6 +2,7 @@
 #include "zf_common_headfile.h"
 
 Data_Complex_t dataC = {0};
+uint8_t car_en = 1;
 //核间通信初始化
 #if defined(CY_CORE_CM7_0)
     //Core 0
@@ -101,6 +102,7 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
     buffer[3] = share_data[6];
     buffer[4] = imu_data.yaw;
     buffer[5] = share_data[14];
+    buffer[6] = car_en;
 }
 
 #elif defined(CY_CORE_CM7_1)

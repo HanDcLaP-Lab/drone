@@ -23,6 +23,7 @@ typedef struct {
 extern Data_Complex_t dataC;
 extern volatile float share_data_from_0[M7_x_DATA_LENGTH];
 extern volatile float share_data_from_1[M7_x_DATA_LENGTH];
+extern uint8_t car_en;
 
 // ================= 函数声明 =================
 void M7_0_data_send(volatile float* data_out);

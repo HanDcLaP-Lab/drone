@@ -96,8 +96,10 @@ void Fly_Param_Update(uint8_t ch, float val) {
             if(val == 1){
                 wireless_uart_send_string("land\r\n");
                 flight_target.cur_state = pre_landing; 
+                car_en = 0;
             }else if(val == 2){
                 wireless_uart_send_string("emergency stop\r\n");
+                car_en = 0;
                 Flight_Lock();
             }else if(val == 0){
                 if (imu_data.is_calibrated) {
@@ -148,9 +150,11 @@ void Fly_Param_Update_Visual(uint8_t ch, float val) {
             if(0.5 <= val && val < 1.5){
                 wireless_uart_send_string("land\r\n");
                 flight_target.cur_state = pre_landing; 
+                car_en = 0;
             }else if(val >=1.5 && val <=2.5){
                 wireless_uart_send_string("emergency stop\r\n");
                 Flight_Lock();
+                car_en = 0;
             }else if(val <= 0.5 && val >= -0.5){
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
@@ -196,9 +200,11 @@ void Fly_Param_Update_yaw(uint8_t ch, float val) {
             if(0.5 <= val && val < 1.5){
                 wireless_uart_send_string("land\r\n");
                 flight_target.cur_state = pre_landing; 
+                car_en = 0;
             }else if(val >=1.5 && val <=2.5){
                 wireless_uart_send_string("emergency stop\r\n");
                 Flight_Lock();
+                car_en = 0;
             }else if(val <= 0.5 && val >= -0.5){
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();

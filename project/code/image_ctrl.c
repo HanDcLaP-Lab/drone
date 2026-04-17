@@ -11,6 +11,8 @@ static uint32_t search_wait_timer = 0; // 停留计时器 (ms)
 static uint8_t is_turning = 0;         // 是否正在转向中 (0:停留计时, 1:转向中)
 static const float search_yaw_seq[8] = {35.0f, 70.0f, 35.0f, 0.0f, -35.0f, -70.0f, -35.0f, 0.0f}; // 目标跳变序列
 
+static int32_t car_en_disable_timer = 0; // 控制 car_en 置零的倒计时器 (ms)
+static uint8_t was_aligning = 0;         // 标记飞机之前是否正处于“对准”转动状态
 // =================== 内部辅助控制函数 ===================
 
 /**
@@ -68,20 +70,35 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights) {
             
             // 3. 角度死区判定：如果偏角大于死区，才更新目标航向
             if (fabs(yaw_error) >= YAW_MIN_ERROR) {
-                flight_target.target_yaw = imu_data.yaw + yaw_error;
-                
+                flight_target.target_yaw = imu_data.yaw + yaw_error;  
+
                 // 4. 叠加全局硬限幅保护
                 if (flight_target.target_yaw > TWO_MAX_YAW_DEV) {
                     flight_target.target_yaw = TWO_MAX_YAW_DEV;
                 } else if (flight_target.target_yaw < -TWO_MAX_YAW_DEV) {
                     flight_target.target_yaw = -TWO_MAX_YAW_DEV;
                 }
+            } 
+            if(fabs(yaw_error) >= 3 * YAW_MIN_ERROR) {
+                was_aligning = 1;
+            }else {
+                // 【新增】：进入偏角死区，说明对准转动刚刚结束
+                if (was_aligning == 1) { 
+                    car_en_disable_timer = ROTATE_RECOVER_TIME; // 只触发一次 1000ms 置零
+                    was_aligning = 0;            // 触发后立即清除标记
+                }
             }
+        }else{
+            if(was_aligning == 1) was_aligning = 0;
         }
 
         search_seq_idx = 0;       // 重置方向序列
         search_wait_timer = 0;    // 重置计时器
         is_turning = 0;           // 重置为停留状态
+    }else{
+        if (was_aligning == 1) {
+            was_aligning = 0; 
+        }
     }
 
     // 逻辑B：仅看到单目标（小车），执行定时定角停留 + 定向跳变扫描
@@ -105,7 +122,9 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights) {
             
             if (fabsf(yaw_diff) < 3.0f) {
                 is_turning = 0;          
-                search_wait_timer = 0;   
+                search_wait_timer = 0;
+                // 【新增】：一次扫描转动刚刚结束
+                //car_en_disable_timer = ROTATE_RECOVER_TIME; // 触发 1000ms 置零
             }
         }
     }
@@ -127,6 +146,18 @@ void Flight_Hover_Control_Task(void) {
     // 2. 计算真实时间差 dt (防除零)
     if (last_ang_cnt != 0) real_dt_ang = dataC.pit0_cnt - last_ang_cnt;
     last_ang_cnt = dataC.pit0_cnt;
+
+    // ---------- 【新增】: 倒计时器处理及 car_en 赋值 ----------
+    if (car_en_disable_timer > 0) {
+        car_en_disable_timer -= real_dt_ang;
+        car_en = 0; // 倒计时期间强制保持为 0
+    } else {
+        if(was_aligning == 0){
+            car_en = 1;
+        }else{
+            car_en = 0;
+        }
+    }
 
     // ================== 有目标视野逻辑 ==================
     if (locked_lights == 1 || locked_lights == 3) {
@@ -157,5 +188,6 @@ void Flight_Hover_Control_Task(void) {
         search_seq_idx = 0;
         search_wait_timer = 0;
         is_turning = 0;
+        was_aligning = 0;
     }                                                                                                                                                                                         
 }
