@@ -76,6 +76,13 @@ int main(void)
             
             // 1. 拉取 Core 0 写入的最新数据
             SCB_InvalidateDCache_by_Addr(&share_data_from_0, sizeof(share_data_from_0));
+            
+            // 立即快照当前姿态，确保在整个 image_processing_loop 中不被下一次通讯污染
+            img_imu_snap.roll   = share_data_from_0[0];
+            img_imu_snap.pitch  = share_data_from_0[1];
+            img_imu_snap.yaw    = share_data_from_0[2];
+            img_imu_snap.height = share_data_from_0[3];
+
             int drone_mode = (int)share_data_from_0[4];
             cam_down.threshold = (uint8_t)debug_params[0];
 

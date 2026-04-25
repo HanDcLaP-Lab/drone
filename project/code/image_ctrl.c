@@ -32,8 +32,12 @@ static void Flight_Hover_Position_Control(float car_pos_x, float car_pos_y, floa
     dataC.debug_earth_err_x = earth_err_x;
     dataC.debug_earth_err_y = earth_err_y;
 
-    float target_earth_accel_x = Nonline_PID_Calculate(&pid_image_x, earth_err_x, real_dt_ang / 1000.0f);
-    float target_earth_accel_y = Nonline_PID_Calculate(&pid_image_y, earth_err_y, real_dt_ang / 1000.0f);
+    float dt_sec = real_dt_ang / 1000.0f;
+    if (dt_sec < 0.015f) dt_sec = 0.015f;
+    if (dt_sec > 0.05f) dt_sec = 0.05f;
+
+    float target_earth_accel_x = Nonline_PID_Calculate(&pid_image_x, earth_err_x, dt_sec);
+    float target_earth_accel_y = Nonline_PID_Calculate(&pid_image_y, earth_err_y, dt_sec);
 
     // 将地球系算出的推力转回当前机体去执行时，必须使用此时此刻的即时偏航角
     float cur_yaw_rad = imu_data.yaw * 3.14159265f / 180.0f;
@@ -50,7 +54,7 @@ static void Flight_Hover_Position_Control(float car_pos_x, float car_pos_y, floa
 /**
  * @brief 航向扫描与搜寻状态机
  */
-static void Flight_Hover_Yaw_Control(uint8_t locked_lights) {
+static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) {
     // 逻辑A：当锁定了双目标（看到信标）
     if (locked_lights == 3) {
         if (imu_data.z > 0.85f * TARGET_HEIGHT_CM) has_seen_beacon = 1;
@@ -70,8 +74,8 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights) {
             
             // 3. 角度死区判定：如果偏角大于死区，才更新目标航向
             if (fabs(yaw_error) >= YAW_MIN_ERROR) {
-                flight_target.target_yaw = imu_data.yaw + yaw_error;  
-
+                flight_target.target_yaw = snapshot_yaw + yaw_error; //使用相机曝光一瞬间的snapshot_yaw
+                
                 // 4. 叠加全局硬限幅保护
                 if (flight_target.target_yaw > TWO_MAX_YAW_DEV) {
                     flight_target.target_yaw = TWO_MAX_YAW_DEV;
@@ -137,6 +141,7 @@ void Flight_Hover_Control_Task(void) {
     float car_pos_x = share_data_from_1[9];
     float car_pos_y = share_data_from_1[12];
     uint8_t locked_lights = (uint8_t)share_data_from_1[14];    
+    float snapshot_yaw = share_data_from_1[8];
     
     if (locked_lights == 1 || locked_lights == 3) {
         car_pos_x = car_pos_x - dataC.camera_offset_x;
@@ -168,7 +173,7 @@ void Flight_Hover_Control_Task(void) {
         Flight_Hover_Position_Control(car_pos_x, car_pos_y, &target_roll_val, &target_pitch_val);
         
         // 2. 调用航向环控制计算目标 Yaw
-        Flight_Hover_Yaw_Control(locked_lights);
+        Flight_Hover_Yaw_Control(locked_lights, snapshot_yaw);
 
         last_locked_lights = locked_lights; 
         Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);

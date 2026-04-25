@@ -8,6 +8,7 @@ uint8_t visited_buffer[MT9V03X_H * MT9V03X_W];
 uint8 image_copy[MT9V03X_H][MT9V03X_W];
 // 定义全局实例
 CameraObject cam_down;
+Image_IMU_Snapshot_t img_imu_snap = {0}; // 新增全局快照实例
 
 // --- 2. 初始化函数 ---
 void camera_init(void) {
@@ -264,7 +265,7 @@ static void sort_lights(CameraObject *cam) {
     // =======================================================
     // 1. 获取当前无人机高度 (用于简单距离估算)
     // =======================================================
-    float current_height = share_data_from_0[3];
+    float current_height = img_imu_snap.height;
     if (current_height < 30.0f) current_height = 30.0f; // 防除零及贴地保护
 
     float phys_dist_sq[MAX_LIGHTS] = {0};
@@ -412,6 +413,6 @@ void image_processing_loop(void) {
     
     sort_lights(&cam_down);
 
-    // 4. 矫正处理 share_data_from_0: [0]=Roll, [1]=Pitch, [3]=Height
-    calculate_ground_positions(share_data_from_0[3], share_data_from_0[1], share_data_from_0[0], share_data_from_0[2]);
+    // 4. 矫正处理 使用锁定快照，保证整个运算链路无时序冲突
+    calculate_ground_positions(img_imu_snap.height, img_imu_snap.pitch, img_imu_snap.roll, img_imu_snap.yaw);
 } 

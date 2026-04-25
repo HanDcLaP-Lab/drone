@@ -1,5 +1,6 @@
 #include "data_complex.h"
 #include "zf_common_headfile.h"
+#include "image.h"
 
 Data_Complex_t dataC = {0};
 uint8_t car_en = 1;
@@ -114,7 +115,7 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[4] = pos.car.y;  
     data_out[5] = pos.target.x;
     data_out[6] = pos.target.y;
-    data_out[8] = share_data_from_0[2];
+    data_out[8] = img_imu_snap.yaw; // 传回 Core0 的是该帧对应的快照 Yaw
     data_out[7] = pos.raw_car.x;
     data_out[9] = pos.k_car.x;
     data_out[12] = pos.k_car.y;
@@ -130,5 +131,3 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     }
 }
 #endif
-
-

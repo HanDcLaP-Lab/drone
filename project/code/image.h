@@ -80,9 +80,17 @@ typedef struct {
 
 } CameraObject;
 
+typedef struct {
+    float roll;
+    float pitch;
+    float yaw;
+    float height;
+} Image_IMU_Snapshot_t;
+
 // 声明全局下视摄像头实例
 extern CameraObject cam_down; 
 extern uint8 image_copy[MT9V03X_H][MT9V03X_W];
+extern Image_IMU_Snapshot_t img_imu_snap;
 
 // 函数声明
 void camera_init(void);           // 初始化
