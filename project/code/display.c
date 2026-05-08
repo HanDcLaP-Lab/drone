@@ -179,5 +179,7 @@ void display_image_debug_display(void){
     ips200_show_float(80, 16*17, share_data_from_0[10], 4,2);
     ips200_show_float(0, 16*18, share_data_from_0[0], 4,2);
     ips200_show_float(80, 16*18, share_data_from_0[1], 4 , 2);
-    ips200_show_float(0, 16*19, share_data_from_0[2], 4,2);
+    
+    ips200_show_float(0, 16*19, cam_down.target_center_x, 4,2);
+    ips200_show_float(80, 16*19, cam_down.target_center_y, 4,2);
 }

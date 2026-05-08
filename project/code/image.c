@@ -10,6 +10,12 @@ uint8 image_copy[MT9V03X_H][MT9V03X_W];
 CameraObject cam_down;
 Image_IMU_Snapshot_t img_imu_snap = {0}; // 新增全局快照实例
 
+// =========================================================
+// 预计算每行扫描的有效列边界，极大节约主循环算力
+// =========================================================
+uint16_t fov_left_bound[MT9V03X_H];
+uint16_t fov_right_bound[MT9V03X_H];
+
 // --- 2. 初始化函数 ---
 void camera_init(void) {
     while(1)
@@ -35,6 +41,24 @@ void camera_init(void) {
     cam_down.margin_cut = 1;    // 四周裁剪 5 像素
     cam_down.debug_max_ratio = 0.0f;
     cam_down.debug_min_ratio = 999.0f;
+
+    // 初始化阶段预计算每一行的圆形视野起始和结束列
+    for (int r = 0; r < MT9V03X_H; r++) {
+        float dy = r - CAM_CY;
+        float dy_sq = dy * dy;
+        if (dy_sq > FOV_RADIUS_SQ) {
+            fov_left_bound[r] = MT9V03X_W; // 本行全在圆外，设为无效区间
+            fov_right_bound[r] = 0;
+        } else {
+            float dx = sqrtf(FOV_RADIUS_SQ - dy_sq);
+            int left = (int)(CAM_CX - dx);
+            int right = (int)(CAM_CX + dx);
+            if (left < 0) left = 0;
+            if (right > MT9V03X_W) right = MT9V03X_W;
+            fov_left_bound[r] = left;
+            fov_right_bound[r] = right;
+        }
+    }
 }
 
 // --- 3. 内部辅助函数 ---
@@ -61,6 +85,11 @@ void Estimate_Distance_Simple(float u, float v, float height, float *out_x, floa
     // 3. 计算畸变多项式 Z 轴 (相当于该像素点处的“虚拟焦距”)
     // 公式: z = A0 + A2*rho^2 + A3*rho^3 + A4*rho^4
     float z_poly = CAM_A0 + CAM_A2 * rho2 + CAM_A3 * rho2 * rho + CAM_A4 * rho2 * rho2;
+
+    // 增加虚拟焦距的安全下限，防除零和异常反向
+    if (z_poly < 0.1f) {
+        z_poly = 0.1f;
+    }
 
     // 4. 相似三角形投影计算比例系数 scale
     // 物理距离与像素距离的比例 = 当前高度 / 虚拟焦距
@@ -149,7 +178,11 @@ static void binarize_and_dilate(CameraObject *cam) {
 
     // 遍历图像 
     for (uint16_t r = safe_margin; r < cam->height - safe_margin; r++) {
-        for (uint16_t c = safe_margin; c < cam->width - safe_margin; c++) {
+        // 查表获取本行的有效扫描区间，并且与 safe_margin 进行安全融合
+        uint16_t c_start = fov_left_bound[r] > safe_margin ? fov_left_bound[r] : safe_margin;
+        uint16_t c_end   = fov_right_bound[r] < (cam->width - safe_margin) ? fov_right_bound[r] : (cam->width - safe_margin);
+
+        for (uint16_t c = c_start; c < c_end; c++) {
             uint32_t idx = r * cam->width + c;
             
             // 阈值判断
@@ -181,7 +214,11 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
     uint8_t valid_idx = 0;
 
     for (uint16_t r = cam->margin_cut; r < cam->height - cam->margin_cut; r++) {
-        for (uint16_t c = cam->margin_cut; c < cam->width - cam->margin_cut; c++) {
+        // 查表读取该行的安全列边界
+        uint16_t c_start = fov_left_bound[r] > cam->margin_cut ? fov_left_bound[r] : cam->margin_cut;
+        uint16_t c_end   = fov_right_bound[r] < (cam->width - cam->margin_cut) ? fov_right_bound[r] : (cam->width - cam->margin_cut);
+
+        for (uint16_t c = c_start; c < c_end; c++) {
             uint32_t idx = r * cam->width + c;
             
             // 发现未访问的亮点 (新连通域的种子点)

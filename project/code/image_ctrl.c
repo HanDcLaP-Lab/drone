@@ -3,7 +3,7 @@
 
 // =================== 内部静态状态变量 ===================
 static uint32_t last_ang_cnt = 0;
-static uint16_t real_dt_ang = 20; 
+static uint32_t real_dt_ang = 20; 
 static uint8_t last_locked_lights = 0; 
 static uint8_t has_seen_beacon = 0;
 static int8_t search_seq_idx = 0;      // 搜索序列索引 (0~3)
@@ -115,7 +115,7 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
                 flight_target.target_yaw = search_yaw_seq[search_seq_idx];
                 
                 search_seq_idx++;
-                if (search_seq_idx > 7) {
+                if (search_seq_idx >= (sizeof(search_yaw_seq) / sizeof(search_yaw_seq[0]))) {
                     search_seq_idx = 0;
                 }
                 is_turning = 1; 

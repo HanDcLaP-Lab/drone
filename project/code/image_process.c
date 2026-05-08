@@ -10,8 +10,8 @@
 // 1. 常量参数
 // ==========================================
 // 畸变中心 (Distortion Center)
-const double CX = 94.0532845692;
-const double CY = 59.6200034349;
+const double CX = 95.5754542924;
+const double CY = 56.0345163934;
 
 // 逆拉伸矩阵 (Inverse Stretch Matrix)
 const double INV_S11 = 1.0000000000;
@@ -20,10 +20,10 @@ const double INV_S21 = 0.0000000000;
 const double INV_S22 = 1.0000000000;
 
 // 映射多项式系数 (Mapping Coefficients)
-const double A0 = 75.0109988547;
-const double A2 = -0.0058158086;
-const double A3 = 0.0000239113;
-const double A4 = -0.0000003180;
+const double A0 = 53.5431129928;
+const double A2 = -0.0157824974;
+const double A3 = 0.0002786109;
+const double A4 = -0.0000044018;
 
 // 定义 3D 空间向量
 typedef struct { double x, y, z; } Vector3D;
@@ -103,7 +103,11 @@ static Vector3D cameraToBody(const Vector3D *cam, double sinp, double cosp, doub
 // 基于相似三角形原理计算地面坐标
 static GroundPoint projectToGround(Vector3D ray, double height) {
     GroundPoint ground_pt = {0.0, 0.0};
-    if (ray.z >= 0) return ground_pt;
+    
+    // 防止射线指向水平线以上或完全水平
+    if (ray.z > -0.01) {
+        ray.z = -0.01;
+    }
 
     double scale = -height / ray.z;
 
@@ -111,6 +115,15 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
     // 目标: ground_pt.x 是 Forward, ground_pt.y 是 Right
     ground_pt.x = ray.y * scale; // X = Forward (cm)
     ground_pt.y = ray.x * scale; // Y = Right (cm)
+    
+    // 硬限幅最大有效地面距离
+    double dist_sq = ground_pt.x * ground_pt.x + ground_pt.y * ground_pt.y;
+    if (dist_sq > MAX_DIST * MAX_DIST) {
+        double limit_scale = max_dist / sqrt(dist_sq);
+        ground_pt.x *= limit_scale;
+        ground_pt.y *= limit_scale;
+    }
+
     return ground_pt;
 }
 

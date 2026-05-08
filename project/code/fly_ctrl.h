@@ -59,6 +59,7 @@ typedef struct {
     uint8_t is_armed;
     STATE cur_state;
     float start_up_scale;
+    float output_scale;
 } Flight_Target_t;
 
 // ===================== 输出结构体 =====================

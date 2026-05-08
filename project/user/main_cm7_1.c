@@ -64,7 +64,7 @@ int main(void)
     // Kalman_Init(&K_target_x, 0.1f, 15.0f, 0.0f); // 信标通常是静止的，Q可以给小一点，R给大一点让它更死区
     // Kalman_Init(&K_target_y, 0.1f, 15.0f, 0.0f);
     system_delay_ms(2000);
-    //display_init();
+    display_init();
     key_switch_init();
     pit_ms_init(PIT_NUM3 , 10);
     while(true)
@@ -97,7 +97,7 @@ int main(void)
             // 3. 屏幕打印
             if (drone_mode == 0) // DRONE_STATE_DEBUG = 0
             {
-                //display_image_debug_display();
+                display_image_debug_display();
             }
 
             // 图像处理效率观测

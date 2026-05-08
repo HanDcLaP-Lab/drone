@@ -3,6 +3,9 @@
 
 #include "zf_common_headfile.h"
 
+#define MAX_DIST 1500.0
+
+
 // 定义地面点结构体
 typedef struct {
     double x;

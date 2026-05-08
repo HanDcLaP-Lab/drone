@@ -5,16 +5,23 @@
 
 #define IMG_CENTER_X (MT9V03X_W / 2.0f)
 #define IMG_CENTER_Y (MT9V03X_H / 2.0f)
-#define CAM_CX 94.0532845f
-#define CAM_CY 59.6200034f
-#define CAM_A0 75.0109988f
-#define CAM_A2 -0.0058158f
-#define CAM_A3 0.0000239f
-#define CAM_A4 -0.0000003f
+#define CAM_CX 95.5754542f
+#define CAM_CY 56.0345163f
+#define CAM_A0 53.5431129f
+#define CAM_A2 -0.0157824f
+#define CAM_A3 0.00027861f
+#define CAM_A4 -0.0000044f
 // 宏定义
 #define STACK_SIZE 4096     // DFS 栈大小
 #define MAX_LIGHTS 20       // 最大识别灯光数量
 #define THRESHOLD 130      //二值化阈值设置
+
+// =========================================================
+// [新增] 广角全景摄像头有效成像圆形区域配置
+// =========================================================
+#define FOV_DIAMETER 126.0f     // 视野有效圆直径
+#define FOV_RADIUS (FOV_DIAMETER / 2.0f)
+#define FOV_RADIUS_SQ (FOV_RADIUS * FOV_RADIUS)
 
 // =========================================================
 // [新增] 面积动态补偿参数 (解决边缘灯光变小的问题)

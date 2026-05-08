@@ -31,6 +31,7 @@ void Flight_Control_Init(void) {
     flight_target.is_armed = 2;  // 0: 锁定, 1: 解锁, 2: 等待校准后解锁
     flight_target.height = 0;
     flight_target.start_up_scale = 0.0f;
+    flight_target.output_scale = 1.0f; // 默认缩放比例设为1
 
     // ----------- 初始化 PID 参数 -----------
     // 高度环
@@ -206,16 +207,16 @@ static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pi
     motor_offset.lb = (int16_t)(-PITCH_OFFSET + ROLL_OFFSET);
     motor_offset.rb = (int16_t)(-PITCH_OFFSET - ROLL_OFFSET);
     // LF (左前, CW): Base + Pitch + Roll - Yaw
-    motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll + out_yaw + motor_offset.lf) * flight_target.start_up_scale);
+    motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll + out_yaw + motor_offset.lf) * flight_target.start_up_scale * flight_target.output_scale);
 
     // RF (右前, CCW): Base + Pitch - Roll + Yaw
-    motor_out.rf = (int16_t)((base_throttle + out_pitch - out_roll - out_yaw + motor_offset.rf) * flight_target.start_up_scale);
+    motor_out.rf = (int16_t)((base_throttle + out_pitch - out_roll - out_yaw + motor_offset.rf) * flight_target.start_up_scale * flight_target.output_scale);
 
     // LB (左后, CCW): Base - Pitch + Roll + Yaw
-    motor_out.lb = (int16_t)((base_throttle - out_pitch + out_roll - out_yaw + motor_offset.lb) * flight_target.start_up_scale);
+    motor_out.lb = (int16_t)((base_throttle - out_pitch + out_roll - out_yaw + motor_offset.lb) * flight_target.start_up_scale * flight_target.output_scale);
 
     // RB (右后, CW): Base - Pitch - Roll - Yaw
-    motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll + out_yaw + motor_offset.rb) * flight_target.start_up_scale);
+    motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll + out_yaw + motor_offset.rb) * flight_target.start_up_scale * flight_target.output_scale);
 
     // 输出限幅
     int16_t* motors = (int16_t*)&motor_out.rf;

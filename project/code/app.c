@@ -42,10 +42,10 @@ void Fly_Param_Update(uint8_t ch, float val) {
     switch (ch) {
         // === 第一组：角度环 (Nonline_PID) ===
         // 包含 kp, ki, kp2
-        case 1: // 角度环 KP
-            pid_roll.kp = val;
-            pid_pitch.kp = val;
-            //pid_yaw.kp = val * 0.5f; // Yaw 参数为 Roll 的 0.5 倍
+        case 1: // 总体输出缩放系数 (限制在 0.0 ~ 1.0 之间)
+            if (val > 1.0f) val = 1.0f;
+            if (val < 0.0f) val = 0.0f;
+            flight_target.output_scale = val;
             break;
             
         case 2: // 角度环 KI
