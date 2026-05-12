@@ -3,11 +3,6 @@
 
 #include "zf_common_headfile.h"
 
-// 引脚定义
-#define PWM_LF (TCPWM_CH11_P05_2)
-#define PWM_LB (TCPWM_CH20_P08_1)
-#define PWM_RF (TCPWM_CH58_P17_3)
-#define PWM_RB (TCPWM_CH30_P10_2)
 
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 120.0f  // 目标高度

@@ -250,35 +250,26 @@ void Flight_Control_Loop(void) {
     Flight_Motor_Mix(base_throttle, motor_out.roll, motor_out.pitch, motor_out.yaw);
 }
 
-// 辅助：电机PWM设置
 void motor_pwm_set() {
-    if(current_drone_state == DRONE_STATE_DEBUG) {
-        pwm_set_duty(PWM_RF, 4000);
-        pwm_set_duty(PWM_RB, 4000);
-        pwm_set_duty(PWM_LF, 4000);
-        pwm_set_duty(PWM_LB, 4000);
+    if (current_drone_state == DRONE_STATE_DEBUG) {
+        small_driver_set_duty(0, 0, 0, 0);
         return;
     }
+
     if (flight_target.is_armed == 1) {
-        pwm_set_duty(PWM_RF, (motor_out.rf * 2 / 5) + 4000);
-        pwm_set_duty(PWM_RB, (motor_out.rb * 2 / 5) + 4000);
-        pwm_set_duty(PWM_LF, (motor_out.lf * 2 / 5) + 4000);
-        pwm_set_duty(PWM_LB, (motor_out.lb * 2 / 5) + 4000);
+        // 注意：UART 驱动通常直接接受逻辑占空比（如 0-10000），不再需要 PWM 的 4000 偏置
+        small_driver_set_duty(motor_out.lf, motor_out.rf, motor_out.rb, motor_out.lb);
+        // small_driver_set_duty(2000, 2000, 2000, 2000);
     } else {
         motor_out.rf = 0;
         motor_out.rb = 0;
         motor_out.lf = 0;
         motor_out.lb = 0;
-        pwm_set_duty(PWM_RF, 4000);
-        pwm_set_duty(PWM_RB, 4000);
-        pwm_set_duty(PWM_LF, 4000);
-        pwm_set_duty(PWM_LB, 4000);
+        small_driver_set_duty(0, 0, 0, 0);
     }
 }
 
 void motor_pwm_init() {
-    pwm_init(PWM_LF, 400, 4000);
-    pwm_init(PWM_LB, 400, 4000);
-    pwm_init(PWM_RF, 400, 4000);
-    pwm_init(PWM_RB, 400, 4000);
+    // 初始化无刷驱动的串口通讯
+    small_driver_uart_init();
 }

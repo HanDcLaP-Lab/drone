@@ -119,7 +119,7 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
     // 硬限幅最大有效地面距离
     double dist_sq = ground_pt.x * ground_pt.x + ground_pt.y * ground_pt.y;
     if (dist_sq > MAX_DIST * MAX_DIST) {
-        double limit_scale = max_dist / sqrt(dist_sq);
+        double limit_scale = MAX_DIST / sqrt(dist_sq);
         ground_pt.x *= limit_scale;
         ground_pt.y *= limit_scale;
     }
