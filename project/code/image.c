@@ -143,9 +143,9 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
         for (int i = 0; i < 4; i++) {
             uint16_t nr = curr.r + dr[i];
             uint16_t nc = curr.c + dc[i];
-            // 简单的边界预判
-            if (nr >= cam->margin_cut && nr < (cam->height - cam->margin_cut) &&
-                nc >= cam->margin_cut && nc < (cam->width - cam->margin_cut)) {
+            // 【关键修复】不仅检查矩形边界，还要检查预计算的圆形 FOV 有效列区间
+            // 确保 DFS 不会由于膨胀操作产生的“溢出”像素而进入无效区域
+            if (nr < cam->height && nc >= fov_left_bound[nr] && nc < fov_right_bound[nr]) {
                 
                 uint32_t nidx = nr * cam->width + nc;
                 // 只有亮点且未访问才入栈，减少栈占用
@@ -167,39 +167,76 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
         }
     }
 }
-
-// 【合并优化】一次遍历同时完成二值化与 8 邻域膨胀
-static void binarize_and_dilate(CameraObject *cam) {
-    // 清空二值化缓冲区
+static void binarize_image(CameraObject *cam) {
     memset(cam->binarized_image, 0, cam->width * cam->height);
-
-    // 为了安全进行 8 邻域膨胀，确保最少有 1 个像素的物理边界
-    uint16_t safe_margin = cam->margin_cut > 1 ? cam->margin_cut : 1;
-
-    // 遍历图像 
-    for (uint16_t r = safe_margin; r < cam->height - safe_margin; r++) {
-        // 查表获取本行的有效扫描区间，并且与 safe_margin 进行安全融合
-        uint16_t c_start = fov_left_bound[r] > safe_margin ? fov_left_bound[r] : safe_margin;
-        uint16_t c_end   = fov_right_bound[r] < (cam->width - safe_margin) ? fov_right_bound[r] : (cam->width - safe_margin);
-
+    for (uint16_t r = cam->margin_cut; r < cam->height - cam->margin_cut; r++) {
+        uint16_t c_start = fov_left_bound[r];
+        uint16_t c_end   = fov_right_bound[r];
         for (uint16_t c = c_start; c < c_end; c++) {
             uint32_t idx = r * cam->width + c;
-            
-            // 阈值判断
-            if (cam->raw_image[idx] > cam->threshold) {
-                // 直接点亮自身与 8 邻域
-                cam->binarized_image[idx] = 1;
-                cam->binarized_image[idx - 1] = 1;
-                cam->binarized_image[idx + 1] = 1;
-                cam->binarized_image[idx - cam->width] = 1;
-                cam->binarized_image[idx + cam->width] = 1;
-                cam->binarized_image[idx - cam->width - 1] = 1;
-                cam->binarized_image[idx - cam->width + 1] = 1;
-                cam->binarized_image[idx + cam->width - 1] = 1;
-                cam->binarized_image[idx + cam->width + 1] = 1;
+            if (cam->raw_image[idx] > cam->threshold) cam->binarized_image[idx] = 1;
+        }
+    }
+}
+
+static void dilate_pass(CameraObject *cam, uint8_t *in, uint8_t *out) {
+    memset(out, 0, cam->width * cam->height);
+    for (uint16_t r = 1; r < cam->height - 1; r++) {
+        uint16_t c_start = fov_left_bound[r] > 1 ? fov_left_bound[r] : 1;
+        uint16_t c_end   = fov_right_bound[r] < cam->width - 1 ? fov_right_bound[r] : cam->width - 1;
+        for (uint16_t c = c_start; c < c_end; c++) {
+            uint32_t idx = r * cam->width + c;
+            if (in[idx]) {
+                out[idx] = 1; out[idx-1] = 1; out[idx+1] = 1;
+                out[idx-cam->width] = 1; out[idx-cam->width-1] = 1; out[idx-cam->width+1] = 1;
+                out[idx+cam->width] = 1; out[idx+cam->width-1] = 1; out[idx+cam->width+1] = 1;
             }
         }
     }
+}
+
+static void erode_pass(CameraObject *cam, uint8_t *in, uint8_t *out) {
+    memset(out, 0, cam->width * cam->height);
+    for (uint16_t r = 1; r < cam->height - 1; r++) {
+        uint16_t c_start = fov_left_bound[r] > 1 ? fov_left_bound[r] : 1;
+        uint16_t c_end   = fov_right_bound[r] < cam->width - 1 ? fov_right_bound[r] : cam->width - 1;
+        for (uint16_t c = c_start; c < c_end; c++) {
+            uint32_t idx = r * cam->width + c;
+            if (in[idx]) {
+                if (in[idx-1] && in[idx+1] && in[idx-cam->width] && in[idx+cam->width] &&
+                    in[idx-cam->width-1] && in[idx-cam->width+1] && in[idx+cam->width-1] && in[idx+cam->width+1]) {
+                    out[idx] = 1;
+                }
+            }
+        }
+    }
+}
+
+static void apply_double_closing(CameraObject *cam) {
+    //static uint32_t total_time = 0;
+    //static uint32_t frame_count = 0;
+    //uint32_t t_start = pit_get_us(PIT_CH0);
+
+    // 1. 基础二值化
+    binarize_image(cam);
+    
+    // 2. 两次闭运算逻辑 (Dilate x 2 -> Erode x 2)
+    // 复用 visited_buffer 作为临时缓冲区（它在后续 extract_components 会被清空重用）
+    dilate_pass(cam, cam->binarized_image, visited_buffer);
+    dilate_pass(cam, visited_buffer, cam->binarized_image);
+    erode_pass(cam, cam->binarized_image, visited_buffer);
+    erode_pass(cam, visited_buffer, cam->binarized_image);
+
+    //uint32_t t_end = pit_get_us(PIT_CH0);
+    //total_time += (t_end - t_start);
+    //frame_count++;
+
+    // 每 100 帧评估一次平均运算耗时
+    // if (frame_count >= 100) {
+    //     printf("[MORPH] 2-Iter Closing Avg Time: %d us\r\n", (int)(total_time / 100));
+    //     frame_count = 0;
+    //     total_time = 0;
+    // }
 }
 
 // 【合并优化】一次全图扫描，同时完成连通域提取、质心计算与二阶矩长宽比特征提取
@@ -441,7 +478,7 @@ static void sort_lights(CameraObject *cam) {
 // --- 4. 外部调用的处理入口 ---
 void image_processing_loop(void) {
     // 1. 二值化与膨胀一趟融合处理，免去额外内存拷贝与遍历
-    binarize_and_dilate(&cam_down);
+    apply_double_closing(&cam_down);
 
     // 2. 连通域提取与质心、特征值计算一次性完成
     extract_components(&cam_down, visited_buffer);

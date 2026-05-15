@@ -119,6 +119,7 @@ int main(void) {
         if (share_data_from_1[15] != 0.0f)
         {
             vision_timeout_cnt = 0; // 成功收到数据，喂狗清零
+            vis_cnt++;
             
             share_data_from_1[15] = 0.0f;
             Flight_Hover_Control_Task(); 
@@ -158,6 +159,10 @@ int main(void) {
         // wireless_uart_send_float(share_data_from_1[12]);
         // wireless_uart_send_string("\n");
         print_cnt = 0;
+        }
+        if(vis_cnt > 100){
+            vis_cnt = 0;
+            printf("100");
         }
         system_delay_us(400); // 稍微延时
     }
