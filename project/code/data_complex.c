@@ -76,58 +76,58 @@ void Board_Comm_Send_Data(volatile float *data_array)
 //请将所有通讯赋值在下面三个函数完成
 
 void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_data_from_0
-    data_out[0] = imu_data.roll; 
-    data_out[1] = imu_data.pitch;
-    data_out[2] = imu_data.yaw;
+    data_out[S0_IMU_ROLL]    = imu_data.roll;
+    data_out[S0_IMU_PITCH]   = imu_data.pitch;
+    data_out[S0_IMU_YAW]     = imu_data.yaw;
 
-    data_out[3] = imu_data.z;
-    data_out[4] = (float)current_drone_state;
-    data_out[5] = motor_out.lf;
-    data_out[6] = motor_out.rf;
-    data_out[7] = motor_out.lb;
-    data_out[8] = motor_out.rb;
+    data_out[S0_IMU_HEIGHT]  = imu_data.z;
+    data_out[S0_DRONE_STATE] = (float)current_drone_state;
+    data_out[S0_MOTOR_LF]    = motor_out.lf;
+    data_out[S0_MOTOR_RF]    = motor_out.rf;
+    data_out[S0_MOTOR_LB]    = motor_out.lb;
+    data_out[S0_MOTOR_RB]    = motor_out.rb;
 
-    data_out[9] = flight_target.target_roll; 
-    data_out[10] = flight_target.target_pitch;
-    data_out[11] = flight_target.target_yaw;
-    data_out[12] = dataC.debug_earth_err_x;
-    data_out[13] = dataC.debug_earth_err_y;
-    
+    data_out[S0_TARGET_ROLL]  = flight_target.target_roll;
+    data_out[S0_TARGET_PITCH] = flight_target.target_pitch;
+    data_out[S0_TARGET_YAW]   = flight_target.target_yaw;
+    data_out[S0_DEBUG_ERR_X]  = dataC.debug_earth_err_x;
+    data_out[S0_DEBUG_ERR_Y]  = dataC.debug_earth_err_y;
+
 }
 
 void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share_data一般传入share_data_from_1
 {
-    buffer[0] = share_data[9];
-    buffer[1] = share_data[12];
-    buffer[2] = share_data[5];
-    buffer[3] = share_data[6];
+    buffer[0] = share_data[S1_K_CAR_X];
+    buffer[1] = share_data[S1_K_CAR_Y];
+    buffer[2] = share_data[S1_TARGET_X];
+    buffer[3] = share_data[S1_TARGET_Y];
     buffer[4] = imu_data.yaw;
-    buffer[5] = share_data[14];
+    buffer[5] = share_data[S1_LOCKED_COUNT];
     buffer[6] = car_en;
 }
 
 #elif defined(CY_CORE_CM7_1)
 void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_data_from_1
-    data_out[0] = cam_down.car_center_y; 
-    data_out[1] = cam_down.car_center_x;
-    data_out[2] = (float)cam_down.car_dot_num;
-    data_out[3] = pos.car.x;
-    data_out[4] = pos.car.y;  
-    data_out[5] = pos.target.x;
-    data_out[6] = pos.target.y;
-    data_out[8] = img_imu_snap.yaw; // 传回 Core0 的是该帧对应的快照 Yaw
-    data_out[7] = pos.raw_car.x;
-    data_out[9] = pos.k_car.x;
-    data_out[12] = pos.k_car.y;
-    data_out[13] = dataC.car_target_dist;
+    data_out[S1_CAR_CENTER_Y] = cam_down.car_center_y;
+    data_out[S1_CAR_CENTER_X] = cam_down.car_center_x;
+    data_out[S1_CAR_DOT_NUM]  = (float)cam_down.car_dot_num;
+    data_out[S1_CAR_RAW_X]    = pos.car.x;
+    data_out[S1_CAR_RAW_Y]    = pos.car.y;
+    data_out[S1_TARGET_X]     = pos.target.x;
+    data_out[S1_TARGET_Y]     = pos.target.y;
+    data_out[S1_SNAPSHOT_YAW] = img_imu_snap.yaw; // 传回 Core0 的是该帧对应的快照 Yaw
+    data_out[S1_RAW_CAR_X]    = pos.raw_car.x;
+    data_out[S1_K_CAR_X]      = pos.k_car.x;
+    data_out[S1_K_CAR_Y]      = pos.k_car.y;
+    data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;
 
     uint8_t locked_count = 0;
     if (cam_down.car_valid) locked_count++;
     if (cam_down.target_valid) locked_count += 2;
-    data_out[14] = (float)locked_count;
-    
+    data_out[S1_LOCKED_COUNT] = (float)locked_count;
+
     if (!cam_down.car_valid) {
-        data_out[2] = 0; // 丢失时仅将面积清零通知飞控即可
+        data_out[S1_CAR_DOT_NUM] = 0; // 丢失时仅将面积清零通知飞控即可
     }
 }
 #endif

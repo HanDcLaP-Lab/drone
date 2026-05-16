@@ -78,12 +78,12 @@ int main(void)
             SCB_InvalidateDCache_by_Addr(&share_data_from_0, sizeof(share_data_from_0));
             
             // 立即快照当前姿态，确保在整个 image_processing_loop 中不被下一次通讯污染
-            img_imu_snap.roll   = share_data_from_0[0];
-            img_imu_snap.pitch  = share_data_from_0[1];
-            img_imu_snap.yaw    = share_data_from_0[2];
-            img_imu_snap.height = share_data_from_0[3];
+            img_imu_snap.roll   = share_data_from_0[S0_IMU_ROLL];
+            img_imu_snap.pitch  = share_data_from_0[S0_IMU_PITCH];
+            img_imu_snap.yaw    = share_data_from_0[S0_IMU_YAW];
+            img_imu_snap.height = share_data_from_0[S0_IMU_HEIGHT];
 
-            int drone_mode = (int)share_data_from_0[4];
+            int drone_mode = (int)share_data_from_0[S0_DRONE_STATE];
             cam_down.threshold = (uint8_t)debug_params[0];
 
             image_processing_loop();               // 执行核心视觉算法
@@ -91,7 +91,7 @@ int main(void)
 
             // 2. 刷入 RAM 供 Core 0 读取
             M7_1_data_send(share_data_from_1);
-            share_data_from_1[15] = 1.0f; // 图像处理完成标志位，Core 0 可根据此位判断何时读取数据
+            share_data_from_1[S1_PROCESS_DONE] = 1.0f; // 图像处理完成标志位，Core 0 可根据此位判断何时读取数据
             SCB_CleanDCache_by_Addr(&share_data_from_1, sizeof(share_data_from_1));
 
             // 3. 屏幕打印

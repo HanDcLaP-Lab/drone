@@ -13,6 +13,42 @@
 //============================================================
 #define M7_x_DATA_LENGTH 16
 
+// ================= share_data_from_0[16] 索引定义 (Core 0 → Core 1) =================
+// 由 M7_0_data_send() 写入，Core 1 只读
+#define S0_IMU_ROLL       0   // imu_data.roll              横滚角 (deg)
+#define S0_IMU_PITCH      1   // imu_data.pitch             俯仰角 (deg)
+#define S0_IMU_YAW        2   // imu_data.yaw               偏航角 (deg)
+#define S0_IMU_HEIGHT     3   // imu_data.z                 高度 (cm)
+#define S0_DRONE_STATE    4   // current_drone_state        飞行模式/状态
+#define S0_MOTOR_LF       5   // motor_out.lf               左前电机PWM
+#define S0_MOTOR_RF       6   // motor_out.rf               右前电机PWM
+#define S0_MOTOR_LB       7   // motor_out.lb               左后电机PWM
+#define S0_MOTOR_RB       8   // motor_out.rb               右后电机PWM
+#define S0_TARGET_ROLL    9   // flight_target.target_roll  目标横滚角 (deg)
+#define S0_TARGET_PITCH   10  // flight_target.target_pitch 目标俯仰角 (deg)
+#define S0_TARGET_YAW     11  // flight_target.target_yaw   目标偏航角 (deg)
+#define S0_DEBUG_ERR_X    12  // dataC.debug_earth_err_x    调试: 地面误差X
+#define S0_DEBUG_ERR_Y    13  // dataC.debug_earth_err_y    调试: 地面误差Y
+// 14-15 reserved
+
+// ================= share_data_from_1[16] 索引定义 (Core 1 → Core 0) =================
+// 由 M7_1_data_send() 写入，Core 0 只读
+#define S1_CAR_CENTER_Y    0   // cam_down.car_center_y      小车中心Y坐标 (像素)
+#define S1_CAR_CENTER_X    1   // cam_down.car_center_x      小车中心X坐标 (像素)
+#define S1_CAR_DOT_NUM     2   // cam_down.car_dot_num       小车识别点数/面积
+#define S1_CAR_RAW_X       3   // pos.car.x                  小车原始位置X (cm)
+#define S1_CAR_RAW_Y       4   // pos.car.y                  小车原始位置Y (cm)
+#define S1_TARGET_X        5   // pos.target.x               目标(信标)位置X (cm)
+#define S1_TARGET_Y        6   // pos.target.y               目标(信标)位置Y (cm)
+#define S1_RAW_CAR_X       7   // pos.raw_car.x              小车未滤波X (cm)
+#define S1_SNAPSHOT_YAW    8   // img_imu_snap.yaw           快照偏航角 (deg)
+#define S1_K_CAR_X         9   // pos.k_car.x                卡尔曼滤波后小车X (cm)
+// 10-11 reserved
+#define S1_K_CAR_Y         12  // pos.k_car.y                卡尔曼滤波后小车Y (cm)
+#define S1_CAR_TARGET_DIST 13  // dataC.car_target_dist      小车-信标距离
+#define S1_LOCKED_COUNT    14  // locked_count               锁定灯数 (bit0=小车, bit1=信标)
+#define S1_PROCESS_DONE    15  // 图像处理完成标志 (1.0=完成, 0.0=未完成)
+
 typedef struct {
     float debug_earth_err_x,debug_earth_err_y; //0
     float car_target_dist; //1

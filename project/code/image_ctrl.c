@@ -19,7 +19,7 @@ static uint8_t was_aligning = 0;         // 标记飞机之前是否正处于“
  * @brief 位置环解耦控制
  */
 static void Flight_Hover_Position_Control(float car_pos_x, float car_pos_y, float *out_roll, float *out_pitch) {
-    float snapshot_yaw = share_data_from_1[8];
+    float snapshot_yaw = share_data_from_1[S1_SNAPSHOT_YAW];
     float yaw_rad = snapshot_yaw * 3.14159265f / 180.0f;
     float cos_yaw = cosf(yaw_rad);
     float sin_yaw = sinf(yaw_rad);
@@ -58,8 +58,8 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
     // 逻辑A：当锁定了双目标（看到信标）
     if (locked_lights == 3) {
         if (imu_data.z > 0.85f * TARGET_HEIGHT_CM) has_seen_beacon = 1;
-        float target_pos_x = share_data_from_1[5] - dataC.camera_offset_x; 
-        float target_pos_y = share_data_from_1[6] - dataC.camera_offset_y; 
+        float target_pos_x = share_data_from_1[S1_TARGET_X] - dataC.camera_offset_x;
+        float target_pos_y = share_data_from_1[S1_TARGET_Y] - dataC.camera_offset_y;
         
         float distance = sqrtf(target_pos_x * target_pos_x + target_pos_y * target_pos_y);
         
@@ -138,10 +138,10 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
 
 void Flight_Hover_Control_Task(void) {
     // 1. 获取目标中心坐标与锁定状态
-    float car_pos_x = share_data_from_1[9];
-    float car_pos_y = share_data_from_1[12];
-    uint8_t locked_lights = (uint8_t)share_data_from_1[14];    
-    float snapshot_yaw = share_data_from_1[8];
+    float car_pos_x = share_data_from_1[S1_K_CAR_X];
+    float car_pos_y = share_data_from_1[S1_K_CAR_Y];
+    uint8_t locked_lights = (uint8_t)share_data_from_1[S1_LOCKED_COUNT];
+    float snapshot_yaw = share_data_from_1[S1_SNAPSHOT_YAW];
     
     if (locked_lights == 1 || locked_lights == 3) {
         car_pos_x = car_pos_x - dataC.camera_offset_x;

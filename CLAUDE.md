@@ -16,11 +16,14 @@ This is a multi-core Cortex-M7 drone flight control system for the CYT4BB platfo
 
 - **CM7_1**: Image processing core (20ms processing loop)  
   - MT9V03X camera processing (120x188 resolution)
+  - Per-pixel dynamic threshold: center 130 → edge 40 (3×3 block LUT)
+  - Pipeline: binarize → double closing (dilate→erode→dilate→erode) → DFS components → sort → ground projection
   - Visual tracking (car and beacon recognition)
   - Interrupt handling (PIT_CH1: 20ms)
 
 **Inter-core communication:**
 - Two shared data arrays: `share_data_from_0[16]` (CM7_0 → CM7_1) and `share_data_from_1[16]` (CM7_1 → CM7_0)
+- Index macros defined in `data_complex.h`: `S0_*` (e.g. `S0_IMU_ROLL=0`) and `S1_*` (e.g. `S1_K_CAR_X=9`)
 - Data synchronization via `SCB_CleanDCache_by_Addr()`
 - Structure: `Data_Complex_t` in `data_complex.h` for managing complex data
 
@@ -33,7 +36,7 @@ The drone uses a triple-cascade PID structure:
 **Key modules:**
 - `fly_ctrl.c/h`: Main flight control with `Flight_Target_t` struct for targets
 - `imu.c/h`: IMU data processing and coordinate transforms
-- `image.c/h`: Image processing for visual tracking  
+- `image.c/h`: Image processing — binarize (per-pixel threshold), double closing, DFS components, light sorting, ground projection via `image_process.c`  
 - `pid.c/h`: Nonlinear PID implementation with filtering
 - `upixel.c/h`: Optical flow module (currently using screen UART)
 - `app.c/h`: State machine with debug/flight mode switching
@@ -79,6 +82,9 @@ The drone uses a triple-cascade PID structure:
 ### Camera Configuration  
 - `MT9V03X_H`: 120, `MT9V03X_W`: 188 (resolution)
 - `CAM_OFFSET_X`: 10.0f, `CAM_OFFSET_Y`: -4.0f (camera relative to IMU)
+- `THRESHOLD_MAX`: 130 (image center), `THRESHOLD_MIN`: 40 (image edge) — per-pixel via rho² LUT
+- `BASE_MIN_AREA`: 4.0f — minimum blob area for valid light detection
+- `FOV_DIAMETER`: 126.0f — circular FOV mask diameter (pixels)
 
 ### Motor Mapping
 New frame (post 5.12a):

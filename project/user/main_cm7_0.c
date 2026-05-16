@@ -64,7 +64,7 @@ int main(void) {
     gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL); //uart
 
     app_init();
-    share_data_from_0[4] = (float)current_drone_state;
+    share_data_from_0[S0_DRONE_STATE] = (float)current_drone_state;
     SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
 
     { //初始化
@@ -116,12 +116,11 @@ int main(void) {
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
         static uint32_t vision_timeout_cnt = 0; // [新增] 视觉失联看门狗计数器
         static uint32_t print_cnt = 0; 
-        if (share_data_from_1[15] != 0.0f)
+        if (share_data_from_1[S1_PROCESS_DONE] != 0.0f)
         {
             vision_timeout_cnt = 0; // 成功收到数据，喂狗清零
-            vis_cnt++;
-            
-            share_data_from_1[15] = 0.0f;
+
+            share_data_from_1[S1_PROCESS_DONE] = 0.0f;
             Flight_Hover_Control_Task(); 
             SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
             
@@ -154,15 +153,11 @@ int main(void) {
         if(print_cnt == 100){
         // wireless_uart_send_float(imu_data.yaw);
         // wireless_uart_send_string(",");
-        // wireless_uart_send_float(share_data_from_1[9]);
+        // wireless_uart_send_float(share_data_from_1[S1_K_CAR_X]);
         // wireless_uart_send_string(",");
-        // wireless_uart_send_float(share_data_from_1[12]);
+        // wireless_uart_send_float(share_data_from_1[S1_K_CAR_Y]);
         // wireless_uart_send_string("\n");
         print_cnt = 0;
-        }
-        if(vis_cnt > 100){
-            vis_cnt = 0;
-            printf("100");
         }
         system_delay_us(400); // 稍微延时
     }

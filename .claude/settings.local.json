@@ -1,37 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh repo *)",
-      "WebSearch",
-      "Read(//tmp/**)",
-      "Bash(/c/Users/26784/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node -e \"console.log\\('Node.js is working'\\)\")",
-      "Bash(/c/Users/26784/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node -e \"const fs = require\\('fs'\\); console.log\\('package.json exists:', fs.existsSync\\('package.json'\\)\\)\")",
-      "Bash(/c/Users/26784/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node bin/cli.mjs)",
-      "Bash(where choco *)",
-      "Bash(where winget *)",
-      "Bash(winget search *)",
-      "Bash(winget install *)",
-      "Bash(timeout 10)",
-      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
-      "Bash(npm --version)",
-      "Bash(npx --version)",
-      "Bash(npx skills *)",
-      "Bash(gh api *)",
-      "WebFetch(domain:raw.githubusercontent.com)",
-      "Skill(update-config)",
-      "Bash(curl -sL \"https://api.github.com/repos/anthropics/claude-code/contents/plugins/commit-commands?ref=main\")",
-      "Bash(curl *)",
-      "Bash(ping *)",
-      "Bash(git add:*)",
-      "Bash(git status:*)",
-      "Bash(git commit:*)",
-      "Bash(git checkout --branch:*)",
-      "Bash(git push:*)",
-      "Bash(gh pr create:*)",
-      "Bash(git branch:*)",
-      "Bash(git worktree:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)"
+      "Bash(claude mcp *)",
+      "Bash(echo \"@echo off\")",
+      "Bash(echo REM Claude Code with WPS Office MCP enabled)",
+      "Bash(echo claude *)"
     ]
   }
 }

@@ -6,6 +6,7 @@ uint8_t buffer_bin_down[MT9V03X_H][MT9V03X_W];
 // 定义 DFS 访问标记数组 (静态分配以防栈溢出)
 uint8_t visited_buffer[MT9V03X_H * MT9V03X_W];
 uint8 image_copy[MT9V03X_H][MT9V03X_W];
+uint8_t thresh_by_rho2[(int)FOV_RADIUS_SQ + 1]; // 逐像素阈值查找表: rho² → 二值化阈值
 // 定义全局实例
 CameraObject cam_down;
 Image_IMU_Snapshot_t img_imu_snap = {0}; // 新增全局快照实例
@@ -41,6 +42,14 @@ void camera_init(void) {
     cam_down.margin_cut = 1;    // 四周裁剪 5 像素
     cam_down.debug_max_ratio = 0.0f;
     cam_down.debug_min_ratio = 999.0f;
+
+    // 预计算逐像素阈值查找表: rho² → threshold, 中心高阈值边缘低阈值
+    int span = THRESHOLD_MAX - THRESHOLD_MIN;
+    for (int i = 0; i <= (int)FOV_RADIUS_SQ; i++) {
+        int thr = THRESHOLD_MAX - (i * span) / (int)FOV_RADIUS_SQ;
+        if (thr < THRESHOLD_MIN) thr = THRESHOLD_MIN;
+        thresh_by_rho2[i] = (uint8_t)thr;
+    }
 
     // 初始化阶段预计算每一行的圆形视野起始和结束列
     for (int r = 0; r < MT9V03X_H; r++) {
@@ -143,9 +152,9 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
         for (int i = 0; i < 4; i++) {
             uint16_t nr = curr.r + dr[i];
             uint16_t nc = curr.c + dc[i];
-            // 【关键修复】不仅检查矩形边界，还要检查预计算的圆形 FOV 有效列区间
-            // 确保 DFS 不会由于膨胀操作产生的“溢出”像素而进入无效区域
-            if (nr < cam->height && nc >= fov_left_bound[nr] && nc < fov_right_bound[nr]) {
+            // 简单的边界预判
+            if (nr >= cam->margin_cut && nr < (cam->height - cam->margin_cut) &&
+                nc >= cam->margin_cut && nc < (cam->width - cam->margin_cut)) {
                 
                 uint32_t nidx = nr * cam->width + nc;
                 // 只有亮点且未访问才入栈，减少栈占用
@@ -167,76 +176,93 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
         }
     }
 }
-static void binarize_image(CameraObject *cam) {
+
+// 逐像素动态阈值二值化: 每3×3像素块共用一个阈值, 离图像中心越远阈值越低
+static void binarize_pass(CameraObject *cam) {
     memset(cam->binarized_image, 0, cam->width * cam->height);
-    for (uint16_t r = cam->margin_cut; r < cam->height - cam->margin_cut; r++) {
-        uint16_t c_start = fov_left_bound[r];
-        uint16_t c_end   = fov_right_bound[r];
-        for (uint16_t c = c_start; c < c_end; c++) {
-            uint32_t idx = r * cam->width + c;
-            if (cam->raw_image[idx] > cam->threshold) cam->binarized_image[idx] = 1;
-        }
-    }
-}
+    uint16_t safe_margin = cam->margin_cut > 1 ? cam->margin_cut : 1;
+    uint16_t h = cam->height;
+    uint16_t w = cam->width;
 
-static void dilate_pass(CameraObject *cam, uint8_t *in, uint8_t *out) {
-    memset(out, 0, cam->width * cam->height);
-    for (uint16_t r = 1; r < cam->height - 1; r++) {
-        uint16_t c_start = fov_left_bound[r] > 1 ? fov_left_bound[r] : 1;
-        uint16_t c_end   = fov_right_bound[r] < cam->width - 1 ? fov_right_bound[r] : cam->width - 1;
-        for (uint16_t c = c_start; c < c_end; c++) {
-            uint32_t idx = r * cam->width + c;
-            if (in[idx]) {
-                out[idx] = 1; out[idx-1] = 1; out[idx+1] = 1;
-                out[idx-cam->width] = 1; out[idx-cam->width-1] = 1; out[idx-cam->width+1] = 1;
-                out[idx+cam->width] = 1; out[idx+cam->width-1] = 1; out[idx+cam->width+1] = 1;
-            }
-        }
-    }
-}
+    for (uint16_t r = safe_margin; r < h - safe_margin; r += 3) {
+        uint16_t r_end = r + 3;
+        if (r_end > h - safe_margin) r_end = h - safe_margin;
+        int32_t cy = r + 1;
+        if (cy >= (int32_t)(h - safe_margin)) cy = r;
+        int32_t dy = cy - (int32_t)CAM_CY;
+        int32_t dy_sq = dy * dy;
 
-static void erode_pass(CameraObject *cam, uint8_t *in, uint8_t *out) {
-    memset(out, 0, cam->width * cam->height);
-    for (uint16_t r = 1; r < cam->height - 1; r++) {
-        uint16_t c_start = fov_left_bound[r] > 1 ? fov_left_bound[r] : 1;
-        uint16_t c_end   = fov_right_bound[r] < cam->width - 1 ? fov_right_bound[r] : cam->width - 1;
-        for (uint16_t c = c_start; c < c_end; c++) {
-            uint32_t idx = r * cam->width + c;
-            if (in[idx]) {
-                if (in[idx-1] && in[idx+1] && in[idx-cam->width] && in[idx+cam->width] &&
-                    in[idx-cam->width-1] && in[idx-cam->width+1] && in[idx+cam->width-1] && in[idx+cam->width+1]) {
-                    out[idx] = 1;
+        for (uint16_t c = safe_margin; c < w - safe_margin; c += 3) {
+            uint16_t c_end = c + 3;
+            if (c_end > w - safe_margin) c_end = w - safe_margin;
+            int32_t cx = c + 1;
+            if (cx >= (int32_t)(w - safe_margin)) cx = c;
+            int32_t dx = cx - (int32_t)CAM_CX;
+            int32_t rho2 = dx * dx + dy_sq;
+            uint8_t thr;
+            if (rho2 > (int32_t)FOV_RADIUS_SQ) thr = THRESHOLD_MIN;
+            else thr = thresh_by_rho2[rho2];
+
+            for (uint16_t br = r; br < r_end; br++) {
+                uint16_t bc_start = fov_left_bound[br] > c ? fov_left_bound[br] : c;
+                uint16_t bc_end   = fov_right_bound[br] < c_end ? fov_right_bound[br] : c_end;
+                for (uint16_t bc = bc_start; bc < bc_end; bc++) {
+                    uint32_t idx = br * w + bc;
+                    if (cam->raw_image[idx] > thr) {
+                        cam->binarized_image[idx] = 1;
+                    }
                 }
             }
         }
     }
 }
 
-static void apply_double_closing(CameraObject *cam) {
-    //static uint32_t total_time = 0;
-    //static uint32_t frame_count = 0;
-    //uint32_t t_start = pit_get_us(PIT_CH0);
+// 8邻域膨胀: src → dst
+static void dilate_pass(uint8_t *src, uint8_t *dst, uint16_t width, uint16_t height, uint8_t margin) {
+    memset(dst, 0, width * height);
+    uint16_t safe_margin = margin > 1 ? margin : 1;
 
-    // 1. 基础二值化
-    binarize_image(cam);
-    
-    // 2. 两次闭运算逻辑 (Dilate x 2 -> Erode x 2)
-    // 复用 visited_buffer 作为临时缓冲区（它在后续 extract_components 会被清空重用）
-    dilate_pass(cam, cam->binarized_image, visited_buffer);
-    dilate_pass(cam, visited_buffer, cam->binarized_image);
-    erode_pass(cam, cam->binarized_image, visited_buffer);
-    erode_pass(cam, visited_buffer, cam->binarized_image);
+    for (uint16_t r = safe_margin; r < height - safe_margin; r++) {
+        uint16_t c_start = fov_left_bound[r] > safe_margin ? fov_left_bound[r] : safe_margin;
+        uint16_t c_end   = fov_right_bound[r] < (width - safe_margin) ? fov_right_bound[r] : (width - safe_margin);
 
-    //uint32_t t_end = pit_get_us(PIT_CH0);
-    //total_time += (t_end - t_start);
-    //frame_count++;
+        for (uint16_t c = c_start; c < c_end; c++) {
+            uint32_t idx = r * width + c;
+            if (src[idx] == 1) {
+                dst[idx] = 1;
+                dst[idx - 1] = 1;
+                dst[idx + 1] = 1;
+                dst[idx - width] = 1;
+                dst[idx + width] = 1;
+                dst[idx - width - 1] = 1;
+                dst[idx - width + 1] = 1;
+                dst[idx + width - 1] = 1;
+                dst[idx + width + 1] = 1;
+            }
+        }
+    }
+}
 
-    // 每 100 帧评估一次平均运算耗时
-    // if (frame_count >= 100) {
-    //     printf("[MORPH] 2-Iter Closing Avg Time: %d us\r\n", (int)(total_time / 100));
-    //     frame_count = 0;
-    //     total_time = 0;
-    // }
+// 8邻域腐蚀: src → dst (仅当像素自身及8邻域全为1时保留)
+static void erode_pass(uint8_t *src, uint8_t *dst, uint16_t width, uint16_t height, uint8_t margin) {
+    memset(dst, 0, width * height);
+    uint16_t safe_margin = margin > 1 ? margin : 1;
+
+    for (uint16_t r = safe_margin; r < height - safe_margin; r++) {
+        uint16_t c_start = fov_left_bound[r] > safe_margin ? fov_left_bound[r] : safe_margin;
+        uint16_t c_end   = fov_right_bound[r] < (width - safe_margin) ? fov_right_bound[r] : (width - safe_margin);
+
+        for (uint16_t c = c_start; c < c_end; c++) {
+            uint32_t idx = r * width + c;
+            if (src[idx] == 1 &&
+                src[idx - 1] == 1 && src[idx + 1] == 1 &&
+                src[idx - width] == 1 && src[idx + width] == 1 &&
+                src[idx - width - 1] == 1 && src[idx - width + 1] == 1 &&
+                src[idx + width - 1] == 1 && src[idx + width + 1] == 1) {
+                dst[idx] = 1;
+            }
+        }
+    }
 }
 
 // 【合并优化】一次全图扫描，同时完成连通域提取、质心计算与二阶矩长宽比特征提取
@@ -359,13 +385,13 @@ static void sort_lights(CameraObject *cam) {
         // 记录物理距离的平方 (单位：平方厘米)
         phys_dist_sq[i] = out_dist * out_dist;
 
-        // 【核心修改】：使用物理距离计算动态面积下限！
-        if(out_dist > 150.0f) cam->dot_num[i] *= (out_dist / 100.0f);
+        // 使用局部变量做距离补偿过滤，不改动原始 dot_num
+        float area_for_filter = (float)cam->dot_num[i];
+        if (out_dist > 150.0f) area_for_filter *= (out_dist / 100.0f);
         float dynamic_min_area = BASE_MIN_AREA;
-        
 
         // 只有面积在当前物理距离下达标的点，才允许进入后续竞选
-        if (cam->dot_num[i] >= dynamic_min_area) {
+        if (area_for_filter >= dynamic_min_area) {
             is_valid_blob[i] = 1;
         }
     }
@@ -430,8 +456,8 @@ static void sort_lights(CameraObject *cam) {
     target_idx = -1; // 确保重置
 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
-        if (i == car_idx) continue; 
-        if(cam->dot_num[i] < 20) continue;
+        if (i == car_idx) continue;
+        if (!is_valid_blob[i]) continue;
         // 计算目标质心到画面中心的像素距离平方 
         float dx = cam->centers[i][1] - img_cx;
         float dy = cam->centers[i][0] - img_cy;
@@ -445,8 +471,8 @@ static void sort_lights(CameraObject *cam) {
             dynamic_target_max_ratio = TARGET_LIMIT_MAX_RATIO; 
         }
 
-        // 使用算出来的动态长宽比阈值进行形状筛选
-        if (cam->aspect_ratio[i] < dynamic_target_max_ratio) {
+        // 面积过小的连通域长宽比不可靠, 直接通过形状筛选
+        if (cam->dot_num[i] <= 20 || cam->aspect_ratio[i] < dynamic_target_max_ratio) {
             
             // 【核心修改：按中心距离打擂台】
             // 只要形状合格，谁离画面中心最贴近，谁就是真正的信标！
@@ -477,16 +503,27 @@ static void sort_lights(CameraObject *cam) {
 
 // --- 4. 外部调用的处理入口 ---
 void image_processing_loop(void) {
-    // 1. 二值化与膨胀一趟融合处理，免去额外内存拷贝与遍历
-    apply_double_closing(&cam_down);
+    // 1. 逐像素动态阈值二值化 (越靠近图像边缘阈值越低)
+    binarize_pass(&cam_down);
 
-    // 2. 连通域提取与质心、特征值计算一次性完成
+    // 2. 双重闭运算: dilate → erode → dilate → erode (桥接线缆造成的断裂)
+    uint8_t *bin = (uint8_t *)cam_down.binarized_image;
+    uint8_t *tmp = (uint8_t *)image_copy;
+    uint16_t w = cam_down.width;
+    uint16_t h = cam_down.height;
+    uint8_t m = cam_down.margin_cut;
+
+    dilate_pass(bin, tmp, w, h, m);
+    erode_pass(tmp, bin, w, h, m);
+    dilate_pass(bin, tmp, w, h, m);
+    erode_pass(tmp, bin, w, h, m);
+
+    // 3. 连通域提取与质心、特征值计算一次性完成
     extract_components(&cam_down, visited_buffer);
 
-    // 3. 按面积从大到小排序 (需同步交换 aspect_ratio)
-    
+    // 4. 按面积从大到小排序 (需同步交换 aspect_ratio)
     sort_lights(&cam_down);
 
-    // 4. 矫正处理 使用锁定快照，保证整个运算链路无时序冲突
+    // 5. 矫正处理 使用锁定快照，保证整个运算链路无时序冲突
     calculate_ground_positions(img_imu_snap.height, img_imu_snap.pitch, img_imu_snap.roll, img_imu_snap.yaw);
 } 
