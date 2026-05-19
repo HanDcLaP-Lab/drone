@@ -42,6 +42,7 @@ void Nonline_PID_Reset(Nonline_PID_t *pid){
 
 // 核心计算函数
 float PID_Calculate(PID_t *pid, float error, float dt) {
+    if (dt < 1e-7f) return 0.0f;  // 防止除零: dt合法检查
     // 1. P项计算
     float p_out = pid->kp * error;
 
@@ -90,9 +91,10 @@ float PID_Calculate(PID_t *pid, float error, float dt) {
 }
 
 float Nonline_PID_Calculate(Nonline_PID_t *pid, float error, float dt) {
+    if (dt < 1e-7f) return 0.0f;
     // 1. P项计算
     float p_out = pid->kp * error;
-    float p2_out = pid->kp2 * error * fabs(error);
+    float p2_out = pid->kp2 * error * fabsf(error);
 
     // 2. I项计算
     pid->integral += error * dt;

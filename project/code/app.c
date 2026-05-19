@@ -93,23 +93,24 @@ void Fly_Param_Update(uint8_t ch, float val) {
             pid_g_pitch.kd = val;
             break;
         case 8:
-            if(val == 1){
+            if(0.5f <= val && val < 1.5f){
                 wireless_uart_send_string("land\r\n");
                 flight_target.cur_state = pre_landing; 
                 car_en = 0;
-            }else if(val == 2){
+            }else if(val >=1.5f && val <=2.5f){
                 wireless_uart_send_string("emergency stop\r\n");
-                car_en = 0;
                 Flight_Lock();
-            }else if(val == 0){
+                car_en = 0;
+            }else if(val <= 0.5f && val >= -0.5f){
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
                 } else {
-                    flight_target.is_armed = 2; // 进入等待校准状态
+                    flight_target.is_armed = 2; 
                 }
                 flight_target.cur_state = normal;
                 flight_target.start_up_scale = 0;
             }
+            break;
         default:
             break;
     }

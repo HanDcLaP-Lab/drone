@@ -48,7 +48,7 @@ void pit0_ch0_isr() {
     IMU_Update_Loop();
 
     Flight_Control_Loop(); 
-    if(fabs(imu_data.pitch) > 21.0 || fabs(imu_data.roll) > 21.0){
+    if(fabsf(imu_data.pitch) > 21.0f || fabsf(imu_data.roll) > 21.0f){
         if(has_stopped == 0){
             wireless_uart_send_string("emergency stop\r\n");
         }
@@ -89,7 +89,7 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
     //wireless_uart_output_groud();
     //wireless_uart_output_yaw();
     if (upixels_data.valid == 0xF5) {
-        printf("%f,%f\n", upixels_data.opt_vel_x , upixels_data.opt_vel_y);
+        //printf("%f,%f\n", upixels_data.opt_vel_x , upixels_data.opt_vel_y);
     }
     // extern float share_data_from_1[];
     // extern float car_pos_sol1_0,car_pos_sol1_1;

@@ -202,11 +202,12 @@ static void Flight_Control_Rate(float *out_roll, float *out_pitch, float *out_ya
  */
 static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pitch, float out_yaw) {
 
-    // 混控算法 (X型四旋翼)
+    // 静态补偿 — 仅在初始化时计算 (值恒为0, 因PITCH_OFFSET/ROLL_OFFSET均为0)
     motor_offset.lf = (int16_t)( PITCH_OFFSET + ROLL_OFFSET);
     motor_offset.rf = (int16_t)( PITCH_OFFSET - ROLL_OFFSET);
     motor_offset.lb = (int16_t)(-PITCH_OFFSET + ROLL_OFFSET);
     motor_offset.rb = (int16_t)(-PITCH_OFFSET - ROLL_OFFSET);
+    // 混控算法 (X型四旋翼)
     // LF (左前, CW): Base + Pitch + Roll - Yaw
     motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll + out_yaw + motor_offset.lf) * flight_target.start_up_scale * flight_target.output_scale);
 
@@ -260,7 +261,7 @@ void motor_pwm_set() {
     if (flight_target.is_armed == 1) {
         // 注意：UART 驱动通常直接接受逻辑占空比（如 0-10000），不再需要 PWM 的 4000 偏置
         //small_driver_set_duty(LF, RF, RB,LB);
-        small_driver_set_duty(motor_out.lf, motor_out.rf, motor_out.rb,motor_out.lb);
+        small_driver_set_duty(motor_out.lf, motor_out.lb, motor_out.rb,motor_out.rf);
         // small_driver_set_duty(2000, 2000, 2000, 2000);
     } else {
         motor_out.rf = 0;

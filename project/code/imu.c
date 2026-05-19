@@ -19,6 +19,7 @@ static uint16_t tof_timeout_cnt = 0; // ToF超时计数器
 
 // ================= 内部辅助函数 =================
 static float invSqrt(float x) {
+    if (x < 1e-10f) return 1.0f;  // 防止NaN: 四元数退化时保护
     float halfx = 0.5f * x;
     float y = x;
     long i = *(long*)&y;
@@ -93,7 +94,7 @@ static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, floa
     // 结果：acc_weight 是一个 0.0 ~ 1.0 之间的连续系数
 
     // 3. 加速度归一化 (Mahony 必须步骤)
-    if (acc_norm < 0.1f) return; 
+    if (acc_norm < 0.1f || acc_norm != acc_norm) return;  // NaN也会通过<比较, 加isnan检查
     float inv_norm = 1.0f / acc_norm;
     ax *= inv_norm;
     ay *= inv_norm;

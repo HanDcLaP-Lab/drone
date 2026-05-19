@@ -11,7 +11,7 @@
 #define MAX_PWM 8000
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 6.0f  // 最大倾角限制 (度) 
-#define CTRL_DT_CTLOOP 0.001  // 飞控控制周期
+#define CTRL_DT_CTLOOP 0.001f  // 飞控控制周期
 
 #define MIN_ERROR 0.0f  //飞机跟踪小车的死区设置
 //扫描旋转
