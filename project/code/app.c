@@ -173,16 +173,28 @@ void Fly_Param_Update_Visual(uint8_t ch, float val) {
 
 void Fly_Param_Update_yaw(uint8_t ch, float val) {
     switch (ch) {
+        // case 1: // 视觉环 KP
+        //     pid_yaw.kp = val;
+        //     break;
+        // case 2: // 视觉环 KI
+        //     pid_yaw.ki = val;
+        //     break;
+        // case 3: // 视觉环 KD
+        //     pid_yaw.kp2 = val;
+        //     break;
+        // case 4: // 视觉环 KP2
+        //     break;
         case 1: // 视觉环 KP
-            pid_yaw.kp = val;
+            LF = val;
             break;
         case 2: // 视觉环 KI
-            pid_yaw.ki = val;
+            RF = val;
             break;
         case 3: // 视觉环 KD
-            pid_yaw.kp2 = val;
+            RB = val;
             break;
         case 4: // 视觉环 KP2
+            LB = val;
             break;
         case 5: // 角速度环 KP
             pid_image_x.kp = val;

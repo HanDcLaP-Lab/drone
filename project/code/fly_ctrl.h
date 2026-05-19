@@ -8,7 +8,7 @@
 #define TARGET_HEIGHT_CM 120.0f  // 目标高度
 #define LAND_HEIGHT 10.0f       // 着陆高度
 #define HOVER_THROTTLE 4350    // 基础悬停油门 
-#define MAX_PWM 6000
+#define MAX_PWM 8000
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 6.0f  // 最大倾角限制 (度) 
 #define CTRL_DT_CTLOOP 0.001  // 飞控控制周期
@@ -80,6 +80,7 @@ typedef struct {
 extern Flight_Target_t flight_target;
 extern Motor_Output_t motor_out;
 extern Motor_Offsset_t motor_offset;
+extern int LF , LB , RF,RB;
 // =================== 函数声明 ===================
 void Flight_Control_Init(void);
 void Flight_Control_Angle(void);
