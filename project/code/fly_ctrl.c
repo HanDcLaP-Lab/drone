@@ -3,7 +3,6 @@
 // =================== 全局变量定义 ===================
 Flight_Target_t flight_target = {0};
 Motor_Output_t motor_out = {0};
-int LF=0 , LB=0 , RF=0,RB = 0;
 Motor_Offsset_t motor_offset = {0};
 // 定义 PID 对象
 PID_t pid_height_vel;
@@ -260,7 +259,6 @@ void motor_pwm_set() {
 
     if (flight_target.is_armed == 1) {
         // 注意：UART 驱动通常直接接受逻辑占空比（如 0-10000），不再需要 PWM 的 4000 偏置
-        //small_driver_set_duty(LF, RF, RB,LB);
         small_driver_set_duty(motor_out.lf, motor_out.lb, motor_out.rb,motor_out.rf);
         // small_driver_set_duty(2000, 2000, 2000, 2000);
     } else {

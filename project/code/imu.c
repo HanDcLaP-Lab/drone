@@ -19,7 +19,7 @@ static uint16_t tof_timeout_cnt = 0; // ToF超时计数器
 
 // ================= 内部辅助函数 =================
 static float invSqrt(float x) {
-    if (x < 1e-10f) return 1.0f;  // 防止NaN: 四元数退化时保护
+    if (x < 1e-10f) return 1.0f;
     float halfx = 0.5f * x;
     float y = x;
     long i = *(long*)&y;

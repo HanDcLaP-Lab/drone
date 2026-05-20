@@ -77,11 +77,6 @@ void Fly_Param_Update(uint8_t ch, float val) {
         case 5: // 角速度环 KD
             pid_g_roll.kp = val;
             pid_g_pitch.kp = val;
-
-            //pid_g_yaw.kd = val * 0.5f;
-            //pid_yaw.kp = val;
-            //pid_image_x.kd = val;
-            //pid_image_y.kd = val;
             break;
         
         case 6:
@@ -93,15 +88,14 @@ void Fly_Param_Update(uint8_t ch, float val) {
             pid_g_pitch.kd = val;
             break;
         case 8:
-            if(0.5f <= val && val < 1.5f){
+            if(0.5 <= val && val < 1.5){
                 wireless_uart_send_string("land\r\n");
                 flight_target.cur_state = pre_landing; 
                 car_en = 0;
-            }else if(val >=1.5f && val <=2.5f){
+            }else if(val == 2){
                 wireless_uart_send_string("emergency stop\r\n");
                 Flight_Lock();
-                car_en = 0;
-            }else if(val <= 0.5f && val >= -0.5f){
+            }else if(val == 0){
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
                 } else {
@@ -174,28 +168,16 @@ void Fly_Param_Update_Visual(uint8_t ch, float val) {
 
 void Fly_Param_Update_yaw(uint8_t ch, float val) {
     switch (ch) {
-        // case 1: // 视觉环 KP
-        //     pid_yaw.kp = val;
-        //     break;
-        // case 2: // 视觉环 KI
-        //     pid_yaw.ki = val;
-        //     break;
-        // case 3: // 视觉环 KD
-        //     pid_yaw.kp2 = val;
-        //     break;
-        // case 4: // 视觉环 KP2
-        //     break;
         case 1: // 视觉环 KP
-            LF = val;
+            pid_yaw.kp = val;
             break;
         case 2: // 视觉环 KI
-            RF = val;
+            pid_yaw.ki = val;
             break;
         case 3: // 视觉环 KD
-            RB = val;
+            pid_yaw.kp2 = val;
             break;
         case 4: // 视觉环 KP2
-            LB = val;
             break;
         case 5: // 角速度环 KP
             pid_image_x.kp = val;
