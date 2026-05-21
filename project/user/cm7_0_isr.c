@@ -49,7 +49,6 @@ void pit0_ch0_isr() {
 
     Flight_Control_Loop(); 
     if(fabsf(imu_data.pitch) > 21.0f || fabsf(imu_data.roll) > 21.0f){
-    if(fabsf(imu_data.pitch) > 21.0f || fabsf(imu_data.roll) > 21.0f){
         if(has_stopped == 0){
             wireless_uart_send_string("emergency stop\r\n");
         }

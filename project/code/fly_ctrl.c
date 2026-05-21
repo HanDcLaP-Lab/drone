@@ -46,7 +46,7 @@ void Flight_Control_Init(void) {
     // 角速度环g
     PID_Init(&pid_g_roll, 2.777f, 3.327f, 0.101f, 120, 3500, 40.0f);
     PID_Init(&pid_g_pitch, 2.777f, 13.327f, 0.101f, 120, 3500, 40.0f);
-    PID_Init(&pid_g_yaw, 4.54f, 1.32f, 0.00f, 150, 3500, 40.0f);
+    PID_Init(&pid_g_yaw, 5.43f, 1.32f, 0.00f, 150, 3500, 40.0f);
     // 视觉部分
     Nonline_PID_Init(&pid_image_x, 0.079f, 0.0137f, 0.0772f, 0.00f, 50, 6.0 , 10.0f);
     Nonline_PID_Init(&pid_image_y, 0.079f, 0.0137f, 0.0772f, 0.00f, 50, 6.0 , 10.0f);

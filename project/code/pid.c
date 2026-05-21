@@ -92,10 +92,8 @@ float PID_Calculate(PID_t *pid, float error, float dt) {
 
 float Nonline_PID_Calculate(Nonline_PID_t *pid, float error, float dt) {
     if (dt < 1e-7f) return 0.0f;
-    if (dt < 1e-7f) return 0.0f;
     // 1. P项计算
     float p_out = pid->kp * error;
-    float p2_out = pid->kp2 * error * fabsf(error);
     float p2_out = pid->kp2 * error * fabsf(error);
 
     // 2. I项计算

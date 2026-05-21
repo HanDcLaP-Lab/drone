@@ -42,15 +42,15 @@ void Fly_Param_Update(uint8_t ch, float val) {
     switch (ch) {
         // === 第一组：角度环 (Nonline_PID) ===
         // 包含 kp, ki, kp2
-        case 1: // 总体输出缩放系数 (限制在 0.0 ~ 1.0 之间)
-            if (val > 1.0f) val = 1.0f;
-            if (val < 0.0f) val = 0.0f;
-            flight_target.output_scale = val;
+        case 1:
+            //flight_target.output_scale = val;
+            pid_g_yaw.kp = val;
             break;
             
         case 2: // 角度环 KI
-            pid_roll.ki = val;
-            pid_pitch.ki = val;
+            // pid_roll.ki = val;
+            // pid_pitch.ki = val;
+            pid_g_yaw.ki = val;
             //pid_yaw.ki = val * 0.5f;
             break;
             
@@ -58,8 +58,9 @@ void Fly_Param_Update(uint8_t ch, float val) {
             // pid_image_x.kp = val;
             // pid_image_y.kp = val;
             //pid_g_yaw.kp = val * 0.5f;
-            pid_image_x.kp = val;
-            pid_image_y.kp = val;
+            pid_g_yaw.kd = val;
+            // pid_image_x.kp = val;
+            // pid_image_y.kp = val;
             break;
 
         // === 第二组：角速度环 (PID) ===

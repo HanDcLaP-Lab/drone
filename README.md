@@ -1,7 +1,7 @@
 ## 基本约定
 #### 方向规定
 俯视时，从几何中心向核心板的方向是前进的方向，四个电机分别为lf,lb,rf,rb  
-lf,rb电机顺时针转;rf,lb电机逆时针转  
+lf,rb电机逆时针转;rf,lb电机顺时针转  
 实测在TOF超距时返回值为8192，建议大于1400时直接置为1400  
 当前imu安装方向为水平向前为x，水平向右为y，竖直向下为z  
 定义坐标系为水平向前为x，水平向右为y，竖直向下为z  
@@ -301,3 +301,8 @@ motor4 <=> LB
 uart控制电机参数设置依次为lf , lb , rb , rf
 在50ms周期无线发送数据会导致屏幕卡顿，现改为在pit2中500ms周期发送
 修改了几个小问题
+Sketch uses 266948 bytes (20%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 22068 bytes (6%) of dynamic memory, leaving 305612 bytes for local variables. Maximum is 327680 bytes.
+esptool v5.2.0
+Serial port COM10:
+Connecting......................................
