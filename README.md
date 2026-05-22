@@ -186,7 +186,7 @@ key1短按切换到下一个参数 ， key2短按将选定参数下调5% ， key
 
 **3.16c**  
 对sort函数做了逻辑更改，目前[0]表示小车相关参数，[1]表示信标相关参数  
-发送的data_out[14]即小车收到的uart_data[4]表示：  
+发送的data_out[14]即小车收到的uart_data[5]（当前协议中locked_state对应uart_data[5]）表示：  
 + 0：未识别到任何有效灯  
 + 1：只识别到小车  
 + 2：只识别到信标  
@@ -301,8 +301,6 @@ motor4 <=> LB
 uart控制电机参数设置依次为lf , lb , rb , rf
 在50ms周期无线发送数据会导致屏幕卡顿，现改为在pit2中500ms周期发送
 修改了几个小问题
-Sketch uses 266948 bytes (20%) of program storage space. Maximum is 1310720 bytes.
-Global variables use 22068 bytes (6%) of dynamic memory, leaving 305612 bytes for local variables. Maximum is 327680 bytes.
-esptool v5.2.0
-Serial port COM10:
-Connecting......................................
+
+**5.22a**
+实现了新飞机悬停

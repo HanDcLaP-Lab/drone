@@ -63,6 +63,7 @@ Two `volatile float` arrays at fixed addresses:
 - **Mixed naming in same module** — e.g. `M7_0_data_send()` mixes PascalCase + snake_case. Follow existing style per-file.
 - **Missing `const`** — no const-correctness on pointer params. Not required to fix, but don't make it worse.
 - **Typo**: `Motor_Offsset_t` (double 's') — don't propagate.
+- **Unused declarations** — 声明但未使用过的变量/结构体/函数不要删除，后续可能会使用。
 
 ## COMMANDS
 

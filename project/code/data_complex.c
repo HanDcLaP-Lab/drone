@@ -95,6 +95,17 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 
 }
 
+// **************************** 下传协议映射 (无人机→小车) ****************************
+// buffer[8] 索引映射，与小车端 uart_data[8] 一一对应 (协议帧: 0xAA 0x55 + 8×float + 校验和 + 0x7F):
+//   [0] car_ground_pos.x    — 卡尔曼滤波后小车X坐标 (cm)     ← S1_K_CAR_X (pos.k_car.x)
+//   [1] car_ground_pos.y    — 卡尔曼滤波后小车Y坐标 (cm)     ← S1_K_CAR_Y (pos.k_car.y)
+//   [2] target_ground_pos.x — 目标(信标)地面X坐标 (cm)       ← S1_TARGET_X (pos.target.x)
+//   [3] target_ground_pos.y — 目标(信标)地面Y坐标 (cm)       ← S1_TARGET_Y (pos.target.y)
+//   [4] drone_yaw           — 无人机偏航角 (deg, 顺时针正)    ← imu_data.yaw
+//   [5] locked_state        — 锁定灯数 (0=全丢/1=仅小车/2=仅信标/3=都有) ← S1_LOCKED_COUNT
+//   [6] car_en              — 急停使能标志 (0=急停, 1=正常)   ← car_en
+//   [7] reserved            — 预留，当前未使用
+// ******************************************************************************
 void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share_data一般传入share_data_from_1
 {
     buffer[0] = share_data[S1_K_CAR_X];

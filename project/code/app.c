@@ -71,8 +71,9 @@ void Fly_Param_Update(uint8_t ch, float val) {
             //pid_g_yaw.ki = val * 0.5f;
             //search_yaw_rate = val;
             //pid_image_x.kp = val;
-            pid_image_x.ki = val;
-            pid_image_y.ki = val;
+            // pid_image_x.ki = val;
+            // pid_image_y.ki = val;
+            car_en = val;
             break;
             
         case 5: // 角速度环 KD
@@ -93,8 +94,9 @@ void Fly_Param_Update(uint8_t ch, float val) {
                 wireless_uart_send_string("land\r\n");
                 flight_target.cur_state = pre_landing; 
                 car_en = 0;
-            }else if(val == 2){
+            }else if(val > 1.5 && val < 2.5){
                 wireless_uart_send_string("emergency stop\r\n");
+                car_en = 0;
                 Flight_Lock();
             }else if(val == 0){
                 if (imu_data.is_calibrated) {

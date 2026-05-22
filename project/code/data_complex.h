@@ -4,12 +4,14 @@
 #include "zf_common_headfile.h"
 #include "image_process.h"
 
-// ================= 板间通讯硬件配置 (发送端) =================
+// ================= 板间通讯硬件配置 (发送端: UART4 → 小车UART1) =================
 #define BOARD_UART       UART_4          
 #define BOARD_BAUDRATE   115200          
 #define BOARD_TX_PIN     UART4_TX_P14_1  
 #define BOARD_RX_PIN     UART4_RX_P14_0  
-#define UART_DATA_LENGTH 8  // 数组数据长度
+#define UART_DATA_LENGTH 8  // 下传数组长度 (8个float)
+// 协议帧格式: 0xAA 0x55 + 32字节(8×float) + 1字节累加校验和 + 0x7F
+// 数组索引映射详见 data_complex.c 中 Float_Buffer_write()，小车端对应 car_board_comm.h
 //============================================================
 #define M7_x_DATA_LENGTH 16
 

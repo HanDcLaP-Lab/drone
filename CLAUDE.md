@@ -74,7 +74,7 @@ The drone uses a triple-cascade PID structure:
 
 ### Flight Parameters (fly_ctrl.h)
 - `TARGET_HEIGHT_CM`: 120.0f (target height in cm)
-- `HOVER_THROTTLE`: 4350 (base hover PWM value)
+- `HOVER_THROTTLE`: 4800 (base hover PWM value)
 - `MAX_TILT_ANGLE`: 6.0f ° (maximum tilt for normal flight)
 - `CTRL_DT_CTLOOP`: 0.001s (1ms control cycle)
 - `SEARCH_YAW_RATE`: 15.0f °/s (search rotation speed)
