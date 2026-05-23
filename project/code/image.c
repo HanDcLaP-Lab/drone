@@ -280,12 +280,14 @@ static void erode_pass(uint8_t *src, uint8_t *dst, uint16_t width, uint16_t heig
 
         for (uint16_t c = c_start; c < c_end; c++) {
             uint32_t idx = r * width + c;
-            if (src[idx] == 1 &&
-                src[idx - 1] == 1 && src[idx + 1] == 1 &&
-                src[idx - width] == 1 && src[idx + width] == 1 &&
-                src[idx - width - 1] == 1 && src[idx - width + 1] == 1 &&
-                src[idx + width - 1] == 1 && src[idx + width + 1] == 1) {
-                dst[idx] = 1;
+            if (src[idx] == 1) {
+                uint8_t count = src[idx - 1] + src[idx + 1] +
+                                src[idx - width] + src[idx + width] +
+                                src[idx - width - 1] + src[idx - width + 1] +
+                                src[idx + width - 1] + src[idx + width + 1];
+                if (count >= 6) {
+                    dst[idx] = 1;
+                }
             }
         }
     }
@@ -539,10 +541,14 @@ void image_processing_loop(void) {
     uint16_t h = cam_down.height;
     uint8_t m = cam_down.margin_cut;
 
-    dilate_pass(bin, tmp, w, h, m);
-    erode_pass(tmp, bin, w, h, m);
-    dilate_pass(bin, tmp, w, h, m);
-    erode_pass(tmp, bin, w, h, m);
+    // 3次膨胀 (交替使用 bin 和 tmp 缓冲区，链式传递)
+    dilate_pass(bin, tmp, w, h, m);  // 1: bin -> tmp
+    dilate_pass(tmp, bin, w, h, m);  // 2: tmp -> bin
+    dilate_pass(bin, tmp, w, h, m);  // 3: bin -> tmp
+    // 3次腐蚀 (交替使用 bin 和 tmp 缓冲区，最终输出至 bin)
+    erode_pass(tmp, bin, w, h, m);   // 1: tmp -> bin
+    erode_pass(bin, tmp, w, h, m);   // 2: bin -> tmp
+    erode_pass(tmp, bin, w, h, m);   // 3: tmp -> bin
 
     // 3. 连通域提取与质心、特征值计算一次性完成
     extract_components(&cam_down, visited_buffer);

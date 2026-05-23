@@ -7,7 +7,7 @@
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 120.0f  // 目标高度
 #define LAND_HEIGHT 10.0f       // 着陆高度
-#define HOVER_THROTTLE 4800    // 基础悬停油门 
+#define HOVER_THROTTLE 4900    // 基础悬停油门 
 #define MAX_PWM 8000
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 6.0f  // 最大倾角限制 (度) 
@@ -22,8 +22,8 @@
 #define TARGET_ACC_DISTANCE 100.0f    //为了防止无人机与信标很近时yaw变化大，角度跟踪的最小距离
 #define YAW_MIN_ERROR  5.0f    //角度跟踪设置的小死区
 
-#define ROLL_OFFSET 0.0f//240.0f      //补偿重心偏移
-#define PITCH_OFFSET 0.0f//-38.5f      //补偿重心偏移
+#define ROLL_OFFSET 372.1f//424.0f      //补偿重心偏移
+#define PITCH_OFFSET 72.6f//0.0f      //补偿重心偏移
 // ================= 新增：摄像头物理偏心补偿 =================
     // 摄像头位于 IMU 后方 2cm，因此 X 轴补偿为 -2.0f
 #define CAM_OFFSET_X   10.0f  

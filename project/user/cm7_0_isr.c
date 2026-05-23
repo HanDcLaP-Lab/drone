@@ -51,6 +51,7 @@ void pit0_ch0_isr() {
     if(fabsf(imu_data.pitch) > 21.0f || fabsf(imu_data.roll) > 21.0f){
         if(has_stopped == 0){
             wireless_uart_send_string("emergency stop\r\n");
+            car_en = 0;
         }
         Flight_Lock();
         has_stopped = 1;

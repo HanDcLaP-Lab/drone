@@ -116,6 +116,8 @@ void wireless_uart_output_motor(void){
     wireless_uart_send_float(motor_out.lb);
     wireless_uart_send_string(",");
     wireless_uart_send_float(motor_out.rb);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(imu_data.z);
     wireless_uart_send_string("\n");
 }
 

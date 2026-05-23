@@ -29,7 +29,7 @@ static uint8_t has_seen_beacon = 0;
 static int8_t search_seq_idx = 0;      // 搜索序列索引 (0~3)
 static uint32_t search_wait_timer = 0; // 停留计时器 (ms)
 static uint8_t is_turning = 0;         // 是否正在转向中 (0:停留计时, 1:转向中)
-static const float search_yaw_seq[8] = {35.0f, 70.0f, 35.0f, 0.0f, -35.0f, -70.0f, -35.0f, 0.0f}; // 目标跳变序列
+static const float search_yaw_seq[8] = {0.0f}; // 目标跳变序列
 
 static int32_t car_en_disable_timer = 0; // 控制 car_en 置零的倒计时器 (ms)
 static uint8_t was_aligning = 0;         // 标记飞机之前是否正处于“对准”转动状态
@@ -178,7 +178,7 @@ void Flight_Hover_Control_Task(void) {
         car_en = 0; // 倒计时期间强制保持为 0
     } else {
         if(was_aligning == 0){
-            car_en = 1;
+            //car_en = 1;
         }else{
             car_en = 0;
         }
