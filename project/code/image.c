@@ -423,6 +423,7 @@ static void sort_lights(CameraObject *cam) {
         if (cam->aspect_ratio[i] > dynamic_car_min_ratio 
             && cam->centers[i][1] > EDGE_SAFE_MARGIN_X && cam->centers[i][1] < cam->width - EDGE_SAFE_MARGIN_X
             && cam->centers[i][0] > EDGE_SAFE_MARGIN_Y && cam->centers[i][0] < cam->height - EDGE_SAFE_MARGIN_Y
+            &&dist_sq < 3600
         ) {
             // 在所有合格的候选者中，选出长宽比最大的那个
             if (cam->aspect_ratio[i] > max_car_ratio_found) {

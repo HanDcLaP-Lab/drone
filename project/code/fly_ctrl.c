@@ -53,21 +53,21 @@ void Flight_Control_Init(void) {
 
     // ----------- 初始化 PID 参数 -----------
     // 高度环
-    PID_Init(&pid_height_pos, 0.58f, 0.15f, 0.0f, 30, 30, 40.0f);
+    PID_Init(&pid_height_pos, 0.7f, 0.2f, 0.0f, 30, 30, 40.0f);
     PID_Init(&pid_height_vel, 24.0f, 0.0f, 0.2f, 80, 1000, 40.0f);
     // 角度环a
-    Nonline_PID_Init(&pid_roll, 9.079f, 0.365f, 0.0f, 0.05f, 20, 150, 40.0f);
-    Nonline_PID_Init(&pid_pitch, 9.079f, 0.365f, 0.0f, 0.05f, 20, 150, 40.0f);
+    Nonline_PID_Init(&pid_roll, 9.328f, 0.239f, 0.0f, 0.05f, 20, 150, 40.0f);
+    Nonline_PID_Init(&pid_pitch, 9.328f, 0.239f, 0.0f, 0.05f, 20, 150, 40.0f);
     Nonline_PID_Init(&pid_yaw, 1.5f, 0.33f, 0.0f, 0.0228f, 6, 45, 40.0f);
 
     //Nonline_PID_Init(&pid_image_yaw, 1.0f, 0.00f, 0.0f, 0.0f, 0, 60.0f, 4.0f);
     // 角速度环g
-    PID_Init(&pid_g_roll, 2.777f, 3.327f, 0.101f, 120, 3500, 40.0f);
-    PID_Init(&pid_g_pitch, 2.777f, 13.327f, 0.101f, 120, 3500, 40.0f);
+    PID_Init(&pid_g_roll, 2.777f, 3.327f, 0.115f, 120, 3500, 40.0f);
+    PID_Init(&pid_g_pitch, 2.777f, 13.327f, 0.115f, 120, 3500, 40.0f);
     PID_Init(&pid_g_yaw, 6.1f, 1.32f, 0.00f, 150, 3500, 40.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.079f, 0.0137f, 0.0772f, 0.00f, 50, 6.0 , 10.0f);
-    Nonline_PID_Init(&pid_image_y, 0.079f, 0.0137f, 0.0772f, 0.00f, 50, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_x, 0.086f, 0.012f, 0.0772f, 0.00f, 50, 6.0 , 10.0f);
+    Nonline_PID_Init(&pid_image_y, 0.086f, 0.012f, 0.0772f, 0.00f, 50, 6.0 , 10.0f);
 
 }
 

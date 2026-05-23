@@ -44,13 +44,15 @@ void Fly_Param_Update(uint8_t ch, float val) {
         // 包含 kp, ki, kp2
         case 1:
             //flight_target.output_scale = val;
-            pid_g_yaw.kp = val;
+            pid_image_x.kp = val;
+            pid_image_y.kp = val;
             break;
             
         case 2: // 角度环 KI
             // pid_roll.ki = val;
             // pid_pitch.ki = val;
-            pid_g_yaw.ki = val;
+            pid_image_x.ki = val;
+            pid_image_y.ki = val;
             //pid_yaw.ki = val * 0.5f;
             break;
             
@@ -58,7 +60,8 @@ void Fly_Param_Update(uint8_t ch, float val) {
             // pid_image_x.kp = val;
             // pid_image_y.kp = val;
             //pid_g_yaw.kp = val * 0.5f;
-            pid_g_yaw.kd = val;
+            pid_roll.kp = val;
+            pid_pitch.kp = val;
             // pid_image_x.kp = val;
             // pid_image_y.kp = val;
             break;
@@ -73,7 +76,9 @@ void Fly_Param_Update(uint8_t ch, float val) {
             //pid_image_x.kp = val;
             // pid_image_x.ki = val;
             // pid_image_y.ki = val;
-            car_en = val;
+            //car_en = val;
+            pid_roll.ki = val;
+            pid_pitch.ki = val;
             break;
             
         case 5: // 角速度环 KD
