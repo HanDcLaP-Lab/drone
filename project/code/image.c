@@ -167,18 +167,16 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
     // 压栈即标记，防止重复入栈
     visited[start_r * cam->width + start_c] = label;
     
-    // 方向数组：上右下左
-    const int dr[] = {-1, 0, 1, 0};
-    const int dc[] = {0, 1, 0, -1};
-
     while (top >= 0) {
         Node curr = stack[top--];
         
-        // 搜索 4 邻域
-        for (int i = 0; i < 4; i++) {
-            uint16_t nr = curr.r + dr[i];
-            uint16_t nc = curr.c + dc[i];
-            // 简单的边界预判
+        // 搜索 7x7 邻域
+        for (int dr = -3; dr <= 3; dr++) {
+            for (int dc = -3; dc <= 3; dc++) {
+                if (dr == 0 && dc == 0) continue;
+                int16_t nr = curr.r + dr;
+                int16_t nc = curr.c + dc;
+                // 简单的边界预判
             if (nr >= cam->margin_cut && nr < (cam->height - cam->margin_cut) &&
                 nc >= cam->margin_cut && nc < (cam->width - cam->margin_cut)) {
                 
@@ -201,6 +199,7 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
             }
         }
     }
+}
 }
 
 // 逐像素动态阈值二值化: 每3×3像素块共用一个阈值, 离图像中心越远阈值越低
@@ -243,55 +242,7 @@ static void binarize_pass(CameraObject *cam) {
     }
 }
 
-// 8邻域膨胀: src → dst
-static void dilate_pass(uint8_t *src, uint8_t *dst, uint16_t width, uint16_t height, uint8_t margin) {
-    memset(dst, 0, width * height);
-    uint16_t safe_margin = margin > 1 ? margin : 1;
 
-    for (uint16_t r = safe_margin; r < height - safe_margin; r++) {
-        uint16_t c_start = fov_left_bound[r] > safe_margin ? fov_left_bound[r] : safe_margin;
-        uint16_t c_end   = fov_right_bound[r] < (width - safe_margin) ? fov_right_bound[r] : (width - safe_margin);
-
-        for (uint16_t c = c_start; c < c_end; c++) {
-            uint32_t idx = r * width + c;
-            if (src[idx] == 1) {
-                dst[idx] = 1;
-                dst[idx - 1] = 1;
-                dst[idx + 1] = 1;
-                dst[idx - width] = 1;
-                dst[idx + width] = 1;
-                dst[idx - width - 1] = 1;
-                dst[idx - width + 1] = 1;
-                dst[idx + width - 1] = 1;
-                dst[idx + width + 1] = 1;
-            }
-        }
-    }
-}
-
-// 8邻域腐蚀: src → dst (仅当像素自身及8邻域全为1时保留)
-static void erode_pass(uint8_t *src, uint8_t *dst, uint16_t width, uint16_t height, uint8_t margin) {
-    memset(dst, 0, width * height);
-    uint16_t safe_margin = margin > 1 ? margin : 1;
-
-    for (uint16_t r = safe_margin; r < height - safe_margin; r++) {
-        uint16_t c_start = fov_left_bound[r] > safe_margin ? fov_left_bound[r] : safe_margin;
-        uint16_t c_end   = fov_right_bound[r] < (width - safe_margin) ? fov_right_bound[r] : (width - safe_margin);
-
-        for (uint16_t c = c_start; c < c_end; c++) {
-            uint32_t idx = r * width + c;
-            if (src[idx] == 1) {
-                uint8_t count = src[idx - 1] + src[idx + 1] +
-                                src[idx - width] + src[idx + width] +
-                                src[idx - width - 1] + src[idx - width + 1] +
-                                src[idx + width - 1] + src[idx + width + 1];
-                if (count >= 6) {
-                    dst[idx] = 1;
-                }
-            }
-        }
-    }
-}
 
 // 【合并优化】一次全图扫描，同时完成连通域提取、质心计算与二阶矩长宽比特征提取
 static void extract_components(CameraObject *cam, uint8_t *visited) {
@@ -410,6 +361,8 @@ static void sort_lights(CameraObject *cam) {
         Estimate_Distance_Simple(cam->centers[i][1], cam->centers[i][0], 
                                  current_height, &out_x, &out_y, &out_dist);
         
+        if (out_dist > 1000.0f) continue; // 距离大于10m直接丢弃
+
         // 记录物理距离的平方 (单位：平方厘米)
         phys_dist_sq[i] = out_dist * out_dist;
 
@@ -534,21 +487,7 @@ void image_processing_loop(void) {
     // 1. 逐像素动态阈值二值化 (越靠近图像边缘阈值越低)
     binarize_pass(&cam_down);
 
-    // 2. 双重闭运算: dilate → erode → dilate → erode (桥接线缆造成的断裂)
-    uint8_t *bin = (uint8_t *)cam_down.binarized_image;
-    uint8_t *tmp = (uint8_t *)image_copy;
-    uint16_t w = cam_down.width;
-    uint16_t h = cam_down.height;
-    uint8_t m = cam_down.margin_cut;
-
-    // 3次膨胀 (交替使用 bin 和 tmp 缓冲区，链式传递)
-    dilate_pass(bin, tmp, w, h, m);  // 1: bin -> tmp
-    dilate_pass(tmp, bin, w, h, m);  // 2: tmp -> bin
-    dilate_pass(bin, tmp, w, h, m);  // 3: bin -> tmp
-    // 3次腐蚀 (交替使用 bin 和 tmp 缓冲区，最终输出至 bin)
-    erode_pass(tmp, bin, w, h, m);   // 1: tmp -> bin
-    erode_pass(bin, tmp, w, h, m);   // 2: bin -> tmp
-    erode_pass(tmp, bin, w, h, m);   // 3: tmp -> bin
+    // (已移除) 双重闭运算: dilate → erode → dilate → erode
 
     // 3. 连通域提取与质心、特征值计算一次性完成
     extract_components(&cam_down, visited_buffer);

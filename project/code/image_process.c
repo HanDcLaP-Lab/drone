@@ -172,6 +172,11 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         double raw_earth_x = pos.raw_car.x * cosy - pos.raw_car.y * siny;
         double raw_earth_y = pos.raw_car.x * siny + pos.raw_car.y * cosy;
 
+        // if (fabs(raw_earth_x - K_car_x.x) > 50.0 || fabs(raw_earth_y - K_car_y.x) > 50.0) {
+        //     Kalman_Reset_State(&K_car_x, raw_earth_x);
+        //     Kalman_Reset_State(&K_car_y, raw_earth_y);
+        // }
+
         double k_earth_x = Kalman_Update(&K_car_x, raw_earth_x);
         double k_earth_y = Kalman_Update(&K_car_y, raw_earth_y);
         

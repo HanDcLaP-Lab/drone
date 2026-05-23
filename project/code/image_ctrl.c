@@ -94,8 +94,8 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
             
             // 3. 角度死区判定：如果偏角大于死区，才更新目标航向
             if (fabsf(yaw_error) >= YAW_MIN_ERROR) {
-                flight_target.target_yaw = snapshot_yaw + yaw_error; //使用相机曝光一瞬间的snapshot_yaw
-                
+                //flight_target.target_yaw = snapshot_yaw + yaw_error; //使用相机曝光一瞬间的snapshot_yaw
+                flight_target.target_yaw = 0;
                 // 4. 叠加全局硬限幅保护
                 if (flight_target.target_yaw > TWO_MAX_YAW_DEV) {
                     flight_target.target_yaw = TWO_MAX_YAW_DEV;
