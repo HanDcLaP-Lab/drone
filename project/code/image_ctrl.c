@@ -21,6 +21,54 @@
 //   └──────────────────────────────────────────────────────┘
 // ******************************************************************************
 
+/**
+ * @brief 小车位置预测前馈函数
+ * 当小车与信标距离大于阈值时，根据已知的小车运动速度和方向预测其未来的位置。
+ * 加入平滑处理，防止前馈量突变导致飞机剧烈晃动。
+ */
+static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y, float target_pos_x, float target_pos_y) {
+#if CAR_FF_ENABLE
+    static float last_ff_offset_x = 0.0f;
+    static float last_ff_offset_y = 0.0f;
+    
+    float target_offset_x = 0.0f;
+    float target_offset_y = 0.0f;
+
+    float dx = target_pos_x - *car_pos_x;
+    float dy = target_pos_y - *car_pos_y;
+    float dist = sqrtf(dx * dx + dy * dy);
+
+    // 如果距离大于阈值，计算目标前馈位移
+    if (dist > CAR_FF_DIST_THRESHOLD) {
+        float dir_x = dx / dist;
+        float dir_y = dy / dist;
+
+        // 预测位移 = 速度 * 预测时间
+        target_offset_x = dir_x * CAR_FF_SPEED * CAR_FF_PREDICT_TIME;
+        target_offset_y = dir_y * CAR_FF_SPEED * CAR_FF_PREDICT_TIME;
+    }
+
+    // 计算当前需要的变化量
+    float diff_x = target_offset_x - last_ff_offset_x;
+    float diff_y = target_offset_y - last_ff_offset_y;
+    float diff_dist = sqrtf(diff_x * diff_x + diff_y * diff_y);
+
+    // 限制单次最大变化距离 (平滑处理)
+    if (diff_dist > CAR_FF_MAX_CHANGE) {
+        diff_x = (diff_x / diff_dist) * CAR_FF_MAX_CHANGE;
+        diff_y = (diff_y / diff_dist) * CAR_FF_MAX_CHANGE;
+    }
+
+    // 更新本次的前馈偏置
+    last_ff_offset_x += diff_x;
+    last_ff_offset_y += diff_y;
+
+    // 将平滑后的前馈位移加到小车位置上
+    *car_pos_x += last_ff_offset_x;
+    *car_pos_y += last_ff_offset_y;
+#endif
+}
+
 // =================== 内部静态状态变量 ===================
 static uint32_t last_ang_cnt = 0;
 static uint32_t real_dt_ang = 20; 
@@ -168,7 +216,14 @@ void Flight_Hover_Control_Task(void) {
         car_pos_y = car_pos_y - dataC.camera_offset_y;
     } 
 
-    // 2. 计算真实时间差 dt (防除零)
+    // 2. 视觉位置前馈预测 (当同时看到小车和信标时)
+    if (locked_lights == 3) {
+        float target_pos_x = share_data_from_1[S1_TARGET_X] - dataC.camera_offset_x;
+        float target_pos_y = share_data_from_1[S1_TARGET_Y] - dataC.camera_offset_y;
+        Car_Position_Predict_Feedforward(&car_pos_x, &car_pos_y, target_pos_x, target_pos_y);
+    }
+
+    // 3. 计算真实时间差 dt (防除零)
     if (last_ang_cnt != 0) real_dt_ang = dataC.pit0_cnt - last_ang_cnt;
     last_ang_cnt = dataC.pit0_cnt;
 
