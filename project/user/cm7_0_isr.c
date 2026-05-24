@@ -86,6 +86,7 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
     // wireless_uart_send_string(",");
     // wireless_uart_send_string("\n"wireless_uart_output_，ptor();
     wireless_uart_output_motor();
+    printf("%d",notch_active_count);
     //wireless_uart_output_imu();
     //wireless_uart_output_groud();
     //wireless_uart_output_yaw();
@@ -271,7 +272,7 @@ void uart6_isr (void)
 {
     if(uart_isr_mask(UART_6))            // 串口6接收中断
     {
-
+        uart_control_callback();//无刷驱动回调函数
         
        
     }

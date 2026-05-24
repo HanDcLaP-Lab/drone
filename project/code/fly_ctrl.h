@@ -89,6 +89,5 @@ void Set_Target_Attitude(float roll, float pitch, float yaw);
 void Flight_Unlock(void);
 void Flight_Lock(void);
 void motor_pwm_set(void);
-void motor_pwm_init(void);
 
 #endif

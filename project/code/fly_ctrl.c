@@ -287,8 +287,3 @@ void motor_pwm_set() {
         small_driver_set_duty(0, 0, 0, 0);
     }
 }
-
-void motor_pwm_init() {
-    // 初始化无刷驱动的串口通讯
-    small_driver_uart_init();
-}

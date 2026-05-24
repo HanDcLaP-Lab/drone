@@ -1,5 +1,6 @@
 #include "imu.h"
 #include "zf_common_headfile.h"
+#include "small_driver_uart_control.h"
 
 // ******************************************************************************
 // 传感器融合架构 (Mahony姿态 + Z轴二阶导航观测器)
@@ -8,15 +9,16 @@
 //        │
 //   ┌────┴─────────────────────────────────────────────┐
 //   │ 1. 读取原始传感器 (IMU660RA + ToF DL1B)           │
-//   │ 2. 卡尔曼滤波 (6轴加速度+陀螺仪)                   │
-//   │ 3. 2500次采样校准 → 初始姿态四元数 + 陀螺零偏       │
-//   │ 4. Mahony_Update()   姿态融合 (自适应加速度权重)    │
+//   │ 2. 电机振动陷波滤波 (自适应跟踪平均转速基频)        │
+//   │ 3. 卡尔曼滤波 (6轴加速度+陀螺仪)                   │
+//   │ 4. 2500次采样校准 → 初始姿态四元数 + 陀螺零偏       │
+//   │ 5. Mahony_Update()   姿态融合 (自适应加速度权重)    │
 //   │    ├─ 连续误差补偿: 运动剧烈→降权, 静止→全信        │
 //   │    ├─ 积分修正: 仅静止时累积 (防止Yaw漂移)          │
 //   │    └─ Z轴仅靠陀螺仪积分 (不接受加速度计修正)         │
-//   │ 5. 四元数→欧拉角 (roll/pitch/yaw)                  │
-//   │ 6. Yaw增量累加 (支持连续旋转, 不受±180°跳变影响)     │
-//   │ 7. Navigation_Update()  Z轴二阶互补观测器          │
+//   │ 6. 四元数→欧拉角 (roll/pitch/yaw)                  │
+//   │ 7. Yaw增量累加 (支持连续旋转, 不受±180°跳变影响)     │
+//   │ 8. Navigation_Update()  Z轴二阶互补观测器          │
 //   │    ├─ 惯性推算: 加速度积分→速度→位置                │
 //   │    ├─ ToF修正: 倾角补偿 + 比例/速度修正增益          │
 //   │    └─ 超时阻尼: ToF丢失100ms后速度衰减              │
@@ -40,6 +42,102 @@ static double sum_ax = 0, sum_ay = 0, sum_az = 0;
 static uint16_t calib_cnt = 0;
 static uint16_t tof_timeout_cnt = 0; // ToF超时计数器
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
+
+// ================= 陷波滤波器 (电机振动抑制, IMU 特化) =================
+#if NOTCH_ENABLE
+
+// 谐波倍率: 基频/二倍频/六倍频(叶片通过频率)
+static const float notch_harmonic_mult[NOTCH_HARMONIC_COUNT] = {1.0f, 2.0f, 6.0f};
+
+#define NOTCH_SLICE_COUNT (NOTCH_MOTOR_COUNT * NOTCH_HARMONIC_COUNT) // 4×3=12
+
+// IMU 专用陷波配置 (通用 biquad 实现见 filters.c)
+const NotchConfig_t notch_cfg = {
+    .fs       = NOTCH_FS,
+    .q        = NOTCH_Q,
+    .min_freq = NOTCH_MIN_FREQ,
+    .max_freq = NOTCH_MAX_FREQ,
+};
+
+// 每通道级联 NOTCH_SLICE_COUNT 个 biquad, 按 [电机0·1×, 电机0·2×, 电机0·6×, 电机1·1×, ...] 排列
+static NotchFilter_t notch_gx[NOTCH_SLICE_COUNT];
+static NotchFilter_t notch_gy[NOTCH_SLICE_COUNT];
+static NotchFilter_t notch_gz[NOTCH_SLICE_COUNT];
+static NotchFilter_t notch_ax[NOTCH_SLICE_COUNT];
+static NotchFilter_t notch_ay[NOTCH_SLICE_COUNT];
+static NotchFilter_t notch_az[NOTCH_SLICE_COUNT];
+
+static uint16_t notch_timeout_cnt;   // 距上次转速更新的毫秒数
+static uint8_t  notch_active;        // 0=旁通(超时/未收到数据), 1=工作中
+uint8_t         notch_active_count;  // 当前生效的陷波切片数 0~12 (调试接口)
+
+// ---- 批量操作 ----
+static void Notch_InitAll(void) {
+    for (int i = 0; i < NOTCH_SLICE_COUNT; i++) {
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GX) Notch_Init(&notch_gx[i]);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GY) Notch_Init(&notch_gy[i]);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GZ) Notch_Init(&notch_gz[i]);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AX) Notch_Init(&notch_ax[i]);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AY) Notch_Init(&notch_ay[i]);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AZ) Notch_Init(&notch_az[i]);
+    }
+    notch_timeout_cnt = NOTCH_TIMEOUT_MS + 1;
+    notch_active = 0;
+}
+
+// UART 回调触发: 每个电机独立计算 1×/2×/6× 频率, 各谐波独立判定边界
+static void Notch_UpdateAllFreqs(void) {
+    uint8_t active_cnt = 0;
+    for (int m = 0; m < NOTCH_MOTOR_COUNT; m++) {
+        float rpm = (float)motor_value.receive_speed_data[m];
+        if (rpm < 0) rpm = 0;
+        float base_freq = rpm * 0.016666667f;  // RPM / 60
+
+        for (int h = 0; h < NOTCH_HARMONIC_COUNT; h++) {
+            int idx = m * NOTCH_HARMONIC_COUNT + h;
+            float freq = base_freq * notch_harmonic_mult[h];
+
+            if (freq >= NOTCH_MIN_FREQ && freq <= NOTCH_MAX_FREQ) active_cnt++;
+
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GX) Notch_SetFreq(&notch_gx[idx], freq, &notch_cfg);
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GY) Notch_SetFreq(&notch_gy[idx], freq, &notch_cfg);
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GZ) Notch_SetFreq(&notch_gz[idx], freq, &notch_cfg);
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AX) Notch_SetFreq(&notch_ax[idx], freq, &notch_cfg);
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AY) Notch_SetFreq(&notch_ay[idx], freq, &notch_cfg);
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AZ) Notch_SetFreq(&notch_az[idx], freq, &notch_cfg);
+        }
+    }
+    notch_active_count = active_cnt;
+}
+
+// 每 1ms 调用: 检查转速数据有效期, 更新激活状态
+static void Notch_CheckTimeout(void) {
+    if (motor_value.speed_data_updated) {
+        motor_value.speed_data_updated = 0;
+        notch_timeout_cnt = 0;
+
+        if (!notch_active) {
+            Notch_InitAll();                  // 旁通→激活: 清零延迟线防阶跃
+            notch_active = 1;
+        }
+        Notch_UpdateAllFreqs();
+    } else if (notch_active) {
+        notch_timeout_cnt++;
+        if (notch_timeout_cnt > NOTCH_TIMEOUT_MS) {
+            notch_active = 0;
+            notch_active_count = 0;
+        }
+    }
+}
+
+// 对单个通道级联全部 NOTCH_SLICE_COUNT 个 biquad
+static float Notch_ApplyChannel(NotchFilter_t *nf_array, float value) {
+    for (int i = 0; i < NOTCH_SLICE_COUNT; i++) {
+        value = Notch_Update(&nf_array[i], value);
+    }
+    return value;
+}
+#endif
 
 // ================= 内部辅助函数 =================
 static float invSqrt(float x) {
@@ -264,6 +362,19 @@ void IMU_Update_Loop(void) {
     float raw_ax = imu660ra_acc_transition(imu660ra_acc_x) * GRAVITY_MSS;
     float raw_ay = imu660ra_acc_transition(imu660ra_acc_y) * GRAVITY_MSS;
     float raw_az = imu660ra_acc_transition(imu660ra_acc_z) * GRAVITY_MSS;
+
+    // ================= 电机振动陷波滤波 =================
+#if NOTCH_ENABLE
+    Notch_CheckTimeout();
+    if (notch_active) {
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GX) raw_gx = Notch_ApplyChannel(notch_gx, raw_gx);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GY) raw_gy = Notch_ApplyChannel(notch_gy, raw_gy);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GZ) raw_gz = Notch_ApplyChannel(notch_gz, raw_gz);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AX) raw_ax = Notch_ApplyChannel(notch_ax, raw_ax);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AY) raw_ay = Notch_ApplyChannel(notch_ay, raw_ay);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AZ) raw_az = Notch_ApplyChannel(notch_az, raw_az);
+    }
+#endif
 
     // ================= 加速度计卡尔曼滤波 =================
     raw_ax = Kalman_Update(&K_ax, raw_ax);

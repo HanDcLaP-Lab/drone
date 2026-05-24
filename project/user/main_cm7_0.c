@@ -75,7 +75,8 @@ int main(void) {
         wireless_uart_init_();
         seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
         Board_Comm_Init();
-        motor_pwm_init(); 
+        small_driver_uart_init();
+        small_driver_get_speed();
         //upixels_init();
         Flight_Control_Init();
         dataC.camera_offset_x = CAM_OFFSET_X;

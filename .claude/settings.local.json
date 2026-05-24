@@ -4,7 +4,8 @@
       "Bash(claude mcp *)",
       "Bash(echo \"@echo off\")",
       "Bash(echo REM Claude Code with WPS Office MCP enabled)",
-      "Bash(echo claude *)"
+      "Bash(echo claude *)",
+      "PowerShell(Out-File *)"
     ]
   }
 }

@@ -1,210 +1,214 @@
-#include "small_driver_uart_control.h"
+ï»¿#include "small_driver_uart_control.h"
 
-small_device_value_struct motor_value;      // ¶¨ÒåÍ¨Ñ¶²ÎÊı½á¹¹Ìå
+small_device_value_struct motor_value;      // å®šä¹‰é€šè®¯å‚æ•°ç»“æ„ä½“
 
 
 //-------------------------------------------------------------------------------------------------------------------
-// º¯Êı¼ò½é     ÎŞË¢Çı¶¯ ´®¿Ú½ÓÊÕ»Øµ÷º¯Êı
-// ²ÎÊıËµÃ÷     void
-// ·µ»Ø²ÎÊı     void
-// Ê¹ÓÃÊ¾Àı     uart_control_callback(1000, -1000);
-// ±¸×¢ĞÅÏ¢     ÓÃÓÚ½âÎö½ÓÊÕµ½µÄËÙ¶ÈÊı¾İ  ¸Ãº¯ÊıĞèÒªÔÚ¶ÔÓ¦µÄ´®¿Ú½ÓÊÕÖĞ¶ÏÖĞµ÷ÓÃ
+// å‡½æ•°ç®€ä»‹     æ— åˆ·é©±åŠ¨ ä¸²å£æ¥æ”¶å›è°ƒå‡½æ•°
+// å‚æ•°è¯´æ˜     void
+// è¿”å›å‚æ•°     void
+// ä½¿ç”¨ç¤ºä¾‹     uart_control_callback(1000, -1000);
+// å¤‡æ³¨ä¿¡æ¯     ç”¨äºè§£ææ¥æ”¶åˆ°çš„é€Ÿåº¦æ•°æ®  è¯¥å‡½æ•°éœ€è¦åœ¨å¯¹åº”çš„ä¸²å£æ¥æ”¶ä¸­æ–­ä¸­è°ƒç”¨
 //-------------------------------------------------------------------------------------------------------------------
 void uart_control_callback(void)
 {
-    uint8 receive_data;                                                                     // ¶¨ÒåÁÙÊ±±äÁ¿
+    uint8 receive_data;                                                                     // å®šä¹‰ä¸´æ—¶å˜é‡
 
-    if(uart_query_byte(SMALL_DRIVER_UART, &receive_data))                                   // ½ÓÊÕ´®¿ÚÊı¾İ
+    if(uart_query_byte(SMALL_DRIVER_UART, &receive_data))                                   // æ¥æ”¶ä¸²å£æ•°æ®
     {
-        if(receive_data == 0xA5 && motor_value.receive_data_buffer[0] != 0xA5)              // ÅĞ¶ÏÊÇ·ñÊÕµ½Ö¡Í· ²¢ÇÒ µ±Ç°½ÓÊÕÄÚÈİÖĞÊÇ·ñÕıÈ·°üº¬Ö¡Í·
+        if(receive_data == 0xA5 && motor_value.receive_data_buffer[0] != 0xA5)              // åˆ¤æ–­æ˜¯å¦æ”¶åˆ°å¸§å¤´ å¹¶ä¸” å½“å‰æ¥æ”¶å†…å®¹ä¸­æ˜¯å¦æ­£ç¡®åŒ…å«å¸§å¤´
         {
-            motor_value.receive_data_count = 0;                                             // Î´ÊÕµ½Ö¡Í·»òÕßÎ´ÕıÈ·°üº¬Ö¡Í·ÔòÖØĞÂ½ÓÊÕ
+            motor_value.receive_data_count = 0;                                             // æœªæ”¶åˆ°å¸§å¤´æˆ–è€…æœªæ­£ç¡®åŒ…å«å¸§å¤´åˆ™é‡æ–°æ¥æ”¶
         }
 
-        motor_value.receive_data_buffer[motor_value.receive_data_count ++] = receive_data;  // ±£´æ´®¿ÚÊı¾İ
+        motor_value.receive_data_buffer[motor_value.receive_data_count ++] = receive_data;  // ä¿å­˜ä¸²å£æ•°æ®
 
-        if(motor_value.receive_data_count >= 11)                                            // ÅĞ¶ÏÊÇ·ñ½ÓÊÕµ½Ö¸¶¨ÊıÁ¿µÄÊı¾İ
+        if(motor_value.receive_data_count >= 11)                                            // åˆ¤æ–­æ˜¯å¦æ¥æ”¶åˆ°æŒ‡å®šæ•°é‡çš„æ•°æ®
         {
-            if(motor_value.receive_data_buffer[0] == 0xA5)                                  // ÅĞ¶ÏÖ¡Í·ÊÇ·ñÕıÈ·
+            if(motor_value.receive_data_buffer[0] == 0xA5)                                  // åˆ¤æ–­å¸§å¤´æ˜¯å¦æ­£ç¡®
             {
-                motor_value.sum_check_data = 0;                                             // Çå³ıĞ£ÑéÎ»Êı¾İ
+                motor_value.sum_check_data = 0;                                             // æ¸…é™¤æ ¡éªŒä½æ•°æ®
 
                 for(int i = 0; i < 10; i ++)
                 {
-                    motor_value.sum_check_data += motor_value.receive_data_buffer[i];       // ÖØĞÂ¼ÆËãĞ£ÑéÎ»
+                    motor_value.sum_check_data += motor_value.receive_data_buffer[i];       // é‡æ–°è®¡ç®—æ ¡éªŒä½
                 }
 
-                if(motor_value.sum_check_data == motor_value.receive_data_buffer[10])       // Ğ£ÑéÊı¾İ×¼È·ĞÔ
+                if(motor_value.sum_check_data == motor_value.receive_data_buffer[10])       // æ ¡éªŒæ•°æ®å‡†ç¡®æ€§
                 {
                     for(int i = 0; i < 4; i ++)
                     {
                         motor_value.receive_speed_data[i]   = (((int)motor_value.receive_data_buffer[i * 2 + 2] << 8) | (int)motor_value.receive_data_buffer[i * 2 + 3]);
                     }
+                    motor_value.speed_data_updated = 1;           // é€šçŸ¥IMU: æ–°è½¬é€Ÿæ•°æ®å°±ç»ª
 
-                    motor_value.receive_data_count = 0;                                     // Çå³ı»º³åÇø¼ÆÊıÖµ
+                    motor_value.receive_data_count = 0;                                     // æ¸…é™¤ç¼“å†²åŒºè®¡æ•°å€¼
 
-                    memset(motor_value.receive_data_buffer, 0, 11);                         // Çå³ı»º³åÇøÊı¾İ
+                    memset(motor_value.receive_data_buffer, 0, 11);                         // æ¸…é™¤ç¼“å†²åŒºæ•°æ®
                 }
                 else
                 {
-                    motor_value.receive_data_count = 0;                                     // Çå³ı»º³åÇø¼ÆÊıÖµ
+                    motor_value.receive_data_count = 0;                                     // æ¸…é™¤ç¼“å†²åŒºè®¡æ•°å€¼
 
-                    memset(motor_value.receive_data_buffer, 0, 11);                         // Çå³ı»º³åÇøÊı¾İ
+                    memset(motor_value.receive_data_buffer, 0, 11);                         // æ¸…é™¤ç¼“å†²åŒºæ•°æ®
                 }
             }
             else
             {
-                motor_value.receive_data_count = 0;                                         // Çå³ı»º³åÇø¼ÆÊıÖµ
+                motor_value.receive_data_count = 0;                                         // æ¸…é™¤ç¼“å†²åŒºè®¡æ•°å€¼
 
-                memset(motor_value.receive_data_buffer, 0, 11);                             // Çå³ı»º³åÇøÊı¾İ
+                memset(motor_value.receive_data_buffer, 0, 11);                             // æ¸…é™¤ç¼“å†²åŒºæ•°æ®
             }
         }
     }
 }
 
 //-------------------------------------------------------------------------------------------------------------------
-// º¯Êı¼ò½é     ÎŞË¢Çı¶¯ ÉèÖÃµç»úÕ¼¿Õ±È
-// ²ÎÊıËµÃ÷     left_duty       ×ó²àµç»úÕ¼¿Õ±È  ·¶Î§ -10000 ~ 10000  ¸ºÊıÎª·´×ª
-// ²ÎÊıËµÃ÷     right_duty      ÓÒ²àµç»úÕ¼¿Õ±È  ·¶Î§ -10000 ~ 10000  ¸ºÊıÎª·´×ª
-// ·µ»Ø²ÎÊı     void
-// Ê¹ÓÃÊ¾Àı     small_driver_set_duty(1000, -1000, 1000, -1000);
-// ±¸×¢ĞÅÏ¢
+// å‡½æ•°ç®€ä»‹     æ— åˆ·é©±åŠ¨ è®¾ç½®ç”µæœºå ç©ºæ¯”
+// å‚æ•°è¯´æ˜     left_duty       å·¦ä¾§ç”µæœºå ç©ºæ¯”  èŒƒå›´ -10000 ~ 10000  è´Ÿæ•°ä¸ºåè½¬
+// å‚æ•°è¯´æ˜     right_duty      å³ä¾§ç”µæœºå ç©ºæ¯”  èŒƒå›´ -10000 ~ 10000  è´Ÿæ•°ä¸ºåè½¬
+// è¿”å›å‚æ•°     void
+// ä½¿ç”¨ç¤ºä¾‹     small_driver_set_duty(1000, -1000, 1000, -1000);
+// å¤‡æ³¨ä¿¡æ¯
 //-------------------------------------------------------------------------------------------------------------------
 void small_driver_set_duty(int16 motor_duty_1, int16 motor_duty_2, int16 motor_duty_3, int16 motor_duty_4)
 {
-    motor_value.send_data_buffer[0] = 0xA5;                                         // ÅäÖÃÖ¡Í·
+    motor_value.send_data_buffer[0] = 0xA5;                                         // é…ç½®å¸§å¤´
 
-    motor_value.send_data_buffer[1] = 0X01;                                         // ÅäÖÃ¹¦ÄÜ×Ö
+    motor_value.send_data_buffer[1] = 0X01;                                         // é…ç½®åŠŸèƒ½å­—
 
-    motor_value.send_data_buffer[2] = (uint8)((motor_duty_1 & 0xFF00) >> 8);        // ²ğ·Ö µç»ú1Õ¼¿Õ±È µÄ¸ß°ËÎ»
+    motor_value.send_data_buffer[2] = (uint8)((motor_duty_1 & 0xFF00) >> 8);        // æ‹†åˆ† ç”µæœº1å ç©ºæ¯” çš„é«˜å…«ä½
 
-    motor_value.send_data_buffer[3] = (uint8)(motor_duty_1 & 0x00FF);               // ²ğ·Ö µç»ú1Õ¼¿Õ±È µÄµÍ°ËÎ»
+    motor_value.send_data_buffer[3] = (uint8)(motor_duty_1 & 0x00FF);               // æ‹†åˆ† ç”µæœº1å ç©ºæ¯” çš„ä½å…«ä½
 
-    motor_value.send_data_buffer[4] = (uint8)((motor_duty_2 & 0xFF00) >> 8);        // ²ğ·Ö µç»ú2Õ¼¿Õ±È µÄ¸ß°ËÎ»
+    motor_value.send_data_buffer[4] = (uint8)((motor_duty_2 & 0xFF00) >> 8);        // æ‹†åˆ† ç”µæœº2å ç©ºæ¯” çš„é«˜å…«ä½
 
-    motor_value.send_data_buffer[5] = (uint8)(motor_duty_2 & 0x00FF);               // ²ğ·Ö µç»ú2Õ¼¿Õ±È µÄµÍ°ËÎ»
+    motor_value.send_data_buffer[5] = (uint8)(motor_duty_2 & 0x00FF);               // æ‹†åˆ† ç”µæœº2å ç©ºæ¯” çš„ä½å…«ä½
 
-    motor_value.send_data_buffer[6] = (uint8)((motor_duty_3 & 0xFF00) >> 8);        // ²ğ·Ö µç»ú3Õ¼¿Õ±È µÄ¸ß°ËÎ»
+    motor_value.send_data_buffer[6] = (uint8)((motor_duty_3 & 0xFF00) >> 8);        // æ‹†åˆ† ç”µæœº3å ç©ºæ¯” çš„é«˜å…«ä½
 
-    motor_value.send_data_buffer[7] = (uint8)(motor_duty_3 & 0x00FF);               // ²ğ·Ö µç»ú3Õ¼¿Õ±È µÄµÍ°ËÎ»
+    motor_value.send_data_buffer[7] = (uint8)(motor_duty_3 & 0x00FF);               // æ‹†åˆ† ç”µæœº3å ç©ºæ¯” çš„ä½å…«ä½
 
-    motor_value.send_data_buffer[8] = (uint8)((motor_duty_4 & 0xFF00) >> 8);        // ²ğ·Ö µç»ú4Õ¼¿Õ±È µÄ¸ß°ËÎ»
+    motor_value.send_data_buffer[8] = (uint8)((motor_duty_4 & 0xFF00) >> 8);        // æ‹†åˆ† ç”µæœº4å ç©ºæ¯” çš„é«˜å…«ä½
 
-    motor_value.send_data_buffer[9] = (uint8)(motor_duty_4 & 0x00FF);               // ²ğ·Ö µç»ú4Õ¼¿Õ±È µÄµÍ°ËÎ»
+    motor_value.send_data_buffer[9] = (uint8)(motor_duty_4 & 0x00FF);               // æ‹†åˆ† ç”µæœº4å ç©ºæ¯” çš„ä½å…«ä½
 
-    motor_value.send_data_buffer[10] = 0;                                           // ºÍĞ£ÑéÇå³ı
+    motor_value.send_data_buffer[10] = 0;                                           // å’Œæ ¡éªŒæ¸…é™¤
 
     for(int i = 0; i < 10; i ++)
     {
-        motor_value.send_data_buffer[10] += motor_value.send_data_buffer[i];        // ¼ÆËãĞ£ÑéÎ»
+        motor_value.send_data_buffer[10] += motor_value.send_data_buffer[i];        // è®¡ç®—æ ¡éªŒä½
     }
 
-    uart_write_buffer(SMALL_DRIVER_UART, motor_value.send_data_buffer, 11);                     // ·¢ËÍÉèÖÃÕ¼¿Õ±ÈµÄ ×Ö½Ú°ü Êı¾İ
+    uart_write_buffer(SMALL_DRIVER_UART, motor_value.send_data_buffer, 11);                     // å‘é€è®¾ç½®å ç©ºæ¯”çš„ å­—èŠ‚åŒ… æ•°æ®
 }
 
 //-------------------------------------------------------------------------------------------------------------------
-// º¯Êı¼ò½é     ÎŞË¢Çı¶¯ »ñÈ¡ËÙ¶ÈĞÅÏ¢
-// ²ÎÊıËµÃ÷     void
-// ·µ»Ø²ÎÊı     void
-// Ê¹ÓÃÊ¾Àı     small_driver_get_speed();
-// ±¸×¢ĞÅÏ¢     ½öĞè·¢ËÍÒ»´Î Çı¶¯½«ÖÜÆÚ·¢³öËÙ¶ÈĞÅÏ¢(Ä¬ÈÏ10ms)
+// å‡½æ•°ç®€ä»‹     æ— åˆ·é©±åŠ¨ è·å–é€Ÿåº¦ä¿¡æ¯
+// å‚æ•°è¯´æ˜     void
+// è¿”å›å‚æ•°     void
+// ä½¿ç”¨ç¤ºä¾‹     small_driver_get_speed();
+// å¤‡æ³¨ä¿¡æ¯     ä»…éœ€å‘é€ä¸€æ¬¡ é©±åŠ¨å°†å‘¨æœŸå‘å‡ºé€Ÿåº¦ä¿¡æ¯(é»˜è®¤10ms)
 //-------------------------------------------------------------------------------------------------------------------
 void small_driver_get_speed(void)
 {
-    motor_value.send_data_buffer[0] = 0xA5;                                         // ÅäÖÃÖ¡Í·
+    motor_value.send_data_buffer[0] = 0xA5;                                         // é…ç½®å¸§å¤´
 
-    motor_value.send_data_buffer[1] = 0X02;                                         // ÅäÖÃ¹¦ÄÜ×Ö
+    motor_value.send_data_buffer[1] = 0X02;                                         // é…ç½®åŠŸèƒ½å­—
 
-    motor_value.send_data_buffer[2] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[2] = 0x00;                                         // æ•°æ®ä½æ¸…ç©º
 
-    motor_value.send_data_buffer[3] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[3] = 0x00;                                         // æ•°æ®ä½æ¸…ç©º
 
-    motor_value.send_data_buffer[4] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[4] = 0x00;                                         // æ•°æ®ä½æ¸…ç©º
 
-    motor_value.send_data_buffer[5] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[5] = 0x00;                                         // æ•°æ®ä½æ¸…ç©º
 
-    motor_value.send_data_buffer[6] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[6] = 0x00;                                         // æ•°æ®ä½æ¸…ç©º
 
-    motor_value.send_data_buffer[7] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[7] = 0x00;                                         // æ•°æ®ä½æ¸…ç©º
 
-    motor_value.send_data_buffer[8] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[8] = 0x00;                                         // æ•°æ®ä½æ¸…ç©º
 
-    motor_value.send_data_buffer[9] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[9] = 0x00;                                         // æ•°æ®ä½æ¸…ç©º
 
-    motor_value.send_data_buffer[10] = 0xA7;                                        // ÅäÖÃĞ£ÑéÎ»
+    motor_value.send_data_buffer[10] = 0xA7;                                        // é…ç½®æ ¡éªŒä½
 
-    uart_write_buffer(SMALL_DRIVER_UART, motor_value.send_data_buffer, 11);         // ·¢ËÍ»ñÈ¡×ªËÙÊı¾İµÄ ×Ö½Ú°ü Êı¾İ
+    uart_write_buffer(SMALL_DRIVER_UART, motor_value.send_data_buffer, 11);         // å‘é€è·å–è½¬é€Ÿæ•°æ®çš„ å­—èŠ‚åŒ… æ•°æ®
 }
 
 
 //-------------------------------------------------------------------------------------------------------------------
-// º¯Êı¼ò½é     ÎŞË¢Çı¶¯ ²ÎÊı³õÊ¼»¯
-// ²ÎÊıËµÃ÷     void
-// ·µ»Ø²ÎÊı     void
-// Ê¹ÓÃÊ¾Àı     small_driver_init();
-// ±¸×¢ĞÅÏ¢
+// å‡½æ•°ç®€ä»‹     æ— åˆ·é©±åŠ¨ å‚æ•°åˆå§‹åŒ–
+// å‚æ•°è¯´æ˜     void
+// è¿”å›å‚æ•°     void
+// ä½¿ç”¨ç¤ºä¾‹     small_driver_init();
+// å¤‡æ³¨ä¿¡æ¯
 //-------------------------------------------------------------------------------------------------------------------
 void small_driver_init(void)
 {
-    memset(motor_value.send_data_buffer, 0, 11);                             // Çå³ı»º³åÇøÊı¾İ
+    memset(motor_value.send_data_buffer, 0, 11);                             // æ¸…é™¤ç¼“å†²åŒºæ•°æ®
 
-    memset(motor_value.receive_data_buffer, 0, 11);                          // Çå³ı»º³åÇøÊı¾İ
+    memset(motor_value.receive_data_buffer, 0, 11);                          // æ¸…é™¤ç¼“å†²åŒºæ•°æ®
 
-    memset(motor_value.receive_speed_data, 0, 8);                            // Çå³ı½ÓÊÕÊı¾İ
+    memset(motor_value.receive_speed_data, 0, 8);                            // æ¸…é™¤æ¥æ”¶æ•°æ®
 
     motor_value.receive_data_count          = 0;
 
     motor_value.sum_check_data              = 0;
+
+    motor_value.speed_data_updated          = 0;
 }
 
 
 //-------------------------------------------------------------------------------------------------------------------
-// º¯Êı¼ò½é     ÎŞË¢Çı¶¯ ´®¿ÚÍ¨Ñ¶³õÊ¼»¯
-// ²ÎÊıËµÃ÷     void
-// ·µ»Ø²ÎÊı     void
-// Ê¹ÓÃÊ¾Àı     small_driver_uart_init();
-// ±¸×¢ĞÅÏ¢
+// å‡½æ•°ç®€ä»‹     æ— åˆ·é©±åŠ¨ ä¸²å£é€šè®¯åˆå§‹åŒ–
+// å‚æ•°è¯´æ˜     void
+// è¿”å›å‚æ•°     void
+// ä½¿ç”¨ç¤ºä¾‹     small_driver_uart_init();
+// å¤‡æ³¨ä¿¡æ¯
 //-------------------------------------------------------------------------------------------------------------------
 void small_driver_uart_init(void)
 {
-    uart_init(SMALL_DRIVER_UART, SMALL_DRIVER_BAUDRATE, SMALL_DRIVER_RX, SMALL_DRIVER_TX);      // ´®¿Ú³õÊ¼»¯
+    uart_init(SMALL_DRIVER_UART, SMALL_DRIVER_BAUDRATE, SMALL_DRIVER_RX, SMALL_DRIVER_TX);      // ä¸²å£åˆå§‹åŒ–
 
-    uart_rx_interrupt(SMALL_DRIVER_UART, 1);                                                    // Ê¹ÄÜ´®¿Ú½ÓÊÕÖĞ¶Ï
+    uart_rx_interrupt(SMALL_DRIVER_UART, 1);                                                    // ä½¿èƒ½ä¸²å£æ¥æ”¶ä¸­æ–­
 
-    small_driver_init();                                                                        // ½á¹¹Ìå²ÎÊı³õÊ¼»¯
+    small_driver_init();                                                                        // ç»“æ„ä½“å‚æ•°åˆå§‹åŒ–
 
-    small_driver_set_duty(0, 0, 0, 0);                                                          // ÉèÖÃ0Õ¼¿Õ±È
+    small_driver_set_duty(0, 0, 0, 0);                                                          // è®¾ç½®0å ç©ºæ¯”
 
-    small_driver_get_speed();                                                                   // »ñÈ¡ÊµÊ±ËÙ¶ÈÊı¾İ
-
+    small_driver_get_speed();                                                                   // è·å–å®æ—¶é€Ÿåº¦æ•°æ®
 }
 
 void driver_uart_test(void)
 {
-    motor_value.send_data_buffer[0] = 0xA5;                                         // ÅäÖÃÖ¡Í·
+    motor_value.send_data_buffer[0] = 0xA5;                                         // å‘é€å¸§å¤´
 
-    motor_value.send_data_buffer[1] = 0X03;                                         // ÅäÖÃ¹¦ÄÜ×Ö
+    motor_value.send_data_buffer[1] = 0X03;                                         // è®¾ç½®åŠŸèƒ½ç 
 
-    motor_value.send_data_buffer[2] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[2] = 0x00;                                         // æ•°æ®ä½å…¨é›¶
 
-    motor_value.send_data_buffer[3] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[3] = 0x00;                                         // æ•°æ®ä½å…¨é›¶
 
-    motor_value.send_data_buffer[4] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[4] = 0x00;                                         // æ•°æ®ä½å…¨é›¶
 
-    motor_value.send_data_buffer[5] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[5] = 0x00;                                         // æ•°æ®ä½å…¨é›¶
 
-    motor_value.send_data_buffer[6] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[6] = 0x00;                                         // æ•°æ®ä½å…¨é›¶
 
-    motor_value.send_data_buffer[7] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[7] = 0x00;                                         // æ•°æ®ä½å…¨é›¶
 
-    motor_value.send_data_buffer[8] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[8] = 0x00;                                         // æ•°æ®ä½å…¨é›¶
 
-    motor_value.send_data_buffer[9] = 0x00;                                         // Êı¾İÎ»Çå¿Õ
+    motor_value.send_data_buffer[9] = 0x00;                                         // æ•°æ®ä½å…¨é›¶
 
-    motor_value.send_data_buffer[10] = 0xA8;                                        // ÅäÖÃĞ£ÑéÎ»
+    motor_value.send_data_buffer[10] = 0xA8;                                        // è®¾ç½®æ ¡éªŒä½
 
-    uart_write_buffer(SMALL_DRIVER_UART, motor_value.send_data_buffer, 11);         // ·¢ËÍ»ñÈ¡×ªËÙÊı¾İµÄ ×Ö½Ú°ü Êı¾İ
+    uart_write_buffer(SMALL_DRIVER_UART, motor_value.send_data_buffer, 11);         // å‘é€è®¾ç½®å ç©ºæ¯”åˆ° å­—èŠ‚åŒº å‡½æ•°
 }
+
+
 
 
 

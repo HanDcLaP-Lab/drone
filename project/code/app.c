@@ -2,7 +2,7 @@
 #include "key_switch.h" 
 #include "imu.h"
 #include "fly_ctrl.h"
-#include "kalman_filter.h"
+#include "filters.h"
 
 void app_flight_start(void) {
     

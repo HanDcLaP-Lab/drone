@@ -1,4 +1,4 @@
-#ifndef SMALL_DRIVER_UART_CONTROL_H_
+ï»¿#ifndef SMALL_DRIVER_UART_CONTROL_H_
 #define SMALL_DRIVER_UART_CONTROL_H_
 
 #include "zf_common_headfile.h"
@@ -14,15 +14,17 @@
 
 typedef struct
 {
-    uint8 send_data_buffer[11];                 // ·¢ËÍ»º³åÊı×é
+    uint8 send_data_buffer[11];                 // å‘é€ç¼“å†²æ•°ç»„
 
-    uint8 receive_data_buffer[11];              // ½ÓÊÕ»º³åÊı×é
+    uint8 receive_data_buffer[11];              // æ¥æ”¶ç¼“å†²æ•°ç»„
 
-    uint8 receive_data_count;                   // ½ÓÊÕ¼ÆÊı
+    uint8 receive_data_count;                   // æ¥æ”¶è®¡æ•°
 
-    uint8 sum_check_data;                       // Ğ£ÑéÎ»
+    uint8 sum_check_data;                       // æ ¡éªŒä½
 
-    int16 receive_speed_data[4];                // ½ÓÊÕµ½µÄµç»úËÙ¶ÈÊı¾İ
+    int16 receive_speed_data[4];                // æ¥æ”¶åˆ°çš„ç”µæœºé€Ÿåº¦æ•°æ®
+
+    uint8 speed_data_updated;                   // 1=æ–°è½¬é€Ÿå°±ç»ª(UARTå›è°ƒç½®ä½,IMUæ¶ˆè´¹æ¸…é›¶)
 
 }small_device_value_struct;
 
@@ -30,13 +32,13 @@ extern small_device_value_struct motor_value;
 
 
 
-void uart_control_callback(void);                                   // ÎŞË¢Çı¶¯ ´®¿Ú½ÓÊÕ»Øµ÷º¯Êı
+void uart_control_callback(void);                                   // æ— åˆ·é©±åŠ¨ ä¸²å£æ¥æ”¶å›è°ƒå‡½æ•°
 
-void small_driver_set_duty(int16 motor_duty_1, int16 motor_duty_2, int16 motor_duty_3, int16 motor_duty_4);      // ÎŞË¢Çı¶¯ ÉèÖÃµç»úÕ¼¿Õ±È
+void small_driver_set_duty(int16 motor_duty_1, int16 motor_duty_2, int16 motor_duty_3, int16 motor_duty_4);      // æ— åˆ·é©±åŠ¨ è®¾ç½®ç”µæœºå ç©ºæ¯”
 
-void small_driver_get_speed(void);                                  // ÎŞË¢Çı¶¯ »ñÈ¡ËÙ¶ÈĞÅÏ¢
+void small_driver_get_speed(void);                                  // æ— åˆ·é©±åŠ¨ è·å–é€Ÿåº¦ä¿¡æ¯
 
-void small_driver_uart_init(void);                                  // ÎŞË¢Çı¶¯ ´®¿ÚÍ¨Ñ¶³õÊ¼»¯
+void small_driver_uart_init(void);                                  // æ— åˆ·é©±åŠ¨ ä¸²å£é€šè®¯åˆå§‹åŒ–
 
 void driver_uart_test(void);
 

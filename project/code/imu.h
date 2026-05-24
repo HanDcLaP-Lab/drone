@@ -36,6 +36,30 @@
 #define IMU_MOUNT_ADJUST_ROLL   0.0f //直接填写水平飞行的读数
 #define IMU_MOUNT_ADJUST_PITCH  0.0f
 
+// ================= 陷波滤波参数 (电机振动抑制) =================
+#define NOTCH_ENABLE            1       // 1: 使能陷波滤波, 0: 关闭
+#define NOTCH_FS                1000.0f // 采样频率 (Hz) = 1/DT
+#define NOTCH_Q                 5.0f    // 品质因数 (越高越窄, 建议3~10)
+#define NOTCH_MIN_FREQ          5.0f    // 最低陷波频率 (Hz), 低于此值自动旁通
+#define NOTCH_MAX_FREQ          (NOTCH_FS * 0.48f) // 最高陷波频率 (Hz), 超过防Nyquist折叠
+#define NOTCH_MOTOR_COUNT       4       // 电机数量
+#define NOTCH_HARMONIC_COUNT    3       // 每电机谐波数 (1×/2×/6×), 级联 4×3=12 个biquad/通道
+#define NOTCH_TIMEOUT_MS        20      // 转速数据超时 (ms), 超时后旁通所有陷波
+
+// 通道掩码: bit0=gx, bit1=gy, bit2=gz, bit3=ax, bit4=ay, bit5=az
+#define NOTCH_CHANNEL_GX    0x01
+#define NOTCH_CHANNEL_GY    0x02
+#define NOTCH_CHANNEL_GZ    0x04
+#define NOTCH_CHANNEL_AX    0x08
+#define NOTCH_CHANNEL_AY    0x10
+#define NOTCH_CHANNEL_AZ    0x20
+#define NOTCH_CHANNEL_MASK  (NOTCH_CHANNEL_GX | NOTCH_CHANNEL_GY | NOTCH_CHANNEL_GZ)  // 仅陀螺
+
+#include "filters.h"   // KalmanFilter1, NotchFilter_t, NotchConfig_t 等通用滤波器定义
+
+extern const NotchConfig_t notch_cfg;       // IMU 专用陷波配置 (fs=1000, q=5, min=5Hz, max=480Hz)
+extern uint8_t notch_active_count;          // 调试: 当前生效的陷波切片数 (NOTCH_ENABLE时有效)
+
 // ================= Z轴融合参数 =================
 #define Z_CORRECT_POS_GAIN  0.3f   // 位置修正系数
 #define Z_CORRECT_VEL_GAIN  0.3f   // 速度修正系数
