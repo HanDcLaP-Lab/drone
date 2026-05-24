@@ -158,9 +158,9 @@ void display_image_debug_display(void){
 
 
     ips200_show_string(0, 16*13, "MaxR:");
-    ips200_show_float(40, 16*13, cam_down.debug_max_ratio, 3, 2);
+    ips200_show_float(40, 16*13, cam_down.debug.max_ratio, 3, 2);
     ips200_show_string(90, 16*13, "MinR:");
-    ips200_show_float(130, 16*13, cam_down.debug_min_ratio, 3, 2);
+    ips200_show_float(130, 16*13, cam_down.debug.min_ratio, 3, 2);
 
     
     ips200_show_string(0, 16*14, "z:");

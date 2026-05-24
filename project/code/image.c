@@ -66,8 +66,8 @@ void camera_init(void) {
     // 参数配置
     cam_down.threshold = THRESHOLD;   // 二值化阈值 (需根据实际场地光照调整)
     cam_down.margin_cut = 1;    // 四周裁剪 5 像素
-    cam_down.debug_max_ratio = 0.0f;
-    cam_down.debug_min_ratio = 999.0f;
+    cam_down.debug.max_ratio = 0.0f;
+    cam_down.debug.min_ratio = 999.0f;
 
     // 预计算逐像素阈值查找表: rho² → threshold, 中心高阈值边缘低阈值
     int span = THRESHOLD_MAX - THRESHOLD_MIN;
@@ -285,7 +285,7 @@ static void erode_pass(uint8_t *src, uint8_t *dst, uint16_t width, uint16_t heig
                                 src[idx - width] + src[idx + width] +
                                 src[idx - width - 1] + src[idx - width + 1] +
                                 src[idx + width - 1] + src[idx + width + 1];
-                if (count >= 6) {
+                if (count >= ERODE_MIN_NEIGHBORS) {
                     dst[idx] = 1;
                 }
             }
@@ -333,10 +333,7 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
                 float dist_sq = dx * dx + dy * dy;
                 
                 // 动态计算该位置的最小面积门槛 (越靠边缘要求越低)
-                float dynamic_min_area = 1;
-                // if (dynamic_min_area < ABS_MIN_AREA) {
-                //     dynamic_min_area = ABS_MIN_AREA; // 兜底绝对下限
-                // }
+                float dynamic_min_area = BASE_MIN_AREA;
 
                 // 立即判断该连通域并解算 (使用动态面积门槛)
                 if (stats.dot_num > dynamic_min_area) {
@@ -357,10 +354,10 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
                         float delta = sqrtf((mu20 - mu02)*(mu20 - mu02) + 4.0f * mu11 * mu11);
                         float lambda1 = (mu20 + mu02 + delta) / 2.0f;
                         float lambda2 = (mu20 + mu02 - delta) / 2.0f;
-                        
+
                         float ratio = 1.0f;
                         if (lambda2 > 0.1f) ratio = lambda1 / lambda2;
-                        else ratio = 100.0f; // 如果次轴极小(纯直线)，赋予安全极值防除零
+                        else ratio = 100.0f; // 次轴极小(纯直线)，赋予退化极值
                         
                         cam->aspect_ratio[valid_idx] = ratio;
                         valid_idx++;
@@ -371,6 +368,7 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
     }
     cam->components_count = label - 1;
     cam->light_number = valid_idx;
+    cam->debug.raw_blobs = valid_idx; // 调试: 记录本帧原始光斑数
 }
 
 
@@ -388,13 +386,18 @@ static void sort_lights(CameraObject *cam) {
     cam->target_center_x = 0.0f;
     cam->target_center_y = 0.0f;
 
-    if (cam->light_number == 0) return;
+    if (cam->light_number == 0) {
+        cam->debug.pass_area = 0;
+        cam->debug.pass_car = 0;
+        cam->debug.pass_target = 0;
+        return;
+    }
 
     // =======================================================
     // 1. 获取当前无人机高度 (用于简单距离估算)
     // =======================================================
     float current_height = img_imu_snap.height;
-    if (current_height < 30.0f) current_height = 30.0f; // 防除零及贴地保护
+    if (current_height < HEIGHT_ESTIMATE_MIN) current_height = HEIGHT_ESTIMATE_MIN;
 
     float phys_dist_sq[MAX_LIGHTS] = {0};
     uint8_t is_valid_blob[MAX_LIGHTS] = {0};
@@ -415,13 +418,17 @@ static void sort_lights(CameraObject *cam) {
 
         // 使用局部变量做距离补偿过滤，不改动原始 dot_num
         float area_for_filter = (float)cam->dot_num[i];
-        if (out_dist > 150.0f) area_for_filter *= (out_dist / 100.0f);
+        if (out_dist > DIST_COMP_THRESHOLD) area_for_filter *= (out_dist / DIST_COMP_SCALE);
         float dynamic_min_area = BASE_MIN_AREA;
 
         // 只有面积在当前物理距离下达标的点，才允许进入后续竞选
         if (area_for_filter >= dynamic_min_area) {
             is_valid_blob[i] = 1;
         }
+    }
+    cam->debug.pass_area = 0;
+    for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+        if (is_valid_blob[i]) cam->debug.pass_area++;
     }
     // =======================================================
     // [新增]：独立测试极值记录逻辑 (只记录画面中面积最大的灯，防噪点)
@@ -438,12 +445,11 @@ static void sort_lights(CameraObject *cam) {
     // 找到了最大的灯，更新历史极值
     if (max_area_idx != -1) {
         float current_max_ratio = cam->aspect_ratio[max_area_idx];
-        if (current_max_ratio > cam->debug_max_ratio) {
-            cam->debug_max_ratio = current_max_ratio;
+        if (current_max_ratio > cam->debug.max_ratio) {
+            cam->debug.max_ratio = current_max_ratio;
         }
-        // 排除掉刚好等于 100.0 的情况 (在 calculate_centroids 里设定的噪点线)
-        if (current_max_ratio < cam->debug_min_ratio && current_max_ratio < 99.0f) {
-            cam->debug_min_ratio = current_max_ratio;
+        if (current_max_ratio < cam->debug.min_ratio && current_max_ratio < DEGENERATE_RATIO_MARK) {
+            cam->debug.min_ratio = current_max_ratio;
         }
     }
     // =======================================================
@@ -458,6 +464,7 @@ static void sort_lights(CameraObject *cam) {
     float max_car_ratio_found = 0.0f; // 记录找到的最大长宽比
     
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+        if (!is_valid_blob[i]) continue;
         // 计算目标质心到画面中心的像素距离平方
         float dx = cam->centers[i][1] - img_cx;
         float dy = cam->centers[i][0] - img_cy;
@@ -467,21 +474,22 @@ static void sort_lights(CameraObject *cam) {
         float dynamic_car_min_ratio = CAR_BASE_MIN_RATIO + (dist_sq * CAR_RATIO_COMP_COEF);
         
         // 只有大于当前位置的动态门槛，才有资格参与小车竞选
-        if (cam->aspect_ratio[i] > dynamic_car_min_ratio 
+        if (cam->aspect_ratio[i] > dynamic_car_min_ratio
             && cam->centers[i][1] > EDGE_SAFE_MARGIN_X && cam->centers[i][1] < cam->width - EDGE_SAFE_MARGIN_X
             && cam->centers[i][0] > EDGE_SAFE_MARGIN_Y && cam->centers[i][0] < cam->height - EDGE_SAFE_MARGIN_Y
-            && dist_sq < 3600
+            && dist_sq < CAR_MAX_CENTER_DIST_SQ
         ) {
             // 在所有合格的候选者中，选出长宽比最大的那个
             if (cam->aspect_ratio[i] > max_car_ratio_found) {
                 max_car_ratio_found = cam->aspect_ratio[i];
                 car_idx = i;
             }
+            cam->debug.pass_car++;
         }
     }
     
     // 2. 寻找信标 (排除小车后，在动态畸变长宽比阈值内选距离画面中心最近的)
-    float min_dist_sq = 999999.0f; // 记录最小的中心距离平方 (初始给一个极大值)
+    float min_dist_sq = 999999.0f; // 记录最小的中心距离平方 (初始极大值)
     target_idx = -1; // 确保重置
 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
@@ -501,14 +509,15 @@ static void sort_lights(CameraObject *cam) {
         }
 
         // 面积过小的连通域长宽比不可靠, 直接通过形状筛选
-        if (cam->dot_num[i] <= 20 || cam->aspect_ratio[i] < dynamic_target_max_ratio) {
-            
+        if (cam->dot_num[i] <= SMALL_BLOB_DIRECT_AREA || cam->aspect_ratio[i] < dynamic_target_max_ratio) {
+
             // 【核心修改：按中心距离打擂台】
             // 只要形状合格，谁离画面中心最贴近，谁就是真正的信标！
             if (dist_sq < min_dist_sq) {
                 min_dist_sq = dist_sq;
                 target_idx = i;
             }
+            cam->debug.pass_target++;
         }
     }
 
