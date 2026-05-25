@@ -222,3 +222,54 @@ void Fly_Param_Update_yaw(uint8_t ch, float val) {
             break;
     }
 }
+
+void Fly_Param_Update_height(uint8_t ch, float val) {
+    switch (ch) {
+        case 1:
+            pid_height_pos.kp = val;
+            break;
+            
+        case 2: 
+            pid_height_pos.ki = val;
+            break;
+            
+        case 3: 
+            pid_height_vel.kp = val;
+            break;
+        case 4:
+            pid_height_vel.kd = val;
+            break;
+            
+        case 5: // 角速度环 KD
+
+            break;
+        
+        case 6:
+
+            break;
+        case 7:
+
+            break;
+        case 8:
+            if(0.5 <= val && val < 1.5){
+                wireless_uart_send_string("land\r\n");
+                flight_target.cur_state = pre_landing; 
+                car_en = 0;
+            }else if(val > 1.5 && val < 2.5){
+                wireless_uart_send_string("emergency stop\r\n");
+                car_en = 0;
+                Flight_Lock();
+            }else if(val == 0){
+                if (imu_data.is_calibrated) {
+                    Flight_Unlock();
+                } else {
+                    flight_target.is_armed = 2; 
+                }
+                flight_target.cur_state = normal;
+                flight_target.start_up_scale = 0;
+            }
+            break;
+        default:
+            break;
+    }
+}
