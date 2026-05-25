@@ -1,8 +1,9 @@
 #include "app.h"
-#include "key_switch.h" 
+#include "key_switch.h"
 #include "imu.h"
 #include "fly_ctrl.h"
 #include "filters.h"
+#include "debug_data.h"
 
 void app_flight_start(void) {
     
@@ -107,7 +108,61 @@ void Fly_Param_Update(uint8_t ch, float val) {
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
                 } else {
-                    flight_target.is_armed = 2; 
+                    flight_target.is_armed = 2;
+                }
+                flight_target.cur_state = normal;
+                flight_target.start_up_scale = 0;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void Fly_Param_Update_Debug(uint8_t ch, float val) {
+    switch (ch) {
+        case 1:
+            pid_roll.kp = val;
+            pid_pitch.kp = val;
+            break;
+        case 2:
+            pid_roll.ki = val;
+            pid_pitch.ki = val;
+            break;
+        case 3:
+            pid_g_roll.kp = val;
+            pid_g_pitch.kp = val;
+            break;
+        case 4:
+            pid_g_roll.ki = val;
+            pid_g_pitch.ki = val;
+            break;
+        case 5:
+            pid_g_roll.kd = val;
+            pid_g_pitch.kd = val;
+            break;
+        case 6:
+            break;
+        case 7:
+            break;
+        case 8:
+            if(val > 2.5f && val < 3.5f){
+                debug_data_start();
+            }else if(val > 3.5f && val < 4.5f){
+                debug_data_request_send();
+            }else if(val > 1.5f && val < 2.5f){
+                wireless_uart_send_string("emergency stop\r\n");
+                car_en = 0;
+                Flight_Lock();
+            }else if(0.5f <= val && val < 1.5f){
+                wireless_uart_send_string("land\r\n");
+                flight_target.cur_state = pre_landing;
+                car_en = 0;
+            }else if(val == 0){
+                if (imu_data.is_calibrated) {
+                    Flight_Unlock();
+                } else {
+                    flight_target.is_armed = 2;
                 }
                 flight_target.cur_state = normal;
                 flight_target.start_up_scale = 0;

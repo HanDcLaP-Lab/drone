@@ -34,6 +34,7 @@
  ********************************************************************************************************************/
 
 #include "zf_common_headfile.h"
+#include "debug_data.h"
 // 打开新的工程或者工程移动了位置务必执行以下操作
 // 第一步 关闭上面所有打开的文件
 // 第二步 project->clean  等待下方进度条走完
@@ -94,6 +95,8 @@ int main(void) {
 
     while (true) {
         app_state_machine_update(); // 状态机轮询，检测模式切换
+        debug_data_notify_handler();
+        debug_data_send_handler();
 
         seekfree_assistant_data_analysis();
         // 2. 检查是否有参数更新 (遍历所有通道)
@@ -106,7 +109,7 @@ int main(void) {
                 // 将参数应用到 PID (通道号 = 索引 + 1)
                 // seekfree_assistant_parameter[i] 是接收到的浮点数值
                 //Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]); 
-                Fly_Param_Update_height(i + 1, seekfree_assistant_parameter[i]);
+                Fly_Param_Update_Debug(i + 1, seekfree_assistant_parameter[i]);
                 
                 // 可选：通过无线串口回传确认，告诉上位机收到并更新了
                 // wireless_uart_send_string("Param Updated\r\n");

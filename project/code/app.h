@@ -20,4 +20,5 @@ void Fly_Param_Update(uint8_t ch, float val);
 void Fly_Param_Update_Visual(uint8_t ch, float val);
 void Fly_Param_Update_yaw(uint8_t ch, float val) ;
 void Fly_Param_Update_height(uint8_t ch, float val);
+void Fly_Param_Update_Debug(uint8_t ch, float val);
 #endif
