@@ -4,6 +4,7 @@
 #include "zf_common_headfile.h"
 #include <math.h>
 #include <stdint.h>
+#include "filters.h"
 
 // ================= 配置参数 =================
 #define KP 0.93f          // 互补滤波比例增益

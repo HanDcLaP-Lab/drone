@@ -36,6 +36,7 @@ static float exInt = 0.0f, eyInt = 0.0f, ezInt = 0.0f;   // 积分误差
 static float prev_raw_yaw = 0.0f;
 // 陀螺仪校准相关
 static double offset_gx = 0, offset_gy = 0, offset_gz = 0;
+static float  offset_az = 0.0f; // [新增] 加速度计Z轴零偏 (map_az基准偏差, 单位m/s^2)
 static double sum_gx = 0, sum_gy = 0, sum_gz = 0;
 static double sum_ax = 0, sum_ay = 0, sum_az = 0;
 
@@ -278,13 +279,14 @@ static void Navigation_Update(float ax, float ay, float az) {
     float w_ay = 2*(q1q2 + q0q3)*ax + (1 - 2*(q1q1 + q3q3))*ay + 2*(q2q3 - q0q1)*az;
     float w_az = 2*(q1q3 - q0q2)*ax + 2*(q2q3 + q0q1)*ay + (1 - 2*(q1q1 + q2q2))*az;
 
-    // 3. 去除重力 
-    w_az = w_az - GRAVITY_MSS;
+    // 3. 去除重力 + 加速度计Z轴零偏补偿
+    // [修复] 减去校准阶段测量的加速度计零偏，消除静止时vz积分漂移
+    w_az = w_az - GRAVITY_MSS - offset_az;
 
     // 4. 滤波与死区 (Z轴死区稍大，防止静态积分漂移)
     if(fabsf(w_ax) < 0.01f) w_ax = 0; 
     if(fabsf(w_ay) < 0.01f) w_ay = 0;
-    if(fabsf(w_az) < 0.05f) w_az = 0;
+    if(fabsf(w_az) < 0.12f) w_az = 0; // [修复] 0.05→0.12: 覆盖校准后的残余噪声 (~12mg)
     
     // 更新到结构体 (仅用于观察方向，不用于位置控制)
     imu_data.world_ax = w_ax;
@@ -412,6 +414,12 @@ void IMU_Update_Loop(void) {
             float init_ax = IMU_MAP_AX(avg_ax, avg_ay, avg_az);
             float init_ay = IMU_MAP_AY(avg_ax, avg_ay, avg_az);
             float init_az = IMU_MAP_AZ(avg_ax, avg_ay, avg_az);
+
+            // [新增] 计算加速度计Z轴零偏
+            // 静止时 init_az 应该精确等于 GRAVITY_MSS，差值即为传感器零偏
+            // 注意：这里假设校准时无人机水平静止，roll≈0, pitch≈0
+            // 若roll/pitch较大，该补偿有误差，但实际校准场景均为水平放置，可接受
+            offset_az = init_az - GRAVITY_MSS;
 
             // 计算初始欧拉角 (假设初始Yaw为0)
             float init_roll = atan2f(init_ay, init_az);

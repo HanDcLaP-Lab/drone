@@ -7,7 +7,7 @@
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 120.0f  // 目标高度
 #define LAND_HEIGHT 10.0f       // 着陆高度
-#define HOVER_THROTTLE 4900    // 基础悬停油门 
+#define HOVER_THROTTLE 4800    // 基础悬停油门 
 #define MAX_PWM 8000
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 6.0f  // 最大倾角限制 (度) 
