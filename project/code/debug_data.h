@@ -2,6 +2,7 @@
 #define _DEBUG_DATA_H_
 
 #include "zf_common_headfile.h"
+#include "assert.h"
 
 // ===== 功能开关 (置 1 启用, 0 关闭以释放 ~24KB RAM) =====
 #define DEBUG_DATA_ENABLE        0
@@ -24,10 +25,9 @@ typedef struct {
 } debug_sample_t;
 
 // ===== 编译期校验 =====
-// buffer 置于 0x28060000 独立区域, 大小上限 48KB (见 linker .icf)
-#if (DEBUG_DATA_MAX_SAMPLES * sizeof(debug_sample_t)) > (48 * 1024)
-#error "debug_buffer exceeds 48KB reserved region at 0x28060000"
-#endif
+// buffer 放入 linker 预留的 .debug_buf section (0x28060000, 48KB), 防止 .bss 覆盖
+_Static_assert((DEBUG_DATA_MAX_SAMPLES * sizeof(debug_sample_t)) <= (48 * 1024),
+               "debug_buffer exceeds 48KB reserved region in .debug_buf section");
 
 // ===== 存储占用 =====
 // sizeof(debug_sample_t) = 4 + 3*4 + 4*2 = 24 bytes

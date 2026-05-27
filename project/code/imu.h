@@ -38,7 +38,7 @@
 #define IMU_MOUNT_ADJUST_PITCH  0.0f
 
 // ================= 陷波滤波参数 (电机振动抑制) =================
-#define NOTCH_ENABLE            1       // 1: 使能陷波滤波, 0: 关闭
+#define NOTCH_ENABLE            0       // 1: 使能陷波滤波, 0: 关闭
 #define NOTCH_FS                1000.0f // 采样频率 (Hz) = 1/DT
 #define NOTCH_Q                 5.0f    // 品质因数 (越高越窄, 建议3~10)
 #define NOTCH_MIN_FREQ          5.0f    // 最低陷波频率 (Hz), 低于此值自动旁通

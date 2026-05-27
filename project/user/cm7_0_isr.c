@@ -87,7 +87,7 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
     //wireless_uart_send_float(pid_g_roll.integral);
     // wireless_uart_send_string(",");
     // wireless_uart_send_string("\n"wireless_uart_output_，ptor();
-    //wireless_uart_output_motor();
+    wireless_uart_output_motor();
     //printf("%d",notch_active_count);
     //wireless_uart_output_imu();
     //wireless_uart_output_groud();

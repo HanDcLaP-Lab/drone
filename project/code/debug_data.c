@@ -6,7 +6,7 @@
 
 #if DEBUG_DATA_ENABLE
 
-// ===== 存储缓冲 (绝对地址放置，避开 .intvec_ram 和栈) =====
+// ===== 存储缓冲 (绝对地址放置，MAP 已确认无冲突) =====
 #pragma location = 0x28060000
 static debug_sample_t debug_buffer[DEBUG_DATA_MAX_SAMPLES];
 
@@ -99,7 +99,9 @@ void debug_data_send_handler(void)
 
     while (batch < DEBUG_DATA_SEND_BATCH && send_cursor < debug_sample_count) {
         uint16_t len = encode_frame(frame, send_cursor);
-        wireless_uart_send_buffer(frame, len);
+        if (wireless_uart_send_buffer(frame, len) != 0) {
+            break;  // 模块忙超时, 帧未发出, 下次主循环重试
+        }
         send_cursor++;
         batch++;
     }
