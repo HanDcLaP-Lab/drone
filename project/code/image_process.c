@@ -145,7 +145,25 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
 }
 
 // ==========================================
-// 5. 计算地面坐标主函数
+// 5. 精确计算单点的物理距离 (供图像处理使用)
+// ==========================================
+void get_accurate_ground_distance(double u, double v, double height, double pitch_deg, double roll_deg, double *out_x, double *out_y, double *out_dist) {
+    double p_rad = pitch_deg * M_PI / 180.0;
+    double r_rad = roll_deg * M_PI / 180.0;
+    double sinp = sin(p_rad), cosp = cos(p_rad);
+    double sinr = sin(r_rad), cosr = cos(r_rad);
+
+    Vector3D ray = pixelTo3DRay(u, v);
+    Vector3D body = cameraToBody(&ray, sinp, cosp, sinr, cosr);
+    GroundPoint pt = projectToGround(body, height);
+
+    if (out_x) *out_x = pt.x;
+    if (out_y) *out_y = pt.y;
+    if (out_dist) *out_dist = sqrt(pt.x * pt.x + pt.y * pt.y);
+}
+
+// ==========================================
+// 6. 计算地面坐标主函数
 // ==========================================
 // 输出: pos.car.x (前), pos.car.y (右) 单位: cm (取决于height单位)
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg, double yaw_deg) {

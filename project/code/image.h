@@ -16,7 +16,7 @@
 #define MAX_LIGHTS 20       // 最大识别灯光数量
 #define THRESHOLD 130      //二值化阈值设置
 #define THRESHOLD_MAX 130   // 动态阈值上限 (近距离)
-#define THRESHOLD_MIN  40   // 动态阈值下限 (5m水平距离)
+#define THRESHOLD_MIN  5    // 动态阈值下限 (5m水平距离)
 
 // =========================================================
 // [新增] 广角全景摄像头有效成像圆形区域配置
@@ -25,6 +25,8 @@
 #define FOV_RADIUS (FOV_DIAMETER / 2.0f)
 #define FOV_RADIUS_SQ (FOV_RADIUS * FOV_RADIUS)
 
+#define CAR_MAX_DISTANCE  180.0f  //小车最大距离，超过不认为是小车
+#define TARGET_MAX_DISTANCE  1000.0f  //信标最大距离，超过不认为是小车
 // =========================================================
 // [新增] 面积动态补偿参数 (解决边缘灯光变小的问题)
 // =========================================================

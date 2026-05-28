@@ -403,22 +403,23 @@ static void sort_lights(CameraObject *cam) {
     uint8_t is_valid_blob[MAX_LIGHTS] = {0};
 
     // =======================================================
-    // 2. 计算简单物理距离，并做【面积动态过滤】
+    // 2. 计算精确物理距离，并做【面积动态过滤】
     // =======================================================
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
-        float out_x, out_y, out_dist;
+        double out_x, out_y, out_dist;
         
-        // 调用简单估算接口
+        // 调用精确估算接口
         // 注意传参：centers[i][1] 是 Col(X), centers[i][0] 是 Row(Y)
-        Estimate_Distance_Simple(cam->centers[i][1], cam->centers[i][0], 
-                                 current_height, &out_x, &out_y, &out_dist);
+        get_accurate_ground_distance((double)cam->centers[i][1], (double)cam->centers[i][0], 
+                                     (double)current_height, (double)img_imu_snap.pitch, (double)img_imu_snap.roll,
+                                     &out_x, &out_y, &out_dist);
         
         // 记录物理距离的平方 (单位：平方厘米)
-        phys_dist_sq[i] = out_dist * out_dist;
+        phys_dist_sq[i] = (float)(out_dist * out_dist);
 
         // 使用局部变量做距离补偿过滤，不改动原始 dot_num
         float area_for_filter = (float)cam->dot_num[i];
-        if (out_dist > DIST_COMP_THRESHOLD) area_for_filter *= (out_dist / DIST_COMP_SCALE);
+        if (out_dist > DIST_COMP_THRESHOLD) area_for_filter *= (float)(out_dist / DIST_COMP_SCALE);
         float dynamic_min_area = BASE_MIN_AREA;
 
         // 只有面积在当前物理距离下达标的点，才允许进入后续竞选
@@ -465,6 +466,10 @@ static void sort_lights(CameraObject *cam) {
     
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (!is_valid_blob[i]) continue;
+        
+        // 限制：找小车距离在2m以内 (200cm)
+        if (phys_dist_sq[i] > 150.0f * 150.0f) continue;
+        
         // 计算目标质心到画面中心的像素距离平方
         float dx = cam->centers[i][1] - img_cx;
         float dy = cam->centers[i][0] - img_cy;
@@ -495,6 +500,10 @@ static void sort_lights(CameraObject *cam) {
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (i == car_idx) continue;
         if (!is_valid_blob[i]) continue;
+        
+        // 限制：找信标距离在10m以内 (1000cm)
+        if (phys_dist_sq[i] > 1000.0f * 1000.0f) continue;
+
         // 计算目标质心到画面中心的像素距离平方 
         float dx = cam->centers[i][1] - img_cx;
         float dy = cam->centers[i][0] - img_cy;
@@ -507,6 +516,14 @@ static void sort_lights(CameraObject *cam) {
         if (dynamic_target_max_ratio > TARGET_LIMIT_MAX_RATIO) {
             dynamic_target_max_ratio = TARGET_LIMIT_MAX_RATIO; 
         }
+
+        // 动态面积门槛平滑过渡：正上方(0m)要求面积>25，4m(400cm)处降为0
+        float out_dist = sqrtf(phys_dist_sq[i]);
+        float min_target_area = 25.0f * (1.0f - out_dist / 250.0f);
+        if (min_target_area < 0.0f) min_target_area = 0.0f;
+        
+        // 面积不达标直接排除
+        if (cam->dot_num[i] <= min_target_area) continue;
 
         // 面积过小的连通域长宽比不可靠, 直接通过形状筛选
         if (cam->dot_num[i] <= SMALL_BLOB_DIRECT_AREA || cam->aspect_ratio[i] < dynamic_target_max_ratio) {

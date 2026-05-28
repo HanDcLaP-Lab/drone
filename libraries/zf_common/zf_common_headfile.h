@@ -121,4 +121,5 @@
 #include "data_complex.h"
 #include "upixel.h"
 #include "small_driver_uart_control.h"
+#include "debug_data.h"
 #endif

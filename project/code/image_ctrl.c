@@ -233,7 +233,7 @@ void Flight_Hover_Control_Task(void) {
         car_en = 0; // 倒计时期间强制保持为 0
     } else {
         if(was_aligning == 0){
-            //car_en = 1;
+            car_en = 1;
         }else{
             car_en = 0;
         }
