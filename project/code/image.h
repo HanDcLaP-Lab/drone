@@ -70,6 +70,8 @@
 // ================= 信标识别 =================
 #define SMALL_BLOB_DIRECT_AREA  20      // 小光斑面积上限 (≤此值直接通过形状筛选)
 #define DEGENERATE_RATIO_MARK   99.0f   // 退化标记排除值 (ratio==100视为无效)
+#define TARGET_MIN_CONSECUTIVE_FRAMES 5 // 连续检测到信标多少帧后允许保持
+#define TARGET_HOLD_FRAMES      5       // 丢失后保持最后位置的帧数
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---

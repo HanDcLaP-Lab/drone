@@ -368,9 +368,35 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
     }
     cam->components_count = label - 1;
     cam->light_number = valid_idx;
-    cam->debug.raw_blobs = valid_idx; // 调试: 记录本帧原始光斑数
 }
 
+// 处理信标丢失后的保持逻辑
+static void apply_target_hold_logic(CameraObject *cam) {
+    static uint8_t target_consecutive_frames = 0;
+    static uint8_t target_hold_frames = 0;
+
+    if (cam->target_valid) {
+        // 本帧有效锁定到了信标
+        if (target_consecutive_frames < 255) {
+            target_consecutive_frames++;
+        }
+        target_hold_frames = 0;
+    } else {
+        // 本帧没有锁定到信标
+        if (target_consecutive_frames >= TARGET_MIN_CONSECUTIVE_FRAMES && target_hold_frames < TARGET_HOLD_FRAMES) {
+            // 满足保持条件，强行锁定并沿用上一次的值
+            cam->target_valid = 1;
+            target_hold_frames++;
+        } else {
+            // 保持时间结束或未达到保持条件，彻底清除数据
+            target_consecutive_frames = 0;
+            cam->target_dot_num = 0;
+            cam->target_ratio = 0.0f;
+            cam->target_center_x = 0.0f;
+            cam->target_center_y = 0.0f;
+        }
+    }
+}
 
 static void sort_lights(CameraObject *cam) {
     // 默认清除上一帧的锁定状态
@@ -381,15 +407,13 @@ static void sort_lights(CameraObject *cam) {
     cam->car_center_y = 0.0f;
 
     cam->target_valid = 0;
-    cam->target_dot_num = 0;
-    cam->target_ratio = 0.0f;
-    cam->target_center_x = 0.0f;
-    cam->target_center_y = 0.0f;
+    // 不在此处清除信标坐标等信息，以支持保持最后一次信标位置
 
     if (cam->light_number == 0) {
         cam->debug.pass_area = 0;
         cam->debug.pass_car = 0;
         cam->debug.pass_target = 0;
+        apply_target_hold_logic(cam);
         return;
     }
 
@@ -554,6 +578,9 @@ static void sort_lights(CameraObject *cam) {
         cam->target_dot_num = cam->dot_num[target_idx];
         cam->target_ratio = cam->aspect_ratio[target_idx];
     }
+    
+    // 应用信标丢失保持逻辑
+    apply_target_hold_logic(cam);
 }
 
 // --- 4. 外部调用的处理入口 ---
