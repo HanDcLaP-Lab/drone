@@ -104,7 +104,7 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 //   [4] drone_yaw           — 无人机偏航角 (deg, 顺时针正)    ← imu_data.yaw
 //   [5] locked_state        — 锁定灯数 (0=全丢/1=仅小车/2=仅信标/3=都有) ← S1_LOCKED_COUNT
 //   [6] car_en              — 急停使能标志 (0=急停, 1=正常)   ← car_en
-//   [7] reserved            — 预留，当前未使用
+//   [7] car_target_dist     — 车-信标地面距离 (cm)                           ← S1_CAR_TARGET_DIST
 // ******************************************************************************
 void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share_data一般传入share_data_from_1
 {
@@ -115,6 +115,7 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
     buffer[4] = imu_data.yaw;
     buffer[5] = share_data[S1_LOCKED_COUNT];
     buffer[6] = car_en;
+    buffer[7] = share_data[S1_CAR_TARGET_DIST];
 }
 
 #elif defined(CY_CORE_CM7_1)
