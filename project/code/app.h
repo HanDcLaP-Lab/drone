@@ -16,4 +16,9 @@ extern Drone_State_e current_drone_state;
 void app_init(void);
 void app_state_machine_update(void);
 
+void Fly_Param_Update(uint8_t ch, float val);
+void Fly_Param_Update_Visual(uint8_t ch, float val);
+void Fly_Param_Update_yaw(uint8_t ch, float val) ;
+void Fly_Param_Update_height(uint8_t ch, float val);
+void Fly_Param_Update_Debug(uint8_t ch, float val);
 #endif

@@ -34,6 +34,7 @@
  ********************************************************************************************************************/
 
 #include "zf_common_headfile.h"
+#include "debug_data.h"
 // 打开新的工程或者工程移动了位置务必执行以下操作
 // 第一步 关闭上面所有打开的文件
 // 第二步 project->clean  等待下方进度条走完
@@ -44,22 +45,17 @@
 
 // **************************** 代码区域 ****************************
 
-void M7_0_data_send(volatile float* data_out);
-void Float_Buffer_write(float* buffer, volatile float* share_data_from_1);
-float float_buffer[UART_DATA_LENGTH] = {0};
-#pragma location = 0x28001000  
-__root __no_init volatile float share_data_from_1[M7_1_DATA_LENGTH]; // Core 1 写 -> Core 0 读 (视觉数据)
-
-#pragma location = 0x28001040  // 偏移64字节，确保与上面数组不在同一个Cache Line (32字节)
-__root __no_init volatile float share_data_from_0[M7_1_DATA_LENGTH]; // Core 0 写 -> Core 1 读 (IMU数据)
-
 #define PIT_NUM0 (PIT_CH0)
 #define PIT_NUM1 (PIT_CH1)
 #define PIT_NUM2 (PIT_CH2)
 
 #define LED1 (P19_0)
 #define UART_KEY (P19_2)
+
+float float_buffer[UART_DATA_LENGTH] = {0};
+
 int vis_cnt = 0;
+// int send_cnt = 0;
 int main(void) {
     clock_init(SYSTEM_CLOCK_250M);  // 时钟配置及系统初始化<务必保留>
     debug_init();                   // 调试串口信息初始化
@@ -69,32 +65,27 @@ int main(void) {
     gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL); //uart
 
     app_init();
-    share_data_from_0[4] = (float)current_drone_state;
+    share_data_from_0[S0_DRONE_STATE] = (float)current_drone_state;
     SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
 
     { //初始化
-        // 1. 初始化卡尔曼滤波参数
-        Kalman_Init(&K_w_ax, 1e-3f, 0.01f, 0);
-        Kalman_Init(&K_w_ay, 1e-3f, 0.01f, 0);
-        Kalman_Init(&K_groll, 1e-3f, 0.01f, 0);
-        Kalman_Init(&K_gpitch, 1e-3f, 0.01f, 0);
-        Kalman_Init(&K_gyaw, 1e-3f, 0.01f, 0);
-        Kalman_Init(&K_ax, 0.001f, 0.1f, 0);
-        Kalman_Init(&K_ay, 0.001f, 0.1f, 0);
-        Kalman_Init(&K_az, 0.001f, 0.1f, 9.8f);
-
+        main_kalman_init();
         // 2. 初始化底层传感器与执行器
         imu_init();
         tof_init();
         wireless_uart_init_();
         seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
         Board_Comm_Init();
-        motor_pwm_init(); 
+        small_driver_uart_init();
+        small_driver_get_speed();
+        //upixels_init();
         Flight_Control_Init();
+        dataC.camera_offset_x = CAM_OFFSET_X;
+        dataC.camera_offset_y = CAM_OFFSET_Y;
 
         // 3. 启动周期中断
         pit_ms_init(PIT_CH1, 20); //图像
-        pit_ms_init(PIT_CH2, 400); //打印
+        pit_ms_init(PIT_CH2, 500); //打印
         system_delay_ms(1000);     // 等待传感器数据稳定
 
         pit_ms_init(PIT_CH0, 1);   // 开启核心飞控中断 (1ms)
@@ -104,6 +95,8 @@ int main(void) {
 
     while (true) {
         app_state_machine_update(); // 状态机轮询，检测模式切换
+        debug_data_notify_handler();
+        debug_data_send_handler();
 
         seekfree_assistant_data_analysis();
         // 2. 检查是否有参数更新 (遍历所有通道)
@@ -116,7 +109,7 @@ int main(void) {
                 // 将参数应用到 PID (通道号 = 索引 + 1)
                 // seekfree_assistant_parameter[i] 是接收到的浮点数值
                 //Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]); 
-                Fly_Param_Update_Visual(i + 1, seekfree_assistant_parameter[i]);
+                Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]);
                 
                 // 可选：通过无线串口回传确认，告诉上位机收到并更新了
                 // wireless_uart_send_string("Param Updated\r\n");
@@ -125,56 +118,53 @@ int main(void) {
 
         // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
-        if (share_data_from_1[15] != 0.0f)
+        static uint32_t vision_timeout_cnt = 0; // [新增] 视觉失联看门狗计数器
+        static uint32_t print_cnt = 0; 
+        if (share_data_from_1[S1_PROCESS_DONE] != 0.0f)
         {
-            
-            //vis_cnt++;
-            // if(vis_cnt == 100){
-            //     vis_cnt = 0;
-            //     wireless_uart_send_string("Done");
-            // }
+            vision_timeout_cnt = 0; // 成功收到数据，喂狗清零
 
-            share_data_from_1[15] = 0.0f;
+            share_data_from_1[S1_PROCESS_DONE] = 0.0f;
             Flight_Hover_Control_Task(); 
             SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
             
             Float_Buffer_write(float_buffer, share_data_from_1);
-            //printf("%.2f",float_buffer[0]);
+            //send_cnt++;
+            //if(send_cnt == 10){
             Board_Comm_Send_Data(float_buffer);
+            //   send_cnt = 0;
+            //}
+        }
+        else 
+        {
+            // 如果 1ms 内没收到数据，计数器累加
+            vision_timeout_cnt++;
+            
+            if (vision_timeout_cnt > 400) { // 没收到视觉数据
+                // 触发视觉失联保护：强行回平姿态，清理视觉 PID 积分，原地悬停防止乱飞
+                Nonline_PID_Reset(&pid_image_x);
+                Nonline_PID_Reset(&pid_image_y);
+                Set_Target_Attitude(0, 0, flight_target.target_yaw);
+                
+                vision_timeout_cnt = 400; // 防止计数器溢出
+            }
         }
         
         // 2. 刷入 RAM 供 Core 1 读取
         M7_0_data_send(share_data_from_0);
         SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
-        
-        system_delay_ms(1); // 稍微延时
+        print_cnt++;
+        if(print_cnt == 100){
+        // wireless_uart_send_float(imu_data.yaw);
+        // wireless_uart_send_string(",");
+        // wireless_uart_send_float(share_data_from_1[S1_K_CAR_X]);
+        // wireless_uart_send_string(",");
+        // wireless_uart_send_float(share_data_from_1[S1_K_CAR_Y]);
+        // wireless_uart_send_string("\n");
+        print_cnt = 0;
+        }
+        system_delay_us(400); // 
     }
 }
 
 // **************************** 代码区域 ****************************
-void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入 data_out (share_data_from_0)
-    data_out[0] = imu_data.roll; 
-    data_out[1] = imu_data.pitch;
-    data_out[2] = imu_data.yaw;
-
-    data_out[3] = imu_data.z;
-    data_out[4] = (float)current_drone_state;
-    data_out[5] = motor_out.lf;
-    data_out[6] = motor_out.rf;
-    data_out[7] = motor_out.lb;
-    data_out[8] = motor_out.rb;
-
-    data_out[9] = flight_target.target_roll; 
-    data_out[10] = flight_target.target_pitch;
-    data_out[11] = flight_target.target_yaw;
-}
-
-void Float_Buffer_write(float* buffer, volatile float* share_data_from_1)
-{
-    buffer[0] = share_data_from_1[3];
-    buffer[1] = share_data_from_1[4];
-    buffer[2] = share_data_from_1[5];
-    buffer[3] = share_data_from_1[6];
-    buffer[4] = imu_data.yaw;
-    buffer[5] = share_data_from_1[14];
-}

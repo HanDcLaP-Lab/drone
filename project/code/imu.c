@@ -1,5 +1,31 @@
 #include "imu.h"
 #include "zf_common_headfile.h"
+#include "small_driver_uart_control.h"
+
+// ******************************************************************************
+// 传感器融合架构 (Mahony姿态 + Z轴二阶导航观测器)
+//
+//   IMU_Update_Loop() (1ms ISR调用)
+//        │
+//   ┌────┴─────────────────────────────────────────────┐
+//   │ 1. 读取原始传感器 (IMU660RA + ToF DL1B)           │
+//   │ 2. 电机振动陷波滤波 (自适应跟踪平均转速基频)        │
+//   │ 3. 卡尔曼滤波 (6轴加速度+陀螺仪)                   │
+//   │ 4. 2500次采样校准 → 初始姿态四元数 + 陀螺零偏       │
+//   │ 5. Mahony_Update()   姿态融合 (自适应加速度权重)    │
+//   │    ├─ 连续误差补偿: 运动剧烈→降权, 静止→全信        │
+//   │    ├─ 积分修正: 仅静止时累积 (防止Yaw漂移)          │
+//   │    └─ Z轴仅靠陀螺仪积分 (不接受加速度计修正)         │
+//   │ 6. 四元数→欧拉角 (roll/pitch/yaw)                  │
+//   │ 7. Yaw增量累加 (支持连续旋转, 不受±180°跳变影响)     │
+//   │ 8. Navigation_Update()  Z轴二阶互补观测器          │
+//   │    ├─ 惯性推算: 加速度积分→速度→位置                │
+//   │    ├─ ToF修正: 倾角补偿 + 比例/速度修正增益          │
+//   │    └─ 超时阻尼: ToF丢失100ms后速度衰减              │
+//   └──────────────────────────────────────────────────┘
+//
+// 输出: imu_data (roll, pitch, yaw, groll, gpitch, gyaw, z, vz)
+// ******************************************************************************
 
 // ================= 全局变量定义 =================
 IMU_Data_t imu_data = {0}; 
@@ -7,9 +33,10 @@ IMU_Data_t imu_data = {0};
 // 内部算法变量
 static float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f; // 四元数
 static float exInt = 0.0f, eyInt = 0.0f, ezInt = 0.0f;   // 积分误差
-
+static float prev_raw_yaw = 0.0f;
 // 陀螺仪校准相关
 static double offset_gx = 0, offset_gy = 0, offset_gz = 0;
+static float  offset_az = 0.0f; // [新增] 加速度计Z轴零偏 (map_az基准偏差, 单位m/s^2)
 static double sum_gx = 0, sum_gy = 0, sum_gz = 0;
 static double sum_ax = 0, sum_ay = 0, sum_az = 0;
 
@@ -17,8 +44,105 @@ static uint16_t calib_cnt = 0;
 static uint16_t tof_timeout_cnt = 0; // ToF超时计数器
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
 
+// ================= 陷波滤波器 (电机振动抑制, IMU 特化) =================
+#if NOTCH_ENABLE
+
+// 谐波倍率: 基频/二倍频/六倍频(叶片通过频率)
+static const float notch_harmonic_mult[NOTCH_HARMONIC_COUNT] = {1.0f, 2.0f, 6.0f};
+
+#define NOTCH_SLICE_COUNT (NOTCH_MOTOR_COUNT * NOTCH_HARMONIC_COUNT) // 4×3=12
+
+// IMU 专用陷波配置 (通用 biquad 实现见 filters.c)
+const NotchConfig_t notch_cfg = {
+    .fs       = NOTCH_FS,
+    .q        = NOTCH_Q,
+    .min_freq = NOTCH_MIN_FREQ,
+    .max_freq = NOTCH_MAX_FREQ,
+};
+
+// 每通道级联 NOTCH_SLICE_COUNT 个 biquad, 按 [电机0·1×, 电机0·2×, 电机0·6×, 电机1·1×, ...] 排列
+static NotchFilter_t notch_gx[NOTCH_SLICE_COUNT];
+static NotchFilter_t notch_gy[NOTCH_SLICE_COUNT];
+static NotchFilter_t notch_gz[NOTCH_SLICE_COUNT];
+static NotchFilter_t notch_ax[NOTCH_SLICE_COUNT];
+static NotchFilter_t notch_ay[NOTCH_SLICE_COUNT];
+static NotchFilter_t notch_az[NOTCH_SLICE_COUNT];
+
+static uint16_t notch_timeout_cnt;   // 距上次转速更新的毫秒数
+static uint8_t  notch_active;        // 0=旁通(超时/未收到数据), 1=工作中
+uint8_t         notch_active_count;  // 当前生效的陷波切片数 0~12 (调试接口)
+
+// ---- 批量操作 ----
+static void Notch_InitAll(void) {
+    for (int i = 0; i < NOTCH_SLICE_COUNT; i++) {
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GX) Notch_Init(&notch_gx[i]);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GY) Notch_Init(&notch_gy[i]);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GZ) Notch_Init(&notch_gz[i]);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AX) Notch_Init(&notch_ax[i]);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AY) Notch_Init(&notch_ay[i]);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AZ) Notch_Init(&notch_az[i]);
+    }
+    notch_timeout_cnt = NOTCH_TIMEOUT_MS + 1;
+    notch_active = 0;
+}
+
+// UART 回调触发: 每个电机独立计算 1×/2×/6× 频率, 各谐波独立判定边界
+static void Notch_UpdateAllFreqs(void) {
+    uint8_t active_cnt = 0;
+    for (int m = 0; m < NOTCH_MOTOR_COUNT; m++) {
+        float rpm = (float)motor_value.receive_speed_data[m];
+        if (rpm < 0) rpm = 0;
+        float base_freq = rpm * 0.016666667f;  // RPM / 60
+
+        for (int h = 0; h < NOTCH_HARMONIC_COUNT; h++) {
+            int idx = m * NOTCH_HARMONIC_COUNT + h;
+            float freq = base_freq * notch_harmonic_mult[h];
+
+            if (freq >= NOTCH_MIN_FREQ && freq <= NOTCH_MAX_FREQ) active_cnt++;
+
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GX) Notch_SetFreq(&notch_gx[idx], freq, &notch_cfg);
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GY) Notch_SetFreq(&notch_gy[idx], freq, &notch_cfg);
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GZ) Notch_SetFreq(&notch_gz[idx], freq, &notch_cfg);
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AX) Notch_SetFreq(&notch_ax[idx], freq, &notch_cfg);
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AY) Notch_SetFreq(&notch_ay[idx], freq, &notch_cfg);
+            if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AZ) Notch_SetFreq(&notch_az[idx], freq, &notch_cfg);
+        }
+    }
+    notch_active_count = active_cnt;
+}
+
+// 每 1ms 调用: 检查转速数据有效期, 更新激活状态
+static void Notch_CheckTimeout(void) {
+    if (motor_value.speed_data_updated) {
+        motor_value.speed_data_updated = 0;
+        notch_timeout_cnt = 0;
+
+        if (!notch_active) {
+            Notch_InitAll();                  // 旁通→激活: 清零延迟线防阶跃
+            notch_active = 1;
+        }
+        Notch_UpdateAllFreqs();
+    } else if (notch_active) {
+        notch_timeout_cnt++;
+        if (notch_timeout_cnt > NOTCH_TIMEOUT_MS) {
+            notch_active = 0;
+            notch_active_count = 0;
+        }
+    }
+}
+
+// 对单个通道级联全部 NOTCH_SLICE_COUNT 个 biquad
+static float Notch_ApplyChannel(NotchFilter_t *nf_array, float value) {
+    for (int i = 0; i < NOTCH_SLICE_COUNT; i++) {
+        value = Notch_Update(&nf_array[i], value);
+    }
+    return value;
+}
+#endif
+
 // ================= 内部辅助函数 =================
 static float invSqrt(float x) {
+    if (x < 1e-10f) return 1.0f;
     float halfx = 0.5f * x;
     float y = x;
     long i = *(long*)&y;
@@ -93,7 +217,7 @@ static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, floa
     // 结果：acc_weight 是一个 0.0 ~ 1.0 之间的连续系数
 
     // 3. 加速度归一化 (Mahony 必须步骤)
-    if (acc_norm < 0.1f) return; 
+    if (acc_norm < 0.1f || acc_norm != acc_norm) return;  // NaN也会通过<比较, 加isnan检查
     float inv_norm = 1.0f / acc_norm;
     ax *= inv_norm;
     ay *= inv_norm;
@@ -155,13 +279,14 @@ static void Navigation_Update(float ax, float ay, float az) {
     float w_ay = 2*(q1q2 + q0q3)*ax + (1 - 2*(q1q1 + q3q3))*ay + 2*(q2q3 - q0q1)*az;
     float w_az = 2*(q1q3 - q0q2)*ax + 2*(q2q3 + q0q1)*ay + (1 - 2*(q1q1 + q2q2))*az;
 
-    // 3. 去除重力 
-    w_az = w_az - GRAVITY_MSS;
+    // 3. 去除重力 + 加速度计Z轴零偏补偿
+    // [修复] 减去校准阶段测量的加速度计零偏，消除静止时vz积分漂移
+    w_az = w_az - GRAVITY_MSS - offset_az;
 
     // 4. 滤波与死区 (Z轴死区稍大，防止静态积分漂移)
     if(fabsf(w_ax) < 0.01f) w_ax = 0; 
     if(fabsf(w_ay) < 0.01f) w_ay = 0;
-    if(fabsf(w_az) < 0.05f) w_az = 0;
+    if(fabsf(w_az) < 0.12f) w_az = 0; // [修复] 0.05→0.12: 覆盖校准后的残余噪声 (~12mg)
     
     // 更新到结构体 (仅用于观察方向，不用于位置控制)
     imu_data.world_ax = w_ax;
@@ -240,6 +365,19 @@ void IMU_Update_Loop(void) {
     float raw_ay = imu660ra_acc_transition(imu660ra_acc_y) * GRAVITY_MSS;
     float raw_az = imu660ra_acc_transition(imu660ra_acc_z) * GRAVITY_MSS;
 
+    // ================= 电机振动陷波滤波 =================
+#if NOTCH_ENABLE
+    Notch_CheckTimeout();
+    if (notch_active) {
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GX) raw_gx = Notch_ApplyChannel(notch_gx, raw_gx);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GY) raw_gy = Notch_ApplyChannel(notch_gy, raw_gy);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_GZ) raw_gz = Notch_ApplyChannel(notch_gz, raw_gz);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AX) raw_ax = Notch_ApplyChannel(notch_ax, raw_ax);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AY) raw_ay = Notch_ApplyChannel(notch_ay, raw_ay);
+        if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AZ) raw_az = Notch_ApplyChannel(notch_az, raw_az);
+    }
+#endif
+
     // ================= 加速度计卡尔曼滤波 =================
     raw_ax = Kalman_Update(&K_ax, raw_ax);
     raw_ay = Kalman_Update(&K_ay, raw_ay);
@@ -277,6 +415,12 @@ void IMU_Update_Loop(void) {
             float init_ay = IMU_MAP_AY(avg_ax, avg_ay, avg_az);
             float init_az = IMU_MAP_AZ(avg_ax, avg_ay, avg_az);
 
+            // [新增] 计算加速度计Z轴零偏
+            // 静止时 init_az 应该精确等于 GRAVITY_MSS，差值即为传感器零偏
+            // 注意：这里假设校准时无人机水平静止，roll≈0, pitch≈0
+            // 若roll/pitch较大，该补偿有误差，但实际校准场景均为水平放置，可接受
+            offset_az = init_az - GRAVITY_MSS;
+
             // 计算初始欧拉角 (假设初始Yaw为0)
             float init_roll = atan2f(init_ay, init_az);
             float init_pitch = atan2f(-init_ax, sqrtf(init_ay*init_ay + init_az*init_az));
@@ -299,6 +443,8 @@ void IMU_Update_Loop(void) {
             imu_data.is_calibrated = 1;
             imu_data.z = 0.0f;
             imu_data.vz = 0.0f; // 校准完成，速度清零
+            imu_data.yaw = 0.0f;
+            prev_raw_yaw = 0.0f;
         }
         return; 
     }
@@ -341,7 +487,25 @@ void IMU_Update_Loop(void) {
     imu_data.roll  -= IMU_MOUNT_ADJUST_ROLL;
     imu_data.pitch -= IMU_MOUNT_ADJUST_PITCH;
     
-    imu_data.yaw = atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
+    // 【修改】：使用增量法实现 Yaw 的连续累加
+    // 1. 算出现有四元数对应的标准欧拉角 (-180 到 180)
+    float raw_yaw = atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
+    
+    // 2. 计算这一帧与上一帧的差值
+    float delta_yaw = raw_yaw - prev_raw_yaw;
+    
+    // 3. 处理 180 度和 -180 度处的跳变边界 (保证拿到的永远是转过的真实物理小角度)
+    if (delta_yaw > 180.0f) {
+        delta_yaw -= 360.0f;
+    } else if (delta_yaw < -180.0f) {
+        delta_yaw += 360.0f;
+    }
+    
+    // 4. 将真实的转动差值累加到全局的连续 Yaw 变量中
+    imu_data.yaw += delta_yaw;
+    
+    // 5. 更新历史值供下一帧使用
+    prev_raw_yaw = raw_yaw;
 
     Navigation_Update(map_ax, map_ay, map_az);
 }

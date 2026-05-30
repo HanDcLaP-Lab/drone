@@ -1,8 +1,6 @@
 #include "display.h"
 #include "zf_common_headfile.h"
 
-extern volatile float share_data_from_1[];
-extern volatile float share_data_from_0[];
 void display_init()
 {
     ips200_set_dir(IPS200_PORTAIT);
@@ -72,39 +70,39 @@ void display_motor_output_display()
     ips200_show_float(160,16*16 , pid_image_x.kp2, 4 , 2);
     
     ips200_show_string(0,16*17,"x:");
-    ips200_show_float(40,16*17, share_data_from_1[3], 4, 2);
+    ips200_show_float(40,16*17, share_data_from_1[S1_K_CAR_X], 4, 2);
     ips200_show_string(120,16*17,"y:");
-    ips200_show_float(160,16*17, share_data_from_1[4], 4, 2);
+    ips200_show_float(160,16*17, share_data_from_1[S1_K_CAR_Y], 4, 2);
 }
 
 void display_image_display(void){
     ips200_show_string(0,16*1,"x:");
-    ips200_show_float(40,16*1, share_data_from_1[1], 4, 2);
+    ips200_show_float(40,16*1, share_data_from_1[S1_CAR_CENTER_X], 4, 2);
     ips200_show_string(120,16*1,"y:");
-    ips200_show_float(160,16*1, share_data_from_1[0], 4, 2);
+    ips200_show_float(160,16*1, share_data_from_1[S1_CAR_CENTER_Y], 4, 2);
 
     ips200_show_string(0,16*3,"cx:");
-    ips200_show_float(40,16*3, share_data_from_1[3], 4, 2);
+    ips200_show_float(40,16*3, share_data_from_1[S1_CAR_RAW_X], 4, 2);
     ips200_show_string(120,16*3,"cy:");
-    ips200_show_float(160,16*3, share_data_from_1[4], 4, 2);
+    ips200_show_float(160,16*3, share_data_from_1[S1_CAR_RAW_Y], 4, 2);
     ips200_show_string(0,16*4,"tx:");
-    ips200_show_float(40,16*4, share_data_from_1[5], 4, 2);
+    ips200_show_float(40,16*4, share_data_from_1[S1_TARGET_X], 4, 2);
     ips200_show_string(120,16*4,"ty:");
-    ips200_show_float(160,16*4, share_data_from_1[6], 4, 2);
+    ips200_show_float(160,16*4, share_data_from_1[S1_TARGET_Y], 4, 2);
 
     ips200_show_string(0,16*5,"x:");
-    ips200_show_float(40,16*5, share_data_from_1[7], 4, 2);
+    ips200_show_float(40,16*5, share_data_from_1[S1_RAW_CAR_X], 4, 2);
     ips200_show_string(120,16*5,"y:");
-    ips200_show_float(160,16*5, share_data_from_1[8], 4, 2);
+    ips200_show_float(160,16*5, share_data_from_1[S1_SNAPSHOT_YAW], 4, 2);
     ips200_show_string(0,16*6,"z:");
-    ips200_show_float(40,16*6, share_data_from_1[9], 4, 2);
+    ips200_show_float(40,16*6, share_data_from_1[S1_K_CAR_X], 4, 2);
 
     ips200_show_string(0,16*7,"x:");
-    ips200_show_float(40,16*7, share_data_from_1[10], 4, 2);
+    ips200_show_float(40,16*7, share_data_from_1[10], 4, 2); // reserved
     ips200_show_string(120,16*7,"y:");
-    ips200_show_float(160,16*7, share_data_from_1[11], 4, 2);
+    ips200_show_float(160,16*7, share_data_from_1[11], 4, 2); // reserved
     ips200_show_string(0,16*8,"z:");
-    ips200_show_float(40,16*8, share_data_from_1[12], 4, 2);
+    ips200_show_float(40,16*8, share_data_from_1[S1_K_CAR_Y], 4, 2);
 
     ips200_show_string(0,16*9,"Ro:");
     ips200_show_float(40,16*9 , imu_data.roll, 3,2);
@@ -116,7 +114,7 @@ void display_image_display(void){
     ips200_show_float(160,16*10 , imu_data.z, 3,2);
 
     ips200_show_string(0,16*12,"di:");
-    ips200_show_float(40,16*12 , share_data_from_1[13], 4,2);
+    ips200_show_float(40,16*12 , share_data_from_1[S1_CAR_TARGET_DIST], 4,2);
 }
 
 void display_image_debug_display(void){
@@ -132,14 +130,21 @@ void display_image_debug_display(void){
     ips200_displayimage03x((const uint8 *)image_copy , MT9V03X_W, MT9V03X_H);
     
     // 在屏幕下方显示状态与阈值
-    ips200_show_string(0, 16*9, "Mode: DEBUG");
+    // ips200_show_string(0, 16*9, "Mode: DEBUG");
 
-    if (current_param_idx == 0) {
-        ips200_show_string(0, 16*10, "-> Thresh:"); // 带有指示箭头代表当前高亮选中
-    } else {
-        ips200_show_string(0, 16*10, "   Thresh:"); // 未选中时用空格对齐
-    }
+    // if (current_param_idx == 0) {
+    //     ips200_show_string(0, 16*10, "-> Thresh:"); // 带有指示箭头代表当前高亮选中
+    // } else {
+    //     ips200_show_string(0, 16*10, "   Thresh:"); // 未选中时用空格对齐
+    // }
     ips200_show_int(80, 16*10, cam_down.threshold, 3);
+    // ips200_show_float(0, 16*9, share_data_from_0[S0_DEBUG_ERR_X], 2, 2);
+    // ips200_show_float(100, 16*9, share_data_from_0[S0_DEBUG_ERR_Y], 2, 2);
+    // ips200_show_float(0, 16*10, share_data_from_0[S0_TARGET_ROLL], 2, 2);
+    // ips200_show_float(60, 16*10, share_data_from_0[S0_TARGET_PITCH], 2, 2);
+    // ips200_show_float(120, 16*10, share_data_from_0[S0_TARGET_YAW], 2, 2);
+
+
     ips200_show_string(0, 16*11, "L1 A:");
     ips200_show_int(40, 16*11, cam_down.car_dot_num, 4);
     ips200_show_string(80, 16*11, "R:"); // Ratio 长宽比
@@ -153,25 +158,28 @@ void display_image_debug_display(void){
 
 
     ips200_show_string(0, 16*13, "MaxR:");
-    ips200_show_float(40, 16*13, cam_down.debug_max_ratio, 3, 2);
+    ips200_show_float(40, 16*13, cam_down.debug.max_ratio, 3, 2);
     ips200_show_string(90, 16*13, "MinR:");
-    ips200_show_float(130, 16*13, cam_down.debug_min_ratio, 3, 2);
+    ips200_show_float(130, 16*13, cam_down.debug.min_ratio, 3, 2);
 
     
-    ips200_show_string(0, 16*14, "LF:");
-    ips200_show_int(40, 16*14, (int)share_data_from_0[5], 4);
+    ips200_show_string(0, 16*14, "z:");
+    ips200_show_int(40, 16*14, (int)share_data_from_0[S0_IMU_HEIGHT], 4);
     ips200_show_string(80, 16*14, "RF:");
-    ips200_show_int(120, 16*14, (int)share_data_from_0[6], 4);
+    ips200_show_int(120, 16*14, (int)share_data_from_0[S0_MOTOR_RF], 4);
     ips200_show_string(0, 16*15, "LB:");
-    ips200_show_int(40, 16*15, (int)share_data_from_0[7], 4);
+    ips200_show_int(40, 16*15, (int)share_data_from_0[S0_MOTOR_LB], 4);
     ips200_show_string(80, 16*15, "RB:");
-    ips200_show_int(120, 16*15, (int)share_data_from_0[8], 4);
+    ips200_show_int(120, 16*15, (int)share_data_from_0[S0_MOTOR_RB], 4);
 
-    ips200_show_float(0, 16*16, (int)car_ground_pos.x, 2,2);
-    ips200_show_float(80, 16*16, (int)car_ground_pos.y, 2,2);
+    ips200_show_float(0, 16*16, pos.k_car.x, 4,2);
+    ips200_show_float(80, 16*16,pos.k_car.y, 4,2);
 
-    ips200_show_float(0, 16*17, share_data_from_0[9], 2,2);
-    ips200_show_float(80, 16*17, share_data_from_0[10], 2,2);
-    ips200_show_float(0, 16*18, share_data_from_0[0], 2,2);
-    ips200_show_float(80, 16*18, share_data_from_0[1], 2,2);
+    ips200_show_float(0, 16*17, share_data_from_0[S0_TARGET_ROLL], 4,2);
+    ips200_show_float(80, 16*17, share_data_from_0[S0_TARGET_PITCH], 4,2);
+    ips200_show_float(0, 16*18, share_data_from_0[S0_IMU_ROLL], 4,2);
+    ips200_show_float(80, 16*18, share_data_from_0[S0_IMU_PITCH], 4 , 2);
+    ips200_show_float(0, 16*19, share_data_from_0[S0_IMU_YAW], 4,2);
+    // ips200_show_float(0, 16*19, cam_down.target_center_x, 4,2);
+    // ips200_show_float(80, 16*19, cam_down.target_center_y, 4,2);
 }

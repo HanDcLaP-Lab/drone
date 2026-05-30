@@ -37,19 +37,29 @@
  ********************************************************************************************************************/
 
 #include "zf_common_headfile.h"
+#include "debug_data.h"
 
-uint32_t pit0_cnt = 0;
 uint16_t target = 0;
+uint16_t has_stopped = 0;
 // **************************** PIT中断函数 (1ms一次) ****************************
 void pit0_ch0_isr() {
     pit_isr_flag_clear(PIT_CH0);
-    pit0_cnt++;
+    dataC.pit0_cnt++;
     // 自动解锁逻辑已移至 Flight_Control_Loop -> Flight_State_Update 中
     IMU_Update_Loop();
 
     Flight_Control_Loop(); 
+    if(fabsf(imu_data.pitch) > 21.0f || fabsf(imu_data.roll) > 21.0f){
+        if(has_stopped == 0){
+            wireless_uart_send_string("emergency stop\r\n");
+            car_en = 0;
+        }
+        Flight_Lock();
+        has_stopped = 1;
+    }
     
     motor_pwm_set();
+    debug_data_get();
 
 }
 
@@ -57,6 +67,7 @@ void pit0_ch1_isr()
 {
     pit_isr_flag_clear(PIT_CH1);
 
+    
     // 悬停控制任务
     //Flight_Hover_Control_Task(); 
     
@@ -66,11 +77,24 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
 
-    //wireless_uart_output_status();
-    //wireless_uart_output_pid();
-    //wireless_uart_output_imu();
-    //wireless_uart_output_yaw();
+    // wireless_uart_send_float(imu_data.yaw);
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_float(flight_target.target_yaw);
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_float(imu_data.gyaw);
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_float(flight_target.target_g_yaw);
+    //wireless_uart_send_float(pid_g_roll.integral);
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_string("\n"wireless_uart_output_，ptor();
     //wireless_uart_output_motor();
+    //printf("%d",notch_active_count);
+    //wireless_uart_output_imu();
+    //wireless_uart_output_groud();
+    //wireless_uart_output_yaw();
+    // if (upixels_data.valid == 0xF5) {
+    //     printf("%f,%f\n", upixels_data.opt_vel_x , upixels_data.opt_vel_y);
+    // }
     // extern float share_data_from_1[];
     // extern float car_pos_sol1_0,car_pos_sol1_1;
     // printf("%.2f,%.2f,%.2f,%.2f\n",car_pos_sol1_0,car_pos_sol1_1,share_data_from_1[3]*0.833f,share_data_from_1[4]*0.833f);
@@ -196,19 +220,21 @@ void uart2_isr (void)
     }
 }
 
+// 在 cm7_0_isr.c 中
 void uart3_isr (void)
 {
     if(uart_isr_mask(UART_3))            // 串口3接收中断
     {
-        
-        
-        
+        uint8_t rx_data;
+        if(uart_query_byte(UART_3, &rx_data)) {
+            // 解析成功一帧，立刻解算速度
+            if (upixels_parse_byte(rx_data) == 1) {
+                upixels_calc_velocity(imu_data.z); 
+            }
+        }
     }
-    else                                // 串口3发送中断
+    else                                
     {
-      
-        
-        
     }
 }
 
@@ -248,7 +274,7 @@ void uart6_isr (void)
 {
     if(uart_isr_mask(UART_6))            // 串口6接收中断
     {
-
+        uart_control_callback();//无刷驱动回调函数
         
        
     }

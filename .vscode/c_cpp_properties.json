@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "CM7_Core0",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [
+                "CY_CORE_CM7_0"
+            ],
+            "cStandard": "c99"
+        },
+        {
+            "name": "CM7_Core1",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [
+                "CY_CORE_CM7_1"
+            ],
+            "cStandard": "c99"
+        }
+    ],
+    "version": 4
+}
