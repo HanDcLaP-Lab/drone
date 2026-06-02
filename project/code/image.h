@@ -45,6 +45,7 @@
 // 如果系数是 0.00005，角落里最大允许长宽比就是 2.0 + 12436*0.00005 ≈ 2.62
 #define TARGET_RATIO_COMP_COEF  0.00025f
 
+#define CAR_VALID_MIN_DIST          180.0f
 // 3. 绝对上限：就算偏离到屏幕最边缘，长宽比也不能超过这个值 (防止把真正的小车当成信标)
 #define TARGET_LIMIT_MAX_RATIO  5.0f
 
@@ -72,6 +73,12 @@
 #define DEGENERATE_RATIO_MARK   99.0f   // 退化标记排除值 (ratio==100视为无效)
 #define TARGET_MIN_CONSECUTIVE_FRAMES 5 // 连续检测到信标多少帧后允许保持
 #define TARGET_HOLD_FRAMES      5       // 丢失后保持最后位置的帧数
+
+// ================= 时序目标偏好 =================
+#define TEMPORAL_BUFFER_SIZE    5       // 记忆帧数
+#define TEMPORAL_WEIGHT         0.5f    // 时序距离权重
+#define PROXIMITY_THRESHOLD_CM  50.0f   // "相近目标" track 连接判定距离 (cm)
+#define TEMPORAL_MIN_FRAMES     3       // track 至少占 3/5 帧才算"已建立"
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---
@@ -112,6 +119,15 @@ typedef struct {
         float   max_ratio;          // 本帧最大长宽比
         float   min_ratio;          // 本帧最小长宽比 (排除退化标记值)
     } debug;
+
+    // --- 时序目标历史（按时序相邻帧连接形成 track）---
+    struct {
+        float   x[TEMPORAL_BUFFER_SIZE];
+        float   y[TEMPORAL_BUFFER_SIZE];
+        uint8_t valid[TEMPORAL_BUFFER_SIZE];
+        uint8_t head;
+        uint8_t count;
+    } target_history;
 
 } CameraObject;
 
