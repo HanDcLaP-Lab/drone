@@ -508,7 +508,7 @@ static void sort_lights(CameraObject *cam) {
     float   frames_x[TEMPORAL_BUFFER_SIZE], frames_y[TEMPORAL_BUFFER_SIZE];
     uint8_t fn = 0;
     for (uint8_t i = 0; i < cam->target_history.count; i++) {
-        uint8_t idx = (cam->target_history.head - cam->target_history.count + 1 + i)
+        uint8_t idx = (cam->target_history.head + TEMPORAL_BUFFER_SIZE - cam->target_history.count + i)
                       % TEMPORAL_BUFFER_SIZE;
         frames_valid[fn] = cam->target_history.valid[idx];
         frames_x[fn] = cam->target_history.x[idx];
