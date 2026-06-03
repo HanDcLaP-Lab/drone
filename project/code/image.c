@@ -383,6 +383,8 @@ static void sort_lights(CameraObject *cam) {
     uint8_t target_last_valid = cam->target_valid;
     float   last_target_cx  = cam->target_center_x;
     float   last_target_cy  = cam->target_center_y;
+    float   last_target_phys_x = cam->target_phys_x;
+    float   last_target_phys_y = cam->target_phys_y;
 
     // 默认清除本帧锁定状态
     cam->car_valid = 0;
@@ -419,8 +421,10 @@ static void sort_lights(CameraObject *cam) {
     // 提前计算本帧统一的正余弦
     double p_rad = (double)img_imu_snap.pitch * M_PI / 180.0;
     double r_rad = (double)img_imu_snap.roll * M_PI / 180.0;
+    double y_rad = (double)img_imu_snap.yaw * M_PI / 180.0;
     double sinp = sin(p_rad), cosp = cos(p_rad);
     double sinr = sin(r_rad), cosr = cos(r_rad);
+    double siny = sin(y_rad), cosy = cos(y_rad);
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         double out_x, out_y, out_dist;
         
@@ -430,8 +434,9 @@ static void sort_lights(CameraObject *cam) {
                                      (double)current_height, sinp, cosp, sinr, cosr,
                                      &out_x, &out_y, &out_dist);
 
-        phys_x[i] = (float)out_x;
-        phys_y[i] = (float)out_y;
+        // 【修正】必须转换到大地坐标系，防止无人机 Yaw 旋转导致上一帧的历史坐标比对完全失效
+        phys_x[i] = (float)(out_x * cosy - out_y * siny);
+        phys_y[i] = (float)(out_x * siny + out_y * cosy);
 
         // 记录物理距离的平方 (单位：平方厘米)
         phys_dist[i] = (float) out_dist ;
@@ -518,7 +523,7 @@ static void sort_lights(CameraObject *cam) {
         if (phys_dist[i] > 1000.0f) continue;
 
         // 动态面积门槛
-        float min_area = 25.0f * (1.0f - phys_dist[i] / 250.0f);
+        float min_area = 10.0f * (1.0f - phys_dist[i] / 250.0f);
         if (min_area < 0.0f) min_area = 0.0f;
         if ((float)cam->dot_num[i] <= min_area) continue;
 
@@ -535,87 +540,12 @@ static void sort_lights(CameraObject *cam) {
     }
 
     // =========================================================
-    // 2. 时序 track 扫描 (像素质心空间, 不依赖物理距离解算)
+    // 2. 物理大地空间时序引力投票机制: 消除姿态剧变导致的震荡
     // =========================================================
-    uint8_t frames_valid[TEMPORAL_BUFFER_SIZE];
-    float   frames_cx[TEMPORAL_BUFFER_SIZE], frames_cy[TEMPORAL_BUFFER_SIZE];
-    uint8_t fn = 0;
-    for (uint8_t i = 0; i < cam->target_history.count; i++) {
-        uint8_t idx = (cam->target_history.head + TEMPORAL_BUFFER_SIZE - cam->target_history.count + i)
-                      % TEMPORAL_BUFFER_SIZE;
-        frames_valid[fn]   = cam->target_history.valid[idx];
-        frames_cx[fn]      = cam->target_history.x[idx];  // Col (像素质心X)
-        frames_cy[fn]      = cam->target_history.y[idx];  // Row (像素质心Y)
-        fn++;
-    }
-
-    uint8_t num_tracks = 0;
-    uint8_t has_established = 0;
-    float track_repr_cx[TEMPORAL_BUFFER_SIZE];
-    float track_repr_cy[TEMPORAL_BUFFER_SIZE];
-
-    uint8_t cur_len = 0;
-    float   cur_lx = 0.0f, cur_ly = 0.0f;
-
-    for (uint8_t i = 0; i < fn; i++) {
-        if (!frames_valid[i]) {
-            if (cur_len >= TEMPORAL_MIN_FRAMES) {
-                track_repr_cx[num_tracks] = cur_lx;
-                track_repr_cy[num_tracks] = cur_ly;
-                num_tracks++;
-                has_established = 1;
-            }
-            cur_len = 0;
-            continue;
-        }
-        if (cur_len == 0) {
-            cur_len = 1;
-            cur_lx = frames_cx[i];
-            cur_ly = frames_cy[i];
-        } else {
-            float tdx = frames_cx[i] - cur_lx;
-            float tdy = frames_cy[i] - cur_ly;
-            if (sqrtf(tdx * tdx + tdy * tdy) < TEMPORAL_PIXEL_RADIUS) {
-                cur_len++;
-                cur_lx = frames_cx[i];
-                cur_ly = frames_cy[i];
-            } else {
-                if (cur_len >= TEMPORAL_MIN_FRAMES) {
-                    track_repr_cx[num_tracks] = cur_lx;
-                    track_repr_cy[num_tracks] = cur_ly;
-                    num_tracks++;
-                    has_established = 1;
-                }
-                cur_len = 1;
-                cur_lx = frames_cx[i];
-                cur_ly = frames_cy[i];
-            }
-        }
-    }
-    if (cur_len >= TEMPORAL_MIN_FRAMES) {
-        track_repr_cx[num_tracks] = cur_lx;
-        track_repr_cy[num_tracks] = cur_ly;
-        num_tracks++;
-        has_established = 1;
-    }
-
     target_idx = -1;
+    // 【致命修复2】新目标的初始得分为 30 * 10万 = 300万。必须将最小值设为远远大于300万，否则新信标永远无法打破初始值入选！
+    float min_score = 99999999.0f; 
 
-    // === 参考点1: 最旧 track 的末帧 (最高优先级) ===
-    float ref1_cx = 0.0f, ref1_cy = 0.0f;
-    uint8_t has_ref1 = 0;
-    if (has_established) {
-        ref1_cx = track_repr_cx[0];
-        ref1_cy = track_repr_cy[0];
-        has_ref1 = 1;
-    }
-
-    // === 参考点2: 上帧锁定的信标质心 (次优先级) ===
-    uint8_t has_ref2 = target_last_valid;
-
-    float min_score = 999999.0f;
-
-    // === 信标选择: 所有有效性判定已在上方 is_valid_target 完成, 此处纯评分 ===
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (i == car_idx) continue;
         if (!is_valid_target[i]) continue;
@@ -626,28 +556,44 @@ static void sort_lights(CameraObject *cam) {
         float dy = cy - img_cy;
         float dist_sq = dx * dx + dy * dy;
 
-        // 三层评分: 偏移量保证 Tier1 < Tier2 < Tier3 永不交叉
-        float score;
-        uint8_t tier = 3;
+        float cand_px = phys_x[i];
+        float cand_py = phys_y[i];
+        float cand_dist = phys_dist[i];
 
-        if (has_ref1) {
-            float rdx = cx - ref1_cx;
-            float rdy = cy - ref1_cy;
-            if (sqrtf(rdx * rdx + rdy * rdy) < TEMPORAL_PIXEL_RADIUS) {
-                tier = 1;
+        // 动态计算当前候选的容许物理半径 (越边缘容忍越大)
+        float current_radius = TEMPORAL_PHYS_RADIUS_BASE + cand_dist * TEMPORAL_PHYS_RADIUS_COEF;
+        if (current_radius > TEMPORAL_PHYS_RADIUS_MAX) current_radius = TEMPORAL_PHYS_RADIUS_MAX;
+        float radius_sq = current_radius * current_radius;
+
+        // 1. 统计在历史缓冲区中的命中次数 (投票)
+        int hits = 0;
+        for (uint8_t j = 0; j < cam->target_history.count; j++) {
+            if (cam->target_history.valid[j]) {
+                float hdx = cand_px - cam->target_history.x[j];
+                if (hdx > current_radius || hdx < -current_radius) continue; // 快速剔除
+                
+                float hdy = cand_py - cam->target_history.y[j];
+                if (hdy > current_radius || hdy < -current_radius) continue; // 快速剔除
+                
+                if ((hdx * hdx + hdy * hdy) < radius_sq) {
+                    hits++;
+                }
             }
         }
-        if (tier > 1 && has_ref2) {
-            float rdx = cx - last_target_cx;
-            float rdy = cy - last_target_cy;
-            if (sqrtf(rdx * rdx + rdy * rdy) < TEMPORAL_PIXEL_RADIUS) {
-                tier = 2;
+        
+        // 2. 上一帧锁定目标黏性加成 (相当于额外 5 票, 防止历史票数相等时的随机游走)
+        if (target_last_valid) {
+            float rdx = cand_px - last_target_phys_x;
+            float rdy = cand_py - last_target_phys_y;
+            if ((rdx * rdx + rdy * rdy) < radius_sq) {
+                hits += 5;
             }
         }
 
-        if      (tier == 1) score = dist_sq;
-        else if (tier == 2) score = TEMPORAL_TIER2_PENALTY + dist_sq;
-        else                score = TEMPORAL_TIER3_PENALTY + dist_sq;
+        // 3. 综合评分：历史得票数决定数量级，中心距离作为同票数下的次级排序
+        // 得分越低越好，(TEMPORAL_BUFFER_SIZE + 5) 为最高可能票数
+        float max_possible_hits = (float)(TEMPORAL_BUFFER_SIZE + 5);
+        float score = (max_possible_hits - hits) * 100000.0f + dist_sq;
 
         if (score < min_score) {
             min_score = score;
@@ -680,6 +626,8 @@ static void sort_lights(CameraObject *cam) {
             cam->target_center_x = cam->centers[target_idx][1];
             cam->target_dot_num  = cam->dot_num[target_idx];
             cam->target_ratio   = cam->aspect_ratio[target_idx];
+            cam->target_phys_x  = phys_x[target_idx];
+            cam->target_phys_y  = phys_y[target_idx];
         }
     }
 #else
@@ -688,14 +636,16 @@ static void sort_lights(CameraObject *cam) {
         cam->target_center_x = cam->centers[target_idx][1];
         cam->target_dot_num = cam->dot_num[target_idx];
         cam->target_ratio = cam->aspect_ratio[target_idx];
+        cam->target_phys_x  = phys_x[target_idx];
+        cam->target_phys_y  = phys_y[target_idx];
 #endif
     }
 
-    // 更新时序历史 (存像素质心, 非物理坐标; 无论是否找到都推入保持窗口真实)
+    // 更新时序历史 (存物理相对坐标; 无论是否找到都推入保持窗口真实)
     {
         uint8_t h = cam->target_history.head;
-        cam->target_history.x[h]     = (target_idx != -1) ? cam->centers[target_idx][1] : 0.0f;  // Col
-        cam->target_history.y[h]     = (target_idx != -1) ? cam->centers[target_idx][0] : 0.0f;  // Row
+        cam->target_history.x[h]     = (target_idx != -1) ? phys_x[target_idx] : 0.0f;
+        cam->target_history.y[h]     = (target_idx != -1) ? phys_y[target_idx] : 0.0f;
         cam->target_history.valid[h] = (target_idx != -1) ? 1 : 0;
         cam->target_history.head = (h + 1) % TEMPORAL_BUFFER_SIZE;
         if (cam->target_history.count < TEMPORAL_BUFFER_SIZE)

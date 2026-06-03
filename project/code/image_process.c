@@ -209,7 +209,25 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         Vector3D body_target = cameraToBody(&ray_target, sinp, cosp, sinr, cosr);
         pos.raw_target = projectToGround(body_target, height);
         
-        pos.target = pos.raw_target;
+        // 与小车同理，必须在大地坐标系下滤波，使 target 和 car 保持相同的延迟相位
+        double raw_earth_x = pos.raw_target.x * cosy - pos.raw_target.y * siny;
+        double raw_earth_y = pos.raw_target.x * siny + pos.raw_target.y * cosy;
+
+        // 【核心破局】：跳变直通机制
+        // 如果检测到 >40cm 的剧烈跳变，直接重置卡尔曼滤波器内部状态！
+        // 这样既能平时过滤无人机晃动，又能在信标切换时产生“瞬间阶跃”，完美触发小车的跳变倒计时。
+        if (fabs(raw_earth_x - K_target_x.x) > FILTER_JUMP_THRESHOLD || fabs(raw_earth_y - K_target_y.x) > FILTER_JUMP_THRESHOLD) {
+            Kalman_Init(&K_target_x, 1.0f, 10.0f, (float)raw_earth_x);
+            Kalman_Init(&K_target_y, 1.0f, 10.0f, (float)raw_earth_y);
+        }
+
+        double k_earth_x = Kalman_Update(&K_target_x, (float)raw_earth_x);
+        double k_earth_y = Kalman_Update(&K_target_y, (float)raw_earth_y);
+        
+        pos.k_target.x = k_earth_x * cosy + k_earth_y * siny;
+        pos.k_target.y = -k_earth_x * siny + k_earth_y * cosy;
+
+        pos.target = pos.k_target; // 发送给小车的换成滤波后的稳态值
     }
 
 

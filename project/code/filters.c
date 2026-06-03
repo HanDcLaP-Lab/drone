@@ -30,6 +30,11 @@ void main_kalman_init(void) {
     Kalman_Init(&K_ax, 0.001f, 0.05f, 0);
     Kalman_Init(&K_ay, 0.001f, 0.05f, 0);
     Kalman_Init(&K_az, 0.001f, 0.05f, 9.8f);
+
+    Kalman_Init(&K_car_x, 1.0f, 10.0f, 0);
+    Kalman_Init(&K_car_y, 1.0f, 10.0f, 0);
+    Kalman_Init(&K_target_x, 1.0f, 10.0f, 0);
+    Kalman_Init(&K_target_y, 1.0f, 10.0f, 0);
 }
 
 // ================= 陷波滤波器 (通用 biquad) =================

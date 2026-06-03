@@ -112,7 +112,8 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
     buffer[1] = share_data[S1_K_CAR_Y];
     buffer[2] = share_data[S1_TARGET_X];
     buffer[3] = share_data[S1_TARGET_Y];
-    buffer[4] = imu_data.yaw;
+    // 【关键修复】必须使用相机曝光瞬间的快照 Yaw！如果使用实时 imu_data.yaw，时间差会导致坐标在小车端解算时发生旋转跳变！
+    buffer[4] = share_data[S1_SNAPSHOT_YAW]; 
     buffer[5] = share_data[S1_LOCKED_COUNT];
     buffer[6] = car_en;
     buffer[7] = 0.0f; // reserved，车端自行计算距离

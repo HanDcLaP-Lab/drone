@@ -38,7 +38,7 @@
 // 逻辑：画面中心卡得很严，越靠近画面边缘容错越大，但有绝对上限
 // =========================================================
 // 1. 基础上限：信标在画面正中心时允许的最大长宽比 (此时几乎没畸变，卡严一点)
-#define TARGET_BASE_MAX_RATIO   2.0f
+#define TARGET_BASE_MAX_RATIO   3.0f
 
 // 2. 畸变补偿系数：目标质心偏离画面中心距离的平方，每增加 1 个单位，上限放宽多少
 // 提示：188x120 屏幕角落距离中心的平方大概是 (94^2 + 60^2) ≈ 12436。
@@ -74,14 +74,11 @@
 #define TARGET_MIN_CONSECUTIVE_FRAMES 5 // 连续检测到信标多少帧后允许保持
 #define TARGET_HOLD_FRAMES      5       // 丢失后保持最后位置的帧数
 
-// ================= 时序目标偏好 (像素质心空间, 不依赖物理距离解算) =================
-#define TEMPORAL_BUFFER_SIZE    5       // 记忆帧数
-#define TEMPORAL_PIXEL_RADIUS   4.0f    // "相近目标"判定半径 (像素), track连接和参考点匹配共用
-#define TEMPORAL_MIN_FRAMES     2       // track 至少占 2/5 帧才算"已建立"
-
-// 评分分层偏移量 (必须 > dist_sq 最大值 12436 以保证层级不交叉)
-#define TEMPORAL_TIER2_PENALTY  20000   // Tier2 blob 起始分 = 20000 + dist_sq
-#define TEMPORAL_TIER3_PENALTY  40000   // Tier3 blob 起始分 = 40000 + dist_sq
+// ================= 时序目标偏好 (物理地面坐标空间, 防抖与防震荡) =================
+#define TEMPORAL_BUFFER_SIZE      25      // 记忆帧数 (25帧约半秒, 用于历史命中率投票防震荡)
+#define TEMPORAL_PHYS_RADIUS_BASE 20.0f   // 基础物理容许半径 (cm, 消除俯仰/横滚影响)
+#define TEMPORAL_PHYS_RADIUS_COEF 0.1f    // 随目标距离增加的半径扩展系数 (边缘解算突变补偿)
+#define TEMPORAL_PHYS_RADIUS_MAX  100.0f  // 最大容许物理半径上限 (cm)
 
 // ================= 目标采信确认 (杂点防护) =================
 #define ENABLE_TARGET_CONSECUTIVE_CHECK  0    // 开关: 目标需连续/占比确认才采信
@@ -117,6 +114,8 @@ typedef struct {
     float target_center_x;       // 信标 Col (X)
     uint32_t target_dot_num;        // 信标面积
     float target_ratio;
+    float target_phys_x;         // [新增] 锁定信标的物理X (cm, 用于历史投票)
+    float target_phys_y;         // [新增] 锁定信标的物理Y (cm, 用于历史投票)
 
     // --- 调试字段 (ImageDebug_t, 不参与控制逻辑) ---
     struct {
