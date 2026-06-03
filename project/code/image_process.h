@@ -27,6 +27,6 @@ extern GroundPos pos;
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg, double yaw_deg);
 
 // 精确计算单点的物理距离
-void get_accurate_ground_distance(double u, double v, double height, double pitch_deg, double roll_deg, double *out_x, double *out_y, double *out_dist);
+void get_accurate_ground_distance(double u, double v, double height, double sinp, double cosp, double sinr, double cosr, double *out_x, double *out_y, double *out_dist);
 
 #endif

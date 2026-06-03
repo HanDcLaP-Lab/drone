@@ -148,12 +148,7 @@ static GroundPoint projectToGround(Vector3D ray, double height) {
 // ==========================================
 // 5. 精确计算单点的物理距离 (供图像处理使用)
 // ==========================================
-void get_accurate_ground_distance(double u, double v, double height, double pitch_deg, double roll_deg, double *out_x, double *out_y, double *out_dist) {
-    double p_rad = pitch_deg * M_PI / 180.0;
-    double r_rad = roll_deg * M_PI / 180.0;
-    double sinp = sin(p_rad), cosp = cos(p_rad);
-    double sinr = sin(r_rad), cosr = cos(r_rad);
-
+void get_accurate_ground_distance(double u, double v, double height, double sinp, double cosp, double sinr, double cosr, double *out_x, double *out_y, double *out_dist) {
     Vector3D ray = pixelTo3DRay(u, v);
     Vector3D body = cameraToBody(&ray, sinp, cosp, sinr, cosr);
     GroundPoint pt = projectToGround(body, height);
@@ -170,7 +165,6 @@ void get_accurate_ground_distance(double u, double v, double height, double pitc
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg, double yaw_deg) {
     const double k = 0.8; 
     
-    // 提前计算本帧统一的正余弦，避免目标循环中重复计算耗时
     double p_rad = pitch_deg * M_PI / 180.0;
     double r_rad = roll_deg * M_PI / 180.0;
     double y_rad = yaw_deg * M_PI / 180.0;
@@ -215,14 +209,8 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         Vector3D body_target = cameraToBody(&ray_target, sinp, cosp, sinr, cosr);
         pos.raw_target = projectToGround(body_target, height);
         
-        pos.target.x = pos.target.x * (1.0 - k) + pos.raw_target.x * k;
-        pos.target.y = pos.target.y * (1.0 - k) + pos.raw_target.y * k;
+        pos.target = pos.raw_target;
     }
 
-    // 计算双目标直线距离
-    if (cam_down.car_valid && cam_down.target_valid) {
-        double dx = pos.car.x - pos.target.x;
-        double dy = pos.car.y - pos.target.y;
-        dataC.car_target_dist = (float)sqrt(dx * dx + dy * dy);
-    }
+
 }

@@ -47,7 +47,7 @@
 #define S1_K_CAR_X         9   // pos.k_car.x                卡尔曼滤波后小车X (cm)
 // 10-11 reserved
 #define S1_K_CAR_Y         12  // pos.k_car.y                卡尔曼滤波后小车Y (cm)
-#define S1_CAR_TARGET_DIST 13  // dataC.car_target_dist      小车-信标距离
+// #define S1_CAR_TARGET_DIST 13  // (已移除) 距离计算移至车端
 #define S1_LOCKED_COUNT    14  // locked_count               锁定灯数 (bit0=小车, bit1=信标)
 #define S1_PROCESS_DONE    15  // 图像处理完成标志 (1.0=完成, 0.0=未完成)
 

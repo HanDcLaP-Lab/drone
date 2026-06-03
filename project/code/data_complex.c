@@ -104,7 +104,7 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 //   [4] drone_yaw           — 无人机偏航角 (deg, 顺时针正)    ← imu_data.yaw
 //   [5] locked_state        — 锁定灯数 (0=全丢/1=仅小车/2=仅信标/3=都有) ← S1_LOCKED_COUNT
 //   [6] car_en              — 急停使能标志 (0=急停, 1=正常)   ← car_en
-//   [7] car_target_dist     — 车-信标地面距离 (cm)                           ← S1_CAR_TARGET_DIST
+//   [7] reserved            — 车端自行计算距离
 // ******************************************************************************
 void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share_data一般传入share_data_from_1
 {
@@ -115,7 +115,7 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
     buffer[4] = imu_data.yaw;
     buffer[5] = share_data[S1_LOCKED_COUNT];
     buffer[6] = car_en;
-    buffer[7] = share_data[S1_CAR_TARGET_DIST];
+    buffer[7] = 0.0f; // reserved，车端自行计算距离
 }
 
 #elif defined(CY_CORE_CM7_1)
@@ -131,7 +131,6 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_RAW_CAR_X]    = pos.raw_car.x;
     data_out[S1_K_CAR_X]      = pos.k_car.x;
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
-    data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;
 
 #define FUSION_AREA_RATIO 1.3f
 #define FUSION_JUMP_DIST_MAX 50.0f
