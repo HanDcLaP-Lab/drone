@@ -26,6 +26,9 @@
 // 关键全局: cam_down (CameraObject) — 所有图像状态
 // ******************************************************************************
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 // --- 1. 内存分配 ---
 // 定义二值化图像缓冲区 (只定义一个)
 uint8_t buffer_bin_down[MT9V03X_H][MT9V03X_W];
@@ -376,7 +379,12 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
 
 
 static void sort_lights(CameraObject *cam) {
-    // 默认清除上一帧的锁定状态
+    // 快照上帧信标状态 (清除前保存, 供时序偏好使用)
+    uint8_t target_last_valid = cam->target_valid;
+    float   last_target_cx  = cam->target_center_x;
+    float   last_target_cy  = cam->target_center_y;
+
+    // 默认清除本帧锁定状态
     cam->car_valid = 0;
     cam->car_dot_num = 0;
     cam->car_ratio = 0.0f;
@@ -384,7 +392,6 @@ static void sort_lights(CameraObject *cam) {
     cam->car_center_y = 0.0f;
 
     cam->target_valid = 0;
-    // 不在此处清除信标坐标等信息，以支持保持最后一次信标位置
 
     if (cam->light_number == 0) {
         cam->debug.pass_area = 0;
@@ -399,7 +406,7 @@ static void sort_lights(CameraObject *cam) {
     float current_height = img_imu_snap.height;
     if (current_height < HEIGHT_ESTIMATE_MIN) current_height = HEIGHT_ESTIMATE_MIN;
 
-    float phys_dist_sq[MAX_LIGHTS] = {0};
+    float phys_dist[MAX_LIGHTS] = {0};
     float phys_x[MAX_LIGHTS] = {0};
     float phys_y[MAX_LIGHTS] = {0};
     uint8_t is_valid_blob[MAX_LIGHTS] = {0};
@@ -426,7 +433,7 @@ static void sort_lights(CameraObject *cam) {
         phys_y[i] = (float)out_y;
 
         // 记录物理距离的平方 (单位：平方厘米)
-        phys_dist_sq[i] = (float)(out_dist * out_dist);
+        phys_dist[i] = (float) out_dist ;
 
         // 使用局部变量做距离补偿过滤，不改动原始 dot_num
         float area_for_filter = (float)cam->dot_num[i];
@@ -477,7 +484,7 @@ static void sort_lights(CameraObject *cam) {
         if (!is_valid_blob[i]) continue;
         
         // 限制小车距离
-        if (phys_dist_sq[i] > CAR_VALID_MIN_DIST * CAR_VALID_MIN_DIST) continue;
+        if (phys_dist[i] > CAR_VALID_MIN_DIST) continue;
 
         // 动态计算该位置的小车最低长宽比门槛
         float car_dx = cam->centers[i][1] - img_cx;
@@ -499,27 +506,25 @@ static void sort_lights(CameraObject *cam) {
         }
     }
     
-    // 2. 寻找信标 (排除小车后，在动态畸变长宽比阈值内选距离画面中心最近的)
-    float min_dist_sq = 999999.0f; // 记录最小的中心距离平方 (初始极大值)
     // =========================================================
-    // 1.5. 时序 track 扫描
+    // 2. 时序 track 扫描 (像素质心空间, 不依赖物理距离解算)
     // =========================================================
     uint8_t frames_valid[TEMPORAL_BUFFER_SIZE];
-    float   frames_x[TEMPORAL_BUFFER_SIZE], frames_y[TEMPORAL_BUFFER_SIZE];
+    float   frames_cx[TEMPORAL_BUFFER_SIZE], frames_cy[TEMPORAL_BUFFER_SIZE];
     uint8_t fn = 0;
     for (uint8_t i = 0; i < cam->target_history.count; i++) {
         uint8_t idx = (cam->target_history.head + TEMPORAL_BUFFER_SIZE - cam->target_history.count + i)
                       % TEMPORAL_BUFFER_SIZE;
-        frames_valid[fn] = cam->target_history.valid[idx];
-        frames_x[fn] = cam->target_history.x[idx];
-        frames_y[fn] = cam->target_history.y[idx];
+        frames_valid[fn]   = cam->target_history.valid[idx];
+        frames_cx[fn]      = cam->target_history.x[idx];  // Col (像素质心X)
+        frames_cy[fn]      = cam->target_history.y[idx];  // Row (像素质心Y)
         fn++;
     }
 
     uint8_t num_tracks = 0;
     uint8_t has_established = 0;
-    float track_repr_x[TEMPORAL_BUFFER_SIZE];
-    float track_repr_y[TEMPORAL_BUFFER_SIZE];
+    float track_repr_cx[TEMPORAL_BUFFER_SIZE];
+    float track_repr_cy[TEMPORAL_BUFFER_SIZE];
 
     uint8_t cur_len = 0;
     float   cur_lx = 0.0f, cur_ly = 0.0f;
@@ -527,8 +532,8 @@ static void sort_lights(CameraObject *cam) {
     for (uint8_t i = 0; i < fn; i++) {
         if (!frames_valid[i]) {
             if (cur_len >= TEMPORAL_MIN_FRAMES) {
-                track_repr_x[num_tracks] = cur_lx;
-                track_repr_y[num_tracks] = cur_ly;
+                track_repr_cx[num_tracks] = cur_lx;
+                track_repr_cy[num_tracks] = cur_ly;
                 num_tracks++;
                 has_established = 1;
             }
@@ -537,90 +542,106 @@ static void sort_lights(CameraObject *cam) {
         }
         if (cur_len == 0) {
             cur_len = 1;
-            cur_lx = frames_x[i];
-            cur_ly = frames_y[i];
+            cur_lx = frames_cx[i];
+            cur_ly = frames_cy[i];
         } else {
-            float tdx = frames_x[i] - cur_lx;
-            float tdy = frames_y[i] - cur_ly;
-            if (sqrtf(tdx * tdx + tdy * tdy) < PROXIMITY_THRESHOLD_CM) {
+            float tdx = frames_cx[i] - cur_lx;
+            float tdy = frames_cy[i] - cur_ly;
+            if (sqrtf(tdx * tdx + tdy * tdy) < TEMPORAL_PIXEL_RADIUS) {
                 cur_len++;
-                cur_lx = frames_x[i];
-                cur_ly = frames_y[i];
+                cur_lx = frames_cx[i];
+                cur_ly = frames_cy[i];
             } else {
                 if (cur_len >= TEMPORAL_MIN_FRAMES) {
-                    track_repr_x[num_tracks] = cur_lx;
-                    track_repr_y[num_tracks] = cur_ly;
+                    track_repr_cx[num_tracks] = cur_lx;
+                    track_repr_cy[num_tracks] = cur_ly;
                     num_tracks++;
                     has_established = 1;
                 }
                 cur_len = 1;
-                cur_lx = frames_x[i];
-                cur_ly = frames_y[i];
+                cur_lx = frames_cx[i];
+                cur_ly = frames_cy[i];
             }
         }
     }
     if (cur_len >= TEMPORAL_MIN_FRAMES) {
-        track_repr_x[num_tracks] = cur_lx;
-        track_repr_y[num_tracks] = cur_ly;
+        track_repr_cx[num_tracks] = cur_lx;
+        track_repr_cy[num_tracks] = cur_ly;
         num_tracks++;
         has_established = 1;
     }
 
-    target_idx = -1; // 确保重置
+    target_idx = -1;
 
-    // === 计算每 blob 距各 track 代表的时序距离 ===
+    // === 计算每 blob 距各 track 代表的像素距离 ===
     float min_temporal_dist[MAX_LIGHTS];
     uint8_t any_near_track = 0;
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         min_temporal_dist[i] = 1e9f;
         if (!is_valid_blob[i] || i == car_idx) continue;
+        float cx = cam->centers[i][1];  // Col
+        float cy = cam->centers[i][0];  // Row
         for (uint8_t t = 0; t < num_tracks; t++) {
-            float tdx = phys_x[i] - track_repr_x[t];
-            float tdy = phys_y[i] - track_repr_y[t];
+            float tdx = cx - track_repr_cx[t];
+            float tdy = cy - track_repr_cy[t];
             float td = sqrtf(tdx * tdx + tdy * tdy);
             if (td < min_temporal_dist[i]) min_temporal_dist[i] = td;
         }
-        if (min_temporal_dist[i] < PROXIMITY_THRESHOLD_CM) any_near_track = 1;
+        if (min_temporal_dist[i] < TEMPORAL_PIXEL_RADIUS) any_near_track = 1;
     }
+
+    float min_dist_sq = 999999.0f;
 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (i == car_idx) continue;
         if (!is_valid_blob[i]) continue;
-        
-        // 限制：找信标距离在10m以内 (1000cm)
-        if (phys_dist_sq[i] > 1000.0f * 1000.0f) continue;
 
-        // 计算目标质心到画面中心的像素距离平方 
-        float dx = cam->centers[i][1] - img_cx;
-        float dy = cam->centers[i][0] - img_cy;
+        // 限制：找信标距离在10m以内 (1000cm)
+        if (phys_dist[i] > 1000.0f) continue;
+
+        // 目标质心 Col/Row
+        float cx = cam->centers[i][1];
+        float cy = cam->centers[i][0];
+
+        // 计算目标质心到画面中心的像素距离平方
+        float dx = cx - img_cx;
+        float dy = cy - img_cy;
         float dist_sq = dx * dx + dy * dy;
-        
+
         // 动态阈值补偿：越靠近边缘，允许的信标形变长宽比上限越大
         float dynamic_target_max_ratio = TARGET_BASE_MAX_RATIO + (dist_sq * TARGET_RATIO_COMP_COEF);
-        
-        // 限制补偿的绝对上限，防止无限放大后与小车混淆
         if (dynamic_target_max_ratio > TARGET_LIMIT_MAX_RATIO) {
-            dynamic_target_max_ratio = TARGET_LIMIT_MAX_RATIO; 
+            dynamic_target_max_ratio = TARGET_LIMIT_MAX_RATIO;
         }
 
         // 动态面积门槛平滑过渡：正上方(0m)要求面积>25，4m(400cm)处降为0
-        float out_dist = sqrtf(phys_dist_sq[i]);
+        float out_dist = phys_dist[i];
         float min_target_area = 25.0f * (1.0f - out_dist / 250.0f);
         if (min_target_area < 0.0f) min_target_area = 0.0f;
-        
-        // 面积不达标直接排除
         if (cam->dot_num[i] <= min_target_area) continue;
 
         // 面积过小的连通域长宽比不可靠, 直接通过形状筛选
         if (cam->dot_num[i] <= SMALL_BLOB_DIRECT_AREA || cam->aspect_ratio[i] < dynamic_target_max_ratio) {
 
-            // 组合评分：存在已建立 track 且当前 blob 接近 track 代表时启用时序偏好
             float score;
-            if (has_established && any_near_track && min_temporal_dist[i] < 1e8f) {
+
+            // 优先: 上帧选中点 TEMPORAL_PIXEL_RADIUS 像素半径内的 blob (强时序偏好)
+            if (target_last_valid) {
+                float ldx = cx - last_target_cx;
+                float ldy = cy - last_target_cy;
+                if (sqrtf(ldx * ldx + ldy * ldy) < TEMPORAL_PIXEL_RADIUS) {
+                    score = dist_sq * 0.1f;  // 大幅压低评分 = 强优先
+                } else if (has_established && any_near_track && min_temporal_dist[i] < 1e8f) {
+                    score = dist_sq + TEMPORAL_WEIGHT * min_temporal_dist[i] * min_temporal_dist[i];
+                } else {
+                    score = dist_sq;
+                }
+            } else if (has_established && any_near_track && min_temporal_dist[i] < 1e8f) {
                 score = dist_sq + TEMPORAL_WEIGHT * min_temporal_dist[i] * min_temporal_dist[i];
             } else {
                 score = dist_sq;
             }
+
             if (score < min_dist_sq) {
                 min_dist_sq = score;
                 target_idx = i;
@@ -639,18 +660,36 @@ static void sort_lights(CameraObject *cam) {
     }
     
     if (target_idx != -1) {
+#if ENABLE_TARGET_CONSECUTIVE_CHECK
+    {
+        static uint8_t confirm_cnt = 0;
+        if (target_idx != -1) {
+            if (confirm_cnt < TARGET_CONFIRM_MAX) confirm_cnt++;
+        } else {
+            if (confirm_cnt > 0) confirm_cnt--;
+        }
+        if (confirm_cnt >= TARGET_CONFIRM_THRESHOLD) {
+            cam->target_valid = 1;
+            cam->target_center_y = cam->centers[target_idx][0];
+            cam->target_center_x = cam->centers[target_idx][1];
+            cam->target_dot_num  = cam->dot_num[target_idx];
+            cam->target_ratio   = cam->aspect_ratio[target_idx];
+        }
+    }
+#else
         cam->target_valid = 1;
         cam->target_center_y = cam->centers[target_idx][0];
         cam->target_center_x = cam->centers[target_idx][1];
         cam->target_dot_num = cam->dot_num[target_idx];
         cam->target_ratio = cam->aspect_ratio[target_idx];
+#endif
     }
 
-    // 更新时序历史（无论本帧是否找到目标都推入，保持窗口真实）
+    // 更新时序历史 (存像素质心, 非物理坐标; 无论是否找到都推入保持窗口真实)
     {
         uint8_t h = cam->target_history.head;
-        cam->target_history.x[h]     = (target_idx != -1) ? phys_x[target_idx] : 0.0f;
-        cam->target_history.y[h]     = (target_idx != -1) ? phys_y[target_idx] : 0.0f;
+        cam->target_history.x[h]     = (target_idx != -1) ? cam->centers[target_idx][1] : 0.0f;  // Col
+        cam->target_history.y[h]     = (target_idx != -1) ? cam->centers[target_idx][0] : 0.0f;  // Row
         cam->target_history.valid[h] = (target_idx != -1) ? 1 : 0;
         cam->target_history.head = (h + 1) % TEMPORAL_BUFFER_SIZE;
         if (cam->target_history.count < TEMPORAL_BUFFER_SIZE)

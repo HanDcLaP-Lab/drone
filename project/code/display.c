@@ -114,7 +114,7 @@ void display_image_display(void){
     ips200_show_float(160,16*10 , imu_data.z, 3,2);
 
     ips200_show_string(0,16*12,"di:");
-    ips200_show_float(40,16*12 , share_data_from_1[S1_CAR_TARGET_DIST], 4,2);
+    //ips200_show_float(40,16*12 , share_data_from_1[S1_CAR_TARGET_DIST], 4,2);
 }
 
 void display_image_debug_display(void){

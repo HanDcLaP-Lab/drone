@@ -31,7 +31,7 @@
 // [新增] 面积动态补偿参数 (解决边缘灯光变小的问题)
 // =========================================================
 // 1. 最小面积 (灯必须大于这个面积才算有效)
-#define BASE_MIN_AREA 1.0f
+#define BASE_MIN_AREA 1.0f   //此值弃用！
 
 // =========================================================
 // [新增] 信标 (圆形灯) 动态透视畸变补偿参数
@@ -74,11 +74,16 @@
 #define TARGET_MIN_CONSECUTIVE_FRAMES 5 // 连续检测到信标多少帧后允许保持
 #define TARGET_HOLD_FRAMES      5       // 丢失后保持最后位置的帧数
 
-// ================= 时序目标偏好 =================
+// ================= 时序目标偏好 (像素质心空间, 不依赖物理距离解算) =================
 #define TEMPORAL_BUFFER_SIZE    5       // 记忆帧数
-#define TEMPORAL_WEIGHT         0.5f    // 时序距离权重
-#define PROXIMITY_THRESHOLD_CM  50.0f   // "相近目标" track 连接判定距离 (cm)
-#define TEMPORAL_MIN_FRAMES     3       // track 至少占 3/5 帧才算"已建立"
+#define TEMPORAL_WEIGHT         2.0f    // 时序距离权重 (像素空间, 值越大越偏好时序连续的点)
+#define TEMPORAL_PIXEL_RADIUS   4.0f    // "相近目标"判定半径 (像素), track连接和上帧偏好共用
+#define TEMPORAL_MIN_FRAMES     2       // track 至少占 2/5 帧才算"已建立"
+
+// ================= 目标采信确认 (杂点防护) =================
+#define ENABLE_TARGET_CONSECUTIVE_CHECK  1    // 开关: 目标需连续/占比确认才采信
+#define TARGET_CONFIRM_THRESHOLD         5    // 计数器达此值置位 target_valid
+#define TARGET_CONFIRM_MAX               10   // 计数器上限
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---
