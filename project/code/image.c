@@ -410,6 +410,7 @@ static void sort_lights(CameraObject *cam) {
     float phys_x[MAX_LIGHTS] = {0};
     float phys_y[MAX_LIGHTS] = {0};
     uint8_t is_valid_blob[MAX_LIGHTS] = {0};
+    uint8_t is_valid_target[MAX_LIGHTS] = {0};
 
     // =======================================================
     // 2. 计算精确物理距离，并做【面积动态过滤】
@@ -473,8 +474,8 @@ static void sort_lights(CameraObject *cam) {
 
     int car_idx = -1;
     int target_idx = -1;
-    float img_cx = cam->width / 2.0f;
-    float img_cy = cam->height / 2.0f;
+    float img_cx = CAM_CX;  // 摄像头光心 (非几何中心)
+    float img_cy = CAM_CY;
     // =========================================================
     // 1. 寻找小车 (加入动态阈值，边缘门槛自动抬高防信标混淆)
     // =========================================================
@@ -505,7 +506,34 @@ static void sort_lights(CameraObject *cam) {
             cam->debug.pass_car++;
         }
     }
-    
+
+    // =========================================================
+    // 信标有效性筛选 (排除小车后, 所有判定集中于此, 后续只做选择)
+    // =========================================================
+    for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+        if (i == car_idx) continue;
+        if (!is_valid_blob[i]) continue;
+
+        // 距离 > 10m → 排除
+        if (phys_dist[i] > 1000.0f) continue;
+
+        // 动态面积门槛
+        float min_area = 25.0f * (1.0f - phys_dist[i] / 250.0f);
+        if (min_area < 0.0f) min_area = 0.0f;
+        if ((float)cam->dot_num[i] <= min_area) continue;
+
+        // 形状筛选: 小光斑直接通过, 大光斑需长宽比 < 动态上限
+        float cx = cam->centers[i][1], cy = cam->centers[i][0];
+        float dx = cx - img_cx, dy = cy - img_cy;
+        float dist_sq = dx * dx + dy * dy;
+        float dyn_max = TARGET_BASE_MAX_RATIO + dist_sq * TARGET_RATIO_COMP_COEF;
+        if (dyn_max > TARGET_LIMIT_MAX_RATIO) dyn_max = TARGET_LIMIT_MAX_RATIO;
+        if (cam->dot_num[i] > SMALL_BLOB_DIRECT_AREA && cam->aspect_ratio[i] >= dyn_max)
+            continue;
+
+        is_valid_target[i] = 1;
+    }
+
     // =========================================================
     // 2. 时序 track 扫描 (像素质心空间, 不依赖物理距离解算)
     // =========================================================
@@ -573,81 +601,59 @@ static void sort_lights(CameraObject *cam) {
 
     target_idx = -1;
 
-    // === 计算每 blob 距各 track 代表的像素距离 ===
-    float min_temporal_dist[MAX_LIGHTS];
-    uint8_t any_near_track = 0;
-    for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
-        min_temporal_dist[i] = 1e9f;
-        if (!is_valid_blob[i] || i == car_idx) continue;
-        float cx = cam->centers[i][1];  // Col
-        float cy = cam->centers[i][0];  // Row
-        for (uint8_t t = 0; t < num_tracks; t++) {
-            float tdx = cx - track_repr_cx[t];
-            float tdy = cy - track_repr_cy[t];
-            float td = sqrtf(tdx * tdx + tdy * tdy);
-            if (td < min_temporal_dist[i]) min_temporal_dist[i] = td;
-        }
-        if (min_temporal_dist[i] < TEMPORAL_PIXEL_RADIUS) any_near_track = 1;
+    // === 参考点1: 最旧 track 的末帧 (最高优先级) ===
+    float ref1_cx = 0.0f, ref1_cy = 0.0f;
+    uint8_t has_ref1 = 0;
+    if (has_established) {
+        ref1_cx = track_repr_cx[0];
+        ref1_cy = track_repr_cy[0];
+        has_ref1 = 1;
     }
 
-    float min_dist_sq = 999999.0f;
+    // === 参考点2: 上帧锁定的信标质心 (次优先级) ===
+    uint8_t has_ref2 = target_last_valid;
 
+    float min_score = 999999.0f;
+
+    // === 信标选择: 所有有效性判定已在上方 is_valid_target 完成, 此处纯评分 ===
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (i == car_idx) continue;
-        if (!is_valid_blob[i]) continue;
+        if (!is_valid_target[i]) continue;
 
-        // 限制：找信标距离在10m以内 (1000cm)
-        if (phys_dist[i] > 1000.0f) continue;
-
-        // 目标质心 Col/Row
         float cx = cam->centers[i][1];
         float cy = cam->centers[i][0];
-
-        // 计算目标质心到画面中心的像素距离平方
         float dx = cx - img_cx;
         float dy = cy - img_cy;
         float dist_sq = dx * dx + dy * dy;
 
-        // 动态阈值补偿：越靠近边缘，允许的信标形变长宽比上限越大
-        float dynamic_target_max_ratio = TARGET_BASE_MAX_RATIO + (dist_sq * TARGET_RATIO_COMP_COEF);
-        if (dynamic_target_max_ratio > TARGET_LIMIT_MAX_RATIO) {
-            dynamic_target_max_ratio = TARGET_LIMIT_MAX_RATIO;
+        // 三层评分: 偏移量保证 Tier1 < Tier2 < Tier3 永不交叉
+        float score;
+        uint8_t tier = 3;
+
+        if (has_ref1) {
+            float rdx = cx - ref1_cx;
+            float rdy = cy - ref1_cy;
+            if (sqrtf(rdx * rdx + rdy * rdy) < TEMPORAL_PIXEL_RADIUS) {
+                tier = 1;
+            }
+        }
+        if (tier > 1 && has_ref2) {
+            float rdx = cx - last_target_cx;
+            float rdy = cy - last_target_cy;
+            if (sqrtf(rdx * rdx + rdy * rdy) < TEMPORAL_PIXEL_RADIUS) {
+                tier = 2;
+            }
         }
 
-        // 动态面积门槛平滑过渡：正上方(0m)要求面积>25，4m(400cm)处降为0
-        float out_dist = phys_dist[i];
-        float min_target_area = 25.0f * (1.0f - out_dist / 250.0f);
-        if (min_target_area < 0.0f) min_target_area = 0.0f;
-        if (cam->dot_num[i] <= min_target_area) continue;
+        if      (tier == 1) score = dist_sq;
+        else if (tier == 2) score = TEMPORAL_TIER2_PENALTY + dist_sq;
+        else                score = TEMPORAL_TIER3_PENALTY + dist_sq;
 
-        // 面积过小的连通域长宽比不可靠, 直接通过形状筛选
-        if (cam->dot_num[i] <= SMALL_BLOB_DIRECT_AREA || cam->aspect_ratio[i] < dynamic_target_max_ratio) {
-
-            float score;
-
-            // 优先: 上帧选中点 TEMPORAL_PIXEL_RADIUS 像素半径内的 blob (强时序偏好)
-            if (target_last_valid) {
-                float ldx = cx - last_target_cx;
-                float ldy = cy - last_target_cy;
-                if (sqrtf(ldx * ldx + ldy * ldy) < TEMPORAL_PIXEL_RADIUS) {
-                    score = dist_sq * 0.1f;  // 大幅压低评分 = 强优先
-                } else if (has_established && any_near_track && min_temporal_dist[i] < 1e8f) {
-                    score = dist_sq + TEMPORAL_WEIGHT * min_temporal_dist[i] * min_temporal_dist[i];
-                } else {
-                    score = dist_sq;
-                }
-            } else if (has_established && any_near_track && min_temporal_dist[i] < 1e8f) {
-                score = dist_sq + TEMPORAL_WEIGHT * min_temporal_dist[i] * min_temporal_dist[i];
-            } else {
-                score = dist_sq;
-            }
-
-            if (score < min_dist_sq) {
-                min_dist_sq = score;
-                target_idx = i;
-            }
-            cam->debug.pass_target++;
+        if (score < min_score) {
+            min_score = score;
+            target_idx = i;
         }
+        cam->debug.pass_target++;
     }
 
     // 3. 将结果输出到专属的安全变量中 (不破坏原始 centers 数组)

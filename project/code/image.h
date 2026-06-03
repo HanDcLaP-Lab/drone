@@ -62,8 +62,6 @@
 
 // ================= 距离估算 =================
 #define HEIGHT_ESTIMATE_MIN     30.0f   // 距离估算最低高度 (cm)
-#define DIST_COMP_THRESHOLD     150.0f  // 距离补偿起效距离 (cm)
-#define DIST_COMP_SCALE         100.0f  // 距离补偿基准距离 (cm)
 
 // ================= 小车识别 =================
 #define CAR_MAX_CENTER_DIST_SQ  3600.0f // 小车距画面中心最大距离平方 (60²)
@@ -76,12 +74,15 @@
 
 // ================= 时序目标偏好 (像素质心空间, 不依赖物理距离解算) =================
 #define TEMPORAL_BUFFER_SIZE    5       // 记忆帧数
-#define TEMPORAL_WEIGHT         2.0f    // 时序距离权重 (像素空间, 值越大越偏好时序连续的点)
-#define TEMPORAL_PIXEL_RADIUS   4.0f    // "相近目标"判定半径 (像素), track连接和上帧偏好共用
+#define TEMPORAL_PIXEL_RADIUS   4.0f    // "相近目标"判定半径 (像素), track连接和参考点匹配共用
 #define TEMPORAL_MIN_FRAMES     2       // track 至少占 2/5 帧才算"已建立"
 
+// 评分分层偏移量 (必须 > dist_sq 最大值 12436 以保证层级不交叉)
+#define TEMPORAL_TIER2_PENALTY  20000   // Tier2 blob 起始分 = 20000 + dist_sq
+#define TEMPORAL_TIER3_PENALTY  40000   // Tier3 blob 起始分 = 40000 + dist_sq
+
 // ================= 目标采信确认 (杂点防护) =================
-#define ENABLE_TARGET_CONSECUTIVE_CHECK  1    // 开关: 目标需连续/占比确认才采信
+#define ENABLE_TARGET_CONSECUTIVE_CHECK  0    // 开关: 目标需连续/占比确认才采信
 #define TARGET_CONFIRM_THRESHOLD         5    // 计数器达此值置位 target_valid
 #define TARGET_CONFIRM_MAX               10   // 计数器上限
 // --- 摄像头对象结构体 ---
