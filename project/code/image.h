@@ -62,6 +62,8 @@
 
 // ================= 距离估算 =================
 #define HEIGHT_ESTIMATE_MIN     30.0f   // 距离估算最低高度 (cm)
+#define DIST_COMP_THRESHOLD     150.0f  // 距离补偿起效距离 (cm)
+#define DIST_COMP_SCALE         100.0f  // 距离补偿基准距离 (cm)
 
 // ================= 小车识别 =================
 #define CAR_MAX_CENTER_DIST_SQ  3600.0f // 小车距画面中心最大距离平方 (60²)
