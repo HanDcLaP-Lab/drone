@@ -133,9 +133,47 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
     data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;
 
+#define FUSION_AREA_RATIO 1.3f
+#define FUSION_JUMP_DIST_MAX 50.0f
+
     uint8_t locked_count = 0;
     if (cam_down.car_valid) locked_count++;
     if (cam_down.target_valid) locked_count += 2;
+
+    // --- 融合异常检测 ---
+    static uint32_t last_target_area = 0;
+    static float last_target_x = 0.0f;
+    static float last_target_y = 0.0f;
+    static uint8_t last_locked_state = 0;
+    uint8_t trigger_fusion = 0;
+
+    // [隐患修复1]: 必须加上 last_target_area > 20 的基础面积防御，防止0乘任何数还是0导致的起步噪点误判
+    if (last_target_area > 20 && cam_down.max_area > (uint32_t)((float)last_target_area * FUSION_AREA_RATIO)) {
+        // [隐患修复2]: 如果上一帧已经是 4 (融合状态)，本帧由于连通域依然巨大只能算出 1 (仅小车)，则应继续维持 4
+        if ((last_locked_state == 3 || last_locked_state == 4) && locked_count == 1) {
+            trigger_fusion = 1; 
+        } else if (cam_down.target_valid) {
+            float dx = pos.target.x - last_target_x;
+            float dy = pos.target.y - last_target_y;
+            float jump_dist_sq = dx * dx + dy * dy;
+            if (jump_dist_sq > (FUSION_JUMP_DIST_MAX * FUSION_JUMP_DIST_MAX)) {
+                trigger_fusion = 1; 
+            }
+        }
+    }
+
+    if (trigger_fusion) {
+        locked_count = 4; // 触发或维持新建状态 4
+    } else {
+        // 未发生融合时，正常更新历史有效记录
+        if (cam_down.target_valid) {
+            last_target_area = cam_down.target_dot_num;
+            last_target_x = pos.target.x;
+            last_target_y = pos.target.y;
+        }
+    }
+    last_locked_state = locked_count; // 无论是否融合，都要更新 last_locked_state，才能维持状态 4
+
     data_out[S1_LOCKED_COUNT] = (float)locked_count;
 
     if (!cam_down.car_valid) {

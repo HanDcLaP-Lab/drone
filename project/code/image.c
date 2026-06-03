@@ -466,6 +466,7 @@ static void sort_lights(CameraObject *cam) {
             max_area_idx = i;
         }
     }
+    cam->max_area = max_area; // 保存供状态机做异常检测
     
     // 找到了最大的灯，更新历史极值
     if (max_area_idx != -1) {

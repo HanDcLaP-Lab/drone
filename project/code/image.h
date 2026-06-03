@@ -113,6 +113,7 @@ typedef struct {
         float   min_ratio;          // 本帧最小长宽比 (排除退化标记值)
     } debug;
 
+    uint32_t max_area;           // [新增] 本帧最大连通域面积，用于融合检测
 } CameraObject;
 
 typedef struct {
