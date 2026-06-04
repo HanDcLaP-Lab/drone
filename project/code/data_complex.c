@@ -153,11 +153,20 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
         if ((last_locked_state == 3 || last_locked_state == 4) && locked_count == 1) {
             trigger_fusion = 1; 
         } else if (cam_down.target_valid) {
+            static uint8_t jump_cnt = 0;
             float dx = pos.target.x - last_target_x;
             float dy = pos.target.y - last_target_y;
             float jump_dist_sq = dx * dx + dy * dy;
             if (jump_dist_sq > (FUSION_JUMP_DIST_MAX * FUSION_JUMP_DIST_MAX)) {
-                trigger_fusion = 1; 
+                jump_cnt++;
+                if (jump_cnt > 10) { // 连续10帧跳变，认定为真正的目标切换
+                    trigger_fusion = 0; 
+                    jump_cnt = 0;
+                } else {
+                    trigger_fusion = 1; 
+                }
+            } else {
+                jump_cnt = 0;
             }
         }
     }

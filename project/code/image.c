@@ -357,7 +357,7 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
 
                         float ratio = 1.0f;
                         if (lambda2 > 0.1f) ratio = lambda1 / lambda2;
-                        else ratio = 100.0f; // 次轴极小(纯直线)，赋予退化极值
+                        else ratio = 80.0f; // 次轴极小(纯直线)，赋予退化极值
                         
                         cam->aspect_ratio[valid_idx] = ratio;
                         valid_idx++;
