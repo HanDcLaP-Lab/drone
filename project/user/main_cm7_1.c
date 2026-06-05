@@ -58,10 +58,10 @@ int main(void)
     debug_info_init();                  // 调试串口信息初始化
 
     camera_init();
-    // 建议初始参数：Q=0.5 (信任小车本身的连续运动), R=10.0 (视觉噪点较大)
     Kalman_Init(&K_car_x, 1.0f, 0.5f, 0.0f);
     Kalman_Init(&K_car_y, 1.0f, 0.5f, 0.0f);
-    // Kalman_Init(&K_target_x, 0.1f, 15.0f, 0.0f); // 信标通常是静止的，Q可以给小一点，R给大一点让它更死区
+    Kalman_Init(&K_target_x, 0.1f, 15.0f, 0.0f); // 信标静止, Q小=信任模型, R大=过滤噪点
+    Kalman_Init(&K_target_y, 0.1f, 15.0f, 0.0f);
     // Kalman_Init(&K_target_y, 0.1f, 15.0f, 0.0f);
     system_delay_ms(2000);
     display_init();
