@@ -326,10 +326,8 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
                 float cx = (float)stats.sum_c / stats.dot_num; // Col (X)
                 
                 // 计算距离画面中心的平方
-                float img_cx = cam->width / 2.0f;
-                float img_cy = cam->height / 2.0f;
-                float dx = cx - img_cx;
-                float dy = cy - img_cy;
+                float dx = cx - CAM_CX;
+                float dy = cy - CAM_CY;
                 float dist_sq = dx * dx + dy * dy;
                 
                 // 动态计算该位置的最小面积门槛 (越靠边缘要求越低)
@@ -482,8 +480,6 @@ static void sort_lights(CameraObject *cam) {
 
     int car_idx = -1;
     int target_idx = -1;
-    float img_cx = cam->width / 2.0f;
-    float img_cy = cam->height / 2.0f;
     // =========================================================
     // 1. 寻找小车 (加入动态阈值，边缘门槛自动抬高防信标混淆)
     // =========================================================
@@ -496,8 +492,8 @@ static void sort_lights(CameraObject *cam) {
         if (phys_dist_sq[i] > 150.0f * 150.0f) continue;
         
         // 计算目标质心到画面中心的像素距离平方
-        float dx = cam->centers[i][1] - img_cx;
-        float dy = cam->centers[i][0] - img_cy;
+        float dx = cam->centers[i][1] - CAM_CX;
+        float dy = cam->centers[i][0] - CAM_CY;
         float dist_sq = dx * dx + dy * dy;
         
         // 动态计算该位置的小车最低长宽比门槛
@@ -530,8 +526,8 @@ static void sort_lights(CameraObject *cam) {
         if (phys_dist_sq[i] > 1000.0f * 1000.0f) continue;
 
         // 计算目标质心到画面中心的像素距离平方 
-        float dx = cam->centers[i][1] - img_cx;
-        float dy = cam->centers[i][0] - img_cy;
+        float dx = cam->centers[i][1] - CAM_CX;
+        float dy = cam->centers[i][0] - CAM_CY;
         float dist_sq = dx * dx + dy * dy;
         
         // 动态阈值补偿：越靠近边缘，允许的信标形变长宽比上限越大

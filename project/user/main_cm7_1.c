@@ -97,7 +97,7 @@ int main(void)
             // 3. 屏幕打印
             if (drone_mode == 0) // DRONE_STATE_DEBUG = 0
             {
-                display_image_debug_display();
+                display_image_debug_display(cam_down.car_center_x, cam_down.car_center_y, cam_down.car_valid, cam_down.target_center_x, cam_down.target_center_y, cam_down.target_valid);
             }
 
             // 图像处理效率观测

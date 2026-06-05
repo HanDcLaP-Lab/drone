@@ -10,5 +10,5 @@
 void display_init();
 void display_motor_output_display(); 
 void display_image_display(void);
-void display_image_debug_display(void);
+void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, float target_x, float target_y, uint8_t target_valid);
 #endif

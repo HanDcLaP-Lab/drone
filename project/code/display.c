@@ -117,7 +117,7 @@ void display_image_display(void){
     ips200_show_float(40,16*12 , share_data_from_1[S1_CAR_TARGET_DIST], 4,2);
 }
 
-void display_image_debug_display(void){
+void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, float target_x, float target_y, uint8_t target_valid){
     // 将底层的 0/1 放大为 0/255 以便屏幕显示
     for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++) {
         image_copy[0][i] = cam_down.binarized_image[i] ? 255 : 0;
@@ -128,6 +128,57 @@ void display_image_debug_display(void){
     
     // 显示二值化图像 (假设全屏大小为 188x120)
     ips200_displayimage03x((const uint8 *)image_copy , MT9V03X_W, MT9V03X_H);
+    
+    // [新增] 叠加显示小车和信标的十字准星
+    // 检查小车是否有效
+    if (car_valid) {
+        int16_t cx = (int16_t)car_x;
+        int16_t cy = (int16_t)car_y;
+        
+        int16_t radius = 4; // 长度扩大一倍
+        for (int16_t offset = 0; offset <= 1; offset++) { // 粗细扩大一倍
+            // 画水平线（带边缘截断）
+            int16_t y = cy + offset;
+            if (y >= 0 && y < MT9V03X_H) {
+                int16_t x1 = cx - radius < 0 ? 0 : cx - radius;
+                int16_t x2 = cx + radius >= MT9V03X_W ? MT9V03X_W - 1 : cx + radius;
+                if (x1 <= x2) ips200_draw_line(x1, y, x2, y, RGB565_RED);
+            }
+            
+            // 画垂直线（带边缘截断）
+            int16_t x = cx + offset;
+            if (x >= 0 && x < MT9V03X_W) {
+                int16_t y1 = cy - radius < 0 ? 0 : cy - radius;
+                int16_t y2 = cy + radius >= MT9V03X_H ? MT9V03X_H - 1 : cy + radius;
+                if (y1 <= y2) ips200_draw_line(x, y1, x, y2, RGB565_RED);
+            }
+        }
+    }
+
+    // 检查信标是否有效
+    if (target_valid) {
+        int16_t tx = (int16_t)target_x;
+        int16_t ty = (int16_t)target_y;
+
+        int16_t radius = 4; // 长度扩大一倍
+        for (int16_t offset = 0; offset <= 1; offset++) { // 粗细扩大一倍
+            // 画水平线（带边缘截断）
+            int16_t y = ty + offset;
+            if (y >= 0 && y < MT9V03X_H) {
+                int16_t x1 = tx - radius < 0 ? 0 : tx - radius;
+                int16_t x2 = tx + radius >= MT9V03X_W ? MT9V03X_W - 1 : tx + radius;
+                if (x1 <= x2) ips200_draw_line(x1, y, x2, y, RGB565_GREEN); // 改为绿色
+            }
+            
+            // 画垂直线（带边缘截断）
+            int16_t x = tx + offset;
+            if (x >= 0 && x < MT9V03X_W) {
+                int16_t y1 = ty - radius < 0 ? 0 : ty - radius;
+                int16_t y2 = ty + radius >= MT9V03X_H ? MT9V03X_H - 1 : ty + radius;
+                if (y1 <= y2) ips200_draw_line(x, y1, x, y2, RGB565_GREEN); // 改为绿色
+            }
+        }
+    }
     
     // 在屏幕下方显示状态与阈值
     // ips200_show_string(0, 16*9, "Mode: DEBUG");
