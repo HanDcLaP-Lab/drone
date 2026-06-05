@@ -25,6 +25,10 @@
 #define FOV_RADIUS (FOV_DIAMETER / 2.0f)
 #define FOV_RADIUS_SQ (FOV_RADIUS * FOV_RADIUS)
 
+#define MORPH_MASK_DIAMETER 100.0f  // [新增] 形态学有效区域圆直径(限制边缘噪声膨胀)
+#define MORPH_MASK_RADIUS (MORPH_MASK_DIAMETER / 2.0f)
+#define MORPH_MASK_RADIUS_SQ (MORPH_MASK_RADIUS * MORPH_MASK_RADIUS)
+
 #define CAR_MAX_DISTANCE  180.0f  //小车最大距离，超过不认为是小车
 #define TARGET_MAX_DISTANCE  1000.0f  //信标最大距离，超过不认为是小车
 // =========================================================
@@ -50,6 +54,8 @@
 
 #define CAR_BASE_MIN_RATIO      3.2f     // 中心基础下限：在中心时长宽比大于 3.0 即认为是小车
 #define CAR_RATIO_COMP_COEF     0.00006f  // 补偿系数：假设边缘距离平方约 12000，12000*0.0002=2.4。边缘门槛会提升到 3.0+2.4 = 5.4
+#define CAR_IDEAL_MAX_RATIO     25.0f    // [新增] 小车理想长宽比上限 (用于得分截断，防线缆高倍率加分)
+#define CAR_ABSOLUTE_MAX_RATIO  1000.0f    // [未启用] 小车绝对长宽比红线 (超过此值直接视为细长线缆剔除)
 
 #define EDGE_SAFE_MARGIN_X 15.0f
 #define EDGE_SAFE_MARGIN_Y 0.0f
@@ -57,7 +63,7 @@
 #define K_Y 1.11f
 
 // ================= 形态学参数 =================
-#define ERODE_MIN_NEIGHBORS     6       // 腐蚀: 8邻域至少保留此数亮像素
+#define ERODE_MIN_NEIGHBORS     7       // 腐蚀: 8邻域至少保留此数亮像素
 
 // ================= 距离估算 =================
 #define HEIGHT_ESTIMATE_MIN     30.0f   // 距离估算最低高度 (cm)

@@ -42,6 +42,8 @@ Image_IMU_Snapshot_t img_imu_snap = {0}; // 新增全局快照实例
 // =========================================================
 uint16_t fov_left_bound[MT9V03X_H];
 uint16_t fov_right_bound[MT9V03X_H];
+uint16_t morph_left_bound[MT9V03X_H];
+uint16_t morph_right_bound[MT9V03X_H];
 
 // --- 2. 初始化函数 ---
 void camera_init(void) {
@@ -93,6 +95,20 @@ void camera_init(void) {
             fov_left_bound[r] = left;
             fov_right_bound[r] = right;
         }
+
+            // [新增] 形态学中心圆形遮罩 (防止边缘噪点被膨胀放大)
+            if (dy_sq > MORPH_MASK_RADIUS_SQ) {
+                morph_left_bound[r] = MT9V03X_W;
+                morph_right_bound[r] = 0;
+            } else {
+                float dx = sqrtf(MORPH_MASK_RADIUS_SQ - dy_sq);
+                int left = (int)(CAM_CX - dx);
+                int right = (int)(CAM_CX + dx);
+                if (left < 0) left = 0;
+                if (right > MT9V03X_W) right = MT9V03X_W;
+                morph_left_bound[r] = left;
+                morph_right_bound[r] = right;
+            }
     }
 }
 
@@ -254,16 +270,21 @@ static void dilate_pass(uint8_t *src, uint8_t *dst, uint16_t width, uint16_t hei
 
         for (uint16_t c = c_start; c < c_end; c++) {
             uint32_t idx = r * width + c;
-            if (src[idx] == 1) {
-                dst[idx] = 1;
-                dst[idx - 1] = 1;
-                dst[idx + 1] = 1;
-                dst[idx - width] = 1;
-                dst[idx + width] = 1;
-                dst[idx - width - 1] = 1;
-                dst[idx - width + 1] = 1;
-                dst[idx + width - 1] = 1;
-                dst[idx + width + 1] = 1;
+            
+            // [修正] 将膨胀改为 "Gather (拉取)" 模式，彻底杜绝边界向外溢出污染
+            if (c >= morph_left_bound[r] && c < morph_right_bound[r]) {
+                // 在遮罩内：只要自身或周围 8 邻域有一个为 1，当前点就膨胀为 1 (利用 || 短路特性，速度极快)
+                if (src[idx] || src[idx - 1] || src[idx + 1] ||
+                    src[idx - width] || src[idx + width] ||
+                    src[idx - width - 1] || src[idx - width + 1] ||
+                    src[idx + width - 1] || src[idx + width + 1]) {
+                    dst[idx] = 1;
+                }
+            } else {
+                // 在遮罩外：严格原样保留自身，不接受遮罩内溢出的膨胀
+                if (src[idx]) {
+                    dst[idx] = 1;
+                }
             }
         }
     }
@@ -281,12 +302,17 @@ static void erode_pass(uint8_t *src, uint8_t *dst, uint16_t width, uint16_t heig
         for (uint16_t c = c_start; c < c_end; c++) {
             uint32_t idx = r * width + c;
             if (src[idx] == 1) {
-                uint8_t count = src[idx - 1] + src[idx + 1] +
-                                src[idx - width] + src[idx + width] +
-                                src[idx - width - 1] + src[idx - width + 1] +
-                                src[idx + width - 1] + src[idx + width + 1];
-                if (count >= ERODE_MIN_NEIGHBORS) {
-                    dst[idx] = 1;
+                // 仅在中心形态学圆内进行腐蚀过滤
+                if (c >= morph_left_bound[r] && c < morph_right_bound[r]) {
+                    uint8_t count = src[idx - 1] + src[idx + 1] +
+                                    src[idx - width] + src[idx + width] +
+                                    src[idx - width - 1] + src[idx - width + 1] +
+                                    src[idx + width - 1] + src[idx + width + 1];
+                    if (count >= ERODE_MIN_NEIGHBORS) {
+                        dst[idx] = 1;
+                    }
+                } else {
+                    dst[idx] = 1; // 在遮罩外的点跳过腐蚀判断，直接保留
                 }
             }
         }
@@ -483,7 +509,7 @@ static void sort_lights(CameraObject *cam) {
     // =========================================================
     // 1. 寻找小车 (加入动态阈值，边缘门槛自动抬高防信标混淆)
     // =========================================================
-    float max_car_ratio_found = 0.0f; // 记录找到的最大长宽比
+    float max_car_score = 0.0f; // [修改] 记录找到的小车最高综合得分
     
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (!is_valid_blob[i]) continue;
@@ -499,15 +525,23 @@ static void sort_lights(CameraObject *cam) {
         // 动态计算该位置的小车最低长宽比门槛
         float dynamic_car_min_ratio = CAR_BASE_MIN_RATIO + (dist_sq * CAR_RATIO_COMP_COEF);
         
-        // 只有大于当前位置的动态门槛，才有资格参与小车竞选
-        if (cam->aspect_ratio[i] > dynamic_car_min_ratio
+        // 只有在动态门槛与绝对红线之间的连通域，才有资格参与小车竞选
+        if (cam->aspect_ratio[i] > dynamic_car_min_ratio && cam->aspect_ratio[i] < CAR_ABSOLUTE_MAX_RATIO
             && cam->centers[i][1] > EDGE_SAFE_MARGIN_X && cam->centers[i][1] < cam->width - EDGE_SAFE_MARGIN_X
             && cam->centers[i][0] > EDGE_SAFE_MARGIN_Y && cam->centers[i][0] < cam->height - EDGE_SAFE_MARGIN_Y
             && dist_sq < CAR_MAX_CENTER_DIST_SQ
         ) {
-            // 在所有合格的候选者中，选出长宽比最大的那个
-            if (cam->aspect_ratio[i] > max_car_ratio_found) {
-                max_car_ratio_found = cam->aspect_ratio[i];
+            // [新增] 综合得分算法：Score = Area * sqrt(Ratio)
+            // 既保证面积是基本盘，又让形状更好的目标(Ratio大)有加分优势
+            float effective_ratio = cam->aspect_ratio[i];
+            if (effective_ratio > CAR_IDEAL_MAX_RATIO) {
+                effective_ratio = CAR_IDEAL_MAX_RATIO; // 截断：过于细长不再继续加分，防止噪点劫持
+            }
+            
+            float current_score = (float)cam->dot_num[i] * sqrtf(effective_ratio);
+            
+            if (current_score > max_car_score) {
+                max_car_score = current_score;
                 car_idx = i;
             }
             cam->debug.pass_car++;
