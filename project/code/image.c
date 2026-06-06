@@ -243,6 +243,46 @@ static void binarize_pass(CameraObject *cam) {
     }
 }
 
+// [新增] 超高速边界光斑清除：查表法 + 无边界一维 Flood-fill
+static void clear_edge_blobs(CameraObject *cam) {
+    // 注意：border_indices 数组与 border_pixel_count 现已在 image.h 中定义
+
+    uint16_t w = cam->width;
+    uint16_t h = cam->height;
+
+    // 1. 【每一帧的高速处理】
+    static uint16_t stack[STACK_SIZE]; 
+    int top = -1;
+    
+    // O(N) 超高速查表：如果圆周边上有白点，染黑并压入栈
+    for (int i = 0; i < border_pixel_count; i++) {
+        uint32_t idx = border_indices[i];
+        if (cam->binarized_image[idx] == 1) {
+            cam->binarized_image[idx] = 0;
+            if (top < STACK_SIZE - 1) stack[++top] = (uint16_t)idx;
+        }
+    }
+    
+    // 3. 一维 Flood-fill 无边界扩散
+    const int32_t d_idx[] = {-w, 1, w, -1}; // 上、右、下、左
+    
+    while (top >= 0) {
+        uint16_t curr_idx = stack[top--];
+        for (int i = 0; i < 4; i++) {
+            uint32_t nidx = curr_idx + d_idx[i];
+            
+            // 极致优化：利用无符号溢出特性，一次判定防上下界越界！
+            // 原理：二值化后，视场外的像素必定为0，所以只需不越过整块物理内存(w*h)即可。
+            if (nidx < (uint32_t)(w * h) && cam->binarized_image[nidx] == 1) {
+                cam->binarized_image[nidx] = 0; // 染黑
+                if (top < STACK_SIZE - 1) {
+                    stack[++top] = (uint16_t)nidx;
+                }
+            }
+        }
+    }
+}
+
 // 8邻域膨胀: src → dst
 static void dilate_pass(uint8_t *src, uint8_t *dst, uint16_t width, uint16_t height, uint8_t margin) {
     memset(dst, 0, width * height);
@@ -584,6 +624,9 @@ static void sort_lights(CameraObject *cam) {
 void image_processing_loop(void) {
     // 1. 逐像素动态阈值二值化 (越靠近图像边缘阈值越低)
     binarize_pass(&cam_down);
+
+    // [新增] 清除触碰视场边缘的厚光圈污染，防止向内膨胀吸纳信标
+    clear_edge_blobs(&cam_down);
 
     // 2. 双重闭运算: dilate → erode → dilate → erode (桥接线缆造成的断裂)
     uint8_t *bin = (uint8_t *)cam_down.binarized_image;
