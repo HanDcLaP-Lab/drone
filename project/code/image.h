@@ -21,7 +21,7 @@
 // =========================================================
 // [新增] 广角全景摄像头有效成像圆形区域配置
 // =========================================================
-#define FOV_DIAMETER 126.0f     // 视野有效圆直径
+#define FOV_DIAMETER 127.0f     // 视野有效圆直径
 #define FOV_RADIUS (FOV_DIAMETER / 2.0f)
 #define FOV_RADIUS_SQ (FOV_RADIUS * FOV_RADIUS)
 
@@ -88,7 +88,6 @@ typedef struct {
 
     // --- 算法参数 ---
     uint8_t threshold;          
-    uint8_t margin_cut;         
 
     // --- 处理结果 (纯净的原始数据，绝不覆写) ---
     uint8_t light_number;            
