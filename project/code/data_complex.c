@@ -102,7 +102,7 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 //   [2] target_ground_pos.x — 目标(信标)地面X坐标 (cm)       ← S1_TARGET_X (pos.target.x)
 //   [3] target_ground_pos.y — 目标(信标)地面Y坐标 (cm)       ← S1_TARGET_Y (pos.target.y)
 //   [4] drone_yaw           — 无人机偏航角 (deg, 顺时针正)    ← imu_data.yaw
-//   [5] locked_state        — 锁定灯数 (0=全丢/1=仅小车/2=仅信标/3=都有) ← S1_LOCKED_COUNT
+//   [5] locked_state        — 锁定状态 (0=全丢/1=仅小车/2=仅信标/3=都有/4=近距离融合盲冲) ← S1_LOCKED_COUNT
 //   [6] car_en              — 急停使能标志 (0=急停, 1=正常)   ← car_en
 //   [7] car_target_dist     — 车-信标地面距离 (cm)                           ← S1_CAR_TARGET_DIST
 // ******************************************************************************
