@@ -133,7 +133,7 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
     data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;
 
-#define FUSION_AREA_RATIO 1.3f
+#define FUSION_AREA_RATIO 1.25f
 #define FUSION_JUMP_DIST_MAX 50.0f
 
     uint8_t locked_count = 0;
@@ -148,7 +148,7 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     uint8_t trigger_fusion = 0;
 
     // [隐患修复1]: 必须加上 last_target_area > 20 的基础面积防御，防止0乘任何数还是0导致的起步噪点误判
-    if (last_target_area > 20 && cam_down.max_area > (uint32_t)((float)last_target_area * FUSION_AREA_RATIO)) {
+    if (last_target_area > 15 && cam_down.max_area > (uint32_t)((float)last_target_area * FUSION_AREA_RATIO)) {
         // [隐患修复2]: 如果上一帧已经是 4 (融合状态)，本帧由于连通域依然巨大只能算出 1 (仅小车)，则应继续维持 4
         if ((last_locked_state == 3 || last_locked_state == 4) && locked_count == 1) {
             trigger_fusion = 1; 
