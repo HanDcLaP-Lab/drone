@@ -11,6 +11,7 @@ Key_Switch_t dev_switch2;
 
 float debug_params[PARAM_COUNT] = {(float)THRESHOLD};
 uint8_t current_param_idx = 0;             // 当前选中的参数索引
+uint8_t display_page_idx = 0;              // [新增] 屏幕显示页面索引
 
 // 创建一个指针数组，把所有要扫描的按键/拨码开关集中管理
 static Key_Switch_t* const ALL_KEYS[] = { 
@@ -179,6 +180,14 @@ void Key_Switch_Param_Edit(void) {
             if (debug_params[0] < 0.0f) {
                 debug_params[0] = 0.0f; 
             }
+        }
+    }
+
+    // KEY4 短按，切换屏幕显示页面
+    if (dev_key4.event == KEY_EVT_SHORT) {
+        display_page_idx++;
+        if (display_page_idx >= DISPLAY_PAGE_COUNT) {
+            display_page_idx = 0;
         }
     }
 }

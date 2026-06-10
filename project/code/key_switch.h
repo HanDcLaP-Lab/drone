@@ -15,6 +15,7 @@
 #define KS_MAX_SHOCK_PERIOD     20    // 消抖时间(ms)
 #define KS_LONG_PRESS_PERIOD    1000  // 长按判定时间(ms)
 #define PARAM_COUNT 1 // 调试参数的数量
+#define DISPLAY_PAGE_COUNT 2 // 屏幕显示页数
 // 定义状态枚举
 typedef enum {
     KEY_EVT_NONE = 0,
@@ -46,6 +47,7 @@ extern Key_Switch_t dev_switch1;
 extern Key_Switch_t dev_switch2;
 extern float debug_params[PARAM_COUNT];
 extern uint8_t current_param_idx;
+extern uint8_t display_page_idx;
 
 // 外部可调用的接口函数
 void key_switch_init(void);

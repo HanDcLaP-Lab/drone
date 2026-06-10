@@ -21,7 +21,7 @@
 // =========================================================
 // [新增] 广角全景摄像头有效成像圆形区域配置
 // =========================================================
-#define FOV_DIAMETER 127.0f     // 视野有效圆直径
+#define FOV_DIAMETER 127.5f     // 视野有效圆直径
 #define FOV_RADIUS (FOV_DIAMETER / 2.0f)
 #define FOV_RADIUS_SQ (FOV_RADIUS * FOV_RADIUS)
 
