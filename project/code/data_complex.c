@@ -101,7 +101,7 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 //   [1] car_ground_pos.y    — 卡尔曼滤波后小车Y坐标 (cm)     ← S1_K_CAR_Y (pos.k_car.y)
 //   [2] target_ground_pos.x — 目标(信标)地面X坐标 (cm)       ← S1_TARGET_X (pos.target.x)
 //   [3] target_ground_pos.y — 目标(信标)地面Y坐标 (cm)       ← S1_TARGET_Y (pos.target.y)
-//   [4] drone_yaw           — 无人机偏航角 (deg, 顺时针正)    ← imu_data.yaw
+//   [4] drone_yaw           — 无人机偏航角 (deg, 顺时针正)    ← S1_SNAPSHOT_YAW
 //   [5] locked_state        — 锁定状态 (0=全丢/1=仅小车/2=仅信标/3=都有/4=近距离融合盲冲) ← S1_LOCKED_COUNT
 //   [6] car_en              — 急停使能标志 (0=急停, 1=正常)   ← car_en
 //   [7] car_target_dist     — 车-信标地面距离 (cm)                           ← S1_CAR_TARGET_DIST
@@ -112,7 +112,7 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
     buffer[1] = share_data[S1_K_CAR_Y];
     buffer[2] = share_data[S1_TARGET_X];
     buffer[3] = share_data[S1_TARGET_Y];
-    buffer[4] = imu_data.yaw;
+    buffer[4] = share_data[S1_SNAPSHOT_YAW]; // [修复]: 使用快照Yaw替代实时Yaw，消灭20ms的时序旋转误差
     buffer[5] = share_data[S1_LOCKED_COUNT];
     buffer[6] = car_en;
     buffer[7] = share_data[S1_CAR_TARGET_DIST];
@@ -133,7 +133,7 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
     data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;
 
-#define FUSION_AREA_RATIO 1.25f
+#define FUSION_AREA_SUM_RATIO 0.8f // [重构] 融合判定的面积求和阈值比例
 #define FUSION_JUMP_DIST_MAX 50.0f
 
     uint8_t locked_count = 0;
@@ -142,15 +142,17 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
 
     // --- 融合异常检测 ---
     static uint32_t last_target_area = 0;
+    static uint32_t last_car_area = 0; // [新增]
     static float last_target_x = 0.0f;
     static float last_target_y = 0.0f;
     static uint8_t last_locked_state = 0;
     uint8_t trigger_fusion = 0;
 
-    // [隐患修复1]: 必须加上 last_target_area > 20 的基础面积防御，防止0乘任何数还是0导致的起步噪点误判
-    if (last_target_area > 15 && cam_down.max_area > (uint32_t)((float)last_target_area * FUSION_AREA_RATIO)) {
-        // [隐患修复2]: 如果上一帧已经是 4 (融合状态)，本帧由于连通域依然巨大只能算出 1 (仅小车)，则应继续维持 4
-        if ((last_locked_state == 3 || last_locked_state == 4) && locked_count == 1) {
+    // [隐患修复1]: 必须加上 last_target_area > 15 的基础面积防御，防止0乘任何数还是0导致的起步噪点误判
+    uint32_t area_sum = last_car_area + last_target_area;
+    if (last_target_area > 15 && cam_down.max_area > (uint32_t)((float)area_sum * FUSION_AREA_SUM_RATIO)) {
+        // [隐患修复2]: 如果上一帧是 3 或 4，本帧由于连通域依然巨大只能算出单目标（可能判成了车=1，也可能判成了信标=2），则应继续维持 4
+        if ((last_locked_state == 3 || last_locked_state == 4) && (locked_count == 1 || locked_count == 2)) {
             trigger_fusion = 1; 
         } else if (cam_down.target_valid) {
             static uint8_t jump_cnt = 0;
@@ -179,6 +181,9 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
             last_target_area = cam_down.target_dot_num;
             last_target_x = pos.target.x;
             last_target_y = pos.target.y;
+        }
+        if (cam_down.car_valid) {
+            last_car_area = cam_down.car_dot_num;
         }
     }
     last_locked_state = locked_count; // 无论是否融合，都要更新 last_locked_state，才能维持状态 4
