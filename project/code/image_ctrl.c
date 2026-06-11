@@ -77,7 +77,7 @@ static uint8_t has_seen_beacon = 0;
 static int8_t search_seq_idx = 0;      // 搜索序列索引 (0~3)
 static uint32_t search_wait_timer = 0; // 停留计时器 (ms)
 static uint8_t is_turning = 0;         // 是否正在转向中 (0:停留计时, 1:转向中)
-static const float search_yaw_seq[8] = {0.0f}; // 目标跳变序列
+static const float search_yaw_seq[SEARCH_YAW_SEQ_NUM] = SEARCH_YAW_SEQ_ARRAY; // 目标跳变序列
 
 static int32_t car_en_disable_timer = 0; // 控制 car_en 置零的倒计时器 (ms)
 static uint8_t was_aligning = 0;         // 标记飞机之前是否正处于“对准”转动状态
@@ -142,8 +142,11 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
             
             // 3. 角度死区判定：如果偏角大于死区，才更新目标航向
             if (fabsf(yaw_error) >= YAW_MIN_ERROR) {
-                //flight_target.target_yaw = snapshot_yaw + yaw_error; //使用相机曝光一瞬间的snapshot_yaw
-                flight_target.target_yaw = 0;
+#if TARGET_ALIGN_ENABLE
+                flight_target.target_yaw = snapshot_yaw + yaw_error; // 使用相机曝光一瞬间的snapshot_yaw
+#else
+                flight_target.target_yaw = TARGET_ALIGN_DISABLE_YAW; // 当前为特殊值禁用对准
+#endif
                 // 4. 叠加全局硬限幅保护
                 if (flight_target.target_yaw > TWO_MAX_YAW_DEV) {
                     flight_target.target_yaw = TWO_MAX_YAW_DEV;
@@ -175,15 +178,16 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
 
     // 逻辑B：仅看到单目标（小车），执行定时定角停留 + 定向跳变扫描
     if (locked_lights == 1 && has_seen_beacon == 1) {
+#if SEARCH_YAW_ENABLE
         if (!is_turning) {
             // 状态1：已到达目标航向，正在原地停留计时
             search_wait_timer += real_dt_ang;
             
-            if (search_wait_timer >= 5000) { 
+            if (search_wait_timer >= SEARCH_WAIT_TIME) { 
                 flight_target.target_yaw = search_yaw_seq[search_seq_idx];
                 
                 search_seq_idx++;
-                if (search_seq_idx >= (sizeof(search_yaw_seq) / sizeof(search_yaw_seq[0]))) {
+                if (search_seq_idx >= SEARCH_YAW_SEQ_NUM) {
                     search_seq_idx = 0;
                 }
                 is_turning = 1; 
@@ -199,6 +203,11 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
                 //car_en_disable_timer = ROTATE_RECOVER_TIME; // 触发 1000ms 置零
             }
         }
+#else
+        // 若宏开关彻底关闭，清空转动状态，避免干扰
+        search_wait_timer = 0;
+        is_turning = 0;
+#endif
     }
 }
 
