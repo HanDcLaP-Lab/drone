@@ -623,45 +623,53 @@ static void sort_lights(CameraObject *cam) {
         }
     }
     
-    // 2. 寻找信标 (排除小车后，在动态畸变长宽比阈值内选距离画面中心最近的)
-    float min_dist_sq = 999999.0f; // 记录最小的中心距离平方 (初始极大值)
+    // 2. 寻找信标 (排除小车后，选距离小车最近的作为信标)
+    float min_sort_dist_sq = 999999.0f;
     target_idx = -1; // 确保重置
 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (i == car_idx) continue;
         if (!is_valid_blob[i]) continue;
-        
+
         // 限制：找信标距离在10m以内 (1000cm)
         if (phys_dist_sq[i] > 1000.0f * 1000.0f) continue;
 
-        // 计算目标质心到画面中心的像素距离平方 
-        float dx = cam->centers[i][1] - CAM_CX;
-        float dy = cam->centers[i][0] - CAM_CY;
-        float dist_sq = dx * dx + dy * dy;
-        
+        // 计算目标质心到画面中心的像素距离平方 (用于边缘畸变补偿)
+        float dx_c = cam->centers[i][1] - CAM_CX;
+        float dy_c = cam->centers[i][0] - CAM_CY;
+        float dist_to_center_sq = dx_c * dx_c + dy_c * dy_c;
+
         // 动态阈值补偿：越靠近边缘，允许的信标形变长宽比上限越大
-        float dynamic_target_max_ratio = TARGET_BASE_MAX_RATIO + (dist_sq * TARGET_RATIO_COMP_COEF);
-        
+        float dynamic_target_max_ratio = TARGET_BASE_MAX_RATIO + (dist_to_center_sq * TARGET_RATIO_COMP_COEF);
+
         // 限制补偿的绝对上限，防止无限放大后与小车混淆
         if (dynamic_target_max_ratio > TARGET_LIMIT_MAX_RATIO) {
-            dynamic_target_max_ratio = TARGET_LIMIT_MAX_RATIO; 
+            dynamic_target_max_ratio = TARGET_LIMIT_MAX_RATIO;
         }
 
         // 动态面积门槛平滑过渡：正上方(0m)要求面积>25，4m(400cm)处降为0
         float out_dist = sqrtf(phys_dist_sq[i]);
         float min_target_area = 25.0f * (1.0f - out_dist / 250.0f);
         if (min_target_area < 0.0f) min_target_area = 0.0f;
-        
+
         // 面积不达标直接排除
         if (cam->dot_num[i] <= min_target_area) continue;
 
         // 面积过小的连通域长宽比不可靠, 直接通过形状筛选
         if (cam->dot_num[i] <= SMALL_BLOB_DIRECT_AREA || cam->aspect_ratio[i] < dynamic_target_max_ratio) {
 
-            // 【核心修改：按中心距离打擂台】
-            // 只要形状合格，谁离画面中心最贴近，谁就是真正的信标！
-            if (dist_sq < min_dist_sq) {
-                min_dist_sq = dist_sq;
+            // 【核心：按距小车距离打擂台，小车不可见时回退到画面中心距离】
+            float sort_dist_sq;
+            if (car_idx != -1) {
+                float dx_car = cam->centers[i][1] - cam->centers[car_idx][1];
+                float dy_car = cam->centers[i][0] - cam->centers[car_idx][0];
+                sort_dist_sq = dx_car * dx_car + dy_car * dy_car;
+            } else {
+                sort_dist_sq = dist_to_center_sq;
+            }
+
+            if (sort_dist_sq < min_sort_dist_sq) {
+                min_sort_dist_sq = sort_dist_sq;
                 target_idx = i;
             }
             cam->debug.pass_target++;
