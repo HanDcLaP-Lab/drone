@@ -421,10 +421,10 @@ void IMU_Update_Loop(void) {
             // 若roll/pitch较大，该补偿有误差，但实际校准场景均为水平放置，可接受
             offset_az = init_az - GRAVITY_MSS;
 
-            // 计算初始欧拉角 (Yaw基准按无人机相对小车的上电安装角设置)
+            // 计算初始欧拉角 (假设初始Yaw为0)
             float init_roll = atan2f(init_ay, init_az);
             float init_pitch = atan2f(-init_ax, sqrtf(init_ay*init_ay + init_az*init_az));
-            float init_yaw = DRONE_INITIAL_YAW_OFFSET * (PI / 180.0f);
+            float init_yaw = 0.0f;
 
             // 欧拉角转四元数
             float c1 = cosf(init_yaw / 2); float s1 = sinf(init_yaw / 2);
@@ -443,8 +443,8 @@ void IMU_Update_Loop(void) {
             imu_data.is_calibrated = 1;
             imu_data.z = 0.0f;
             imu_data.vz = 0.0f; // 校准完成，速度清零
-            imu_data.yaw = DRONE_INITIAL_YAW_OFFSET;
-            prev_raw_yaw = DRONE_INITIAL_YAW_OFFSET;
+            imu_data.yaw = 0.0f;
+            prev_raw_yaw = 0.0f;
         }
         return; 
     }
