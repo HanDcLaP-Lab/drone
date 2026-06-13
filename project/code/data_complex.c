@@ -135,6 +135,7 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
 
 #define FUSION_AREA_SUM_RATIO 0.8f // [重构] 融合判定的面积求和阈值比例
 #define FUSION_JUMP_DIST_MAX 50.0f
+#define LOCKED_STATE_MIN_HEIGHT_CM 90.0f
 
     uint8_t locked_count = 0;
     if (cam_down.car_valid) locked_count++;
@@ -146,7 +147,22 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     static float last_target_x = 0.0f;
     static float last_target_y = 0.0f;
     static uint8_t last_locked_state = 0;
+    static uint8_t jump_cnt = 0;
     uint8_t trigger_fusion = 0;
+
+    if (img_imu_snap.height < LOCKED_STATE_MIN_HEIGHT_CM) {
+        last_target_area = 0;
+        last_car_area = 0;
+        last_target_x = 0.0f;
+        last_target_y = 0.0f;
+        last_locked_state = 0;
+        jump_cnt = 0;
+        data_out[S1_LOCKED_COUNT] = 0.0f;
+        if (!cam_down.car_valid) {
+            data_out[S1_CAR_DOT_NUM] = 0;
+        }
+        return;
+    }
 
     // [隐患修复1]: 必须加上 last_target_area > 15 的基础面积防御，防止0乘任何数还是0导致的起步噪点误判
     uint32_t area_sum = last_car_area + last_target_area;
@@ -155,7 +171,6 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
         if ((last_locked_state == 3 || last_locked_state == 4) && (locked_count == 1 || locked_count == 2)) {
             trigger_fusion = 1; 
         } else if (cam_down.target_valid) {
-            static uint8_t jump_cnt = 0;
             float dx = pos.target.x - last_target_x;
             float dy = pos.target.y - last_target_y;
             float jump_dist_sq = dx * dx + dy * dy;

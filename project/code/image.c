@@ -524,6 +524,8 @@ static void sort_lights(CameraObject *cam) {
     if (current_height < HEIGHT_ESTIMATE_MIN) current_height = HEIGHT_ESTIMATE_MIN;
 
     float phys_dist_sq[MAX_LIGHTS] = {0};
+    float ground_x[MAX_LIGHTS] = {0};
+    float ground_y[MAX_LIGHTS] = {0};
     uint8_t is_valid_blob[MAX_LIGHTS] = {0};
 
     // =======================================================
@@ -539,6 +541,8 @@ static void sort_lights(CameraObject *cam) {
                                      &out_x, &out_y, &out_dist);
         
         // 记录物理距离的平方 (单位：平方厘米)
+        ground_x[i] = (float)out_x;
+        ground_y[i] = (float)out_y;
         phys_dist_sq[i] = (float)(out_dist * out_dist);
 
         // 使用局部变量做距离补偿过滤，不改动原始 dot_num
@@ -659,14 +663,14 @@ static void sort_lights(CameraObject *cam) {
         // 面积过小的连通域长宽比不可靠, 直接通过形状筛选
         if (cam->dot_num[i] <= SMALL_BLOB_DIRECT_AREA || cam->aspect_ratio[i] < dynamic_target_max_ratio) {
 
-            // 【核心：按距小车距离打擂台，小车不可见时回退到画面中心距离】
+            // 【核心：按地面实际距小车距离打擂台，小车不可见时回退到距无人机地面投影距离】
             float sort_dist_sq;
             if (car_idx != -1) {
-                float dx_car = cam->centers[i][1] - cam->centers[car_idx][1];
-                float dy_car = cam->centers[i][0] - cam->centers[car_idx][0];
+                float dx_car = ground_x[i] - ground_x[car_idx];
+                float dy_car = ground_y[i] - ground_y[car_idx];
                 sort_dist_sq = dx_car * dx_car + dy_car * dy_car;
             } else {
-                sort_dist_sq = dist_to_center_sq;
+                sort_dist_sq = phys_dist_sq[i];
             }
 
             if (sort_dist_sq < min_sort_dist_sq) {
