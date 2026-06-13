@@ -36,6 +36,7 @@
 // ================= 硬件安装误差补偿 (度) =================
 #define IMU_MOUNT_ADJUST_ROLL   0.0f //直接填写水平飞行的读数
 #define IMU_MOUNT_ADJUST_PITCH  0.0f
+#define DRONE_INITIAL_YAW_OFFSET (-45.0f) // 上电时无人机正方向相对小车逆时针45度
 
 // ================= 陷波滤波参数 (电机振动抑制) =================
 #define NOTCH_ENABLE            0       // 1: 使能陷波滤波, 0: 关闭
