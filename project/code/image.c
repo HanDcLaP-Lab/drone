@@ -277,12 +277,13 @@ static void clear_edge_blobs(CameraObject *cam) {
         }
     }
 
-    // 2. 四方向 Flood-fill 扩散，清除整个连通域
-    const int32_t d_idx[] = {-w, 1, w, -1}; // 上、右、下、左
+    // 2. 八方向 Flood-fill 扩散，清除整个连通域 (含对角连接的细斜线/单像素桥接)
+    const int32_t d_idx[] = {-w, 1, w, -1,                 // 上、右、下、左
+                             -w - 1, -w + 1, w - 1, w + 1}; // 左上、右上、左下、右下
 
     while (top >= 0) {
         uint16_t curr_idx = stack[top--];
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 8; i++) {
             uint32_t nidx = curr_idx + d_idx[i];
 
             // 利用无符号溢出特性，一次判定防越界：
