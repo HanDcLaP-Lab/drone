@@ -73,6 +73,7 @@ void Flight_Control_Init(void) {
 
 void Flight_Unlock(void) {
     flight_target.is_armed = 1;
+    car_en = 1;
     flight_target.start_up_scale = 0.0f;
 
     // 解锁瞬间重置积分，防止暴冲

@@ -7,13 +7,11 @@
 //        │
 //   ┌────┴───────────────────────────────────────────────────┐
 //   │ 1. 读取Core1视觉结果 (S1_K_CAR_X/Y, S1_LOCKED_COUNT)  │
-//   │ 2. car_en 倒计时管理 (旋转恢复期间禁用小车)             │
-//   │ 3. Flight_Hover_Position_Control()  位置环PID         │
+//   │ 2. Flight_Hover_Position_Control()  位置环PID         │
 //   │    ├─ 快照Yaw → 地球系误差 → PID → 目标加速度          │
 //   │    └─ 实时Yaw → 转回机体坐标系 → target_roll/pitch     │
 //   │ 4. Flight_Hover_Yaw_Control()  偏航搜索状态机          │
 //   │    ├─ locked_lights=3 (双目标): 跟踪信标方向            │
-//   │    │   └─ 对准完成后触发 car_en_disable_timer (1s禁用) │
 //   │    ├─ locked_lights=1 (仅小车): 定时定角跳变搜索        │
 //   │    │   └─ 序列: 35→70→35→0→-35→-70→-35→0 (度)       │
 //   │    └─ locked_lights=0/2 (全丢/仅信标): 回平等待        │
@@ -79,7 +77,6 @@ static uint32_t search_wait_timer = 0; // 停留计时器 (ms)
 static uint8_t is_turning = 0;         // 是否正在转向中 (0:停留计时, 1:转向中)
 static const float search_yaw_seq[SEARCH_YAW_SEQ_NUM] = SEARCH_YAW_SEQ_ARRAY; // 目标跳变序列
 
-static int32_t car_en_disable_timer = 0; // 控制 car_en 置零的倒计时器 (ms)
 static uint8_t was_aligning = 0;         // 标记飞机之前是否正处于“对准”转动状态
 // =================== 内部辅助控制函数 ===================
 
@@ -159,7 +156,6 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
             }else {
                 // 【新增】：进入偏角死区，说明对准转动刚刚结束
                 if (was_aligning == 1) { 
-                    car_en_disable_timer = ROTATE_RECOVER_TIME; // 只触发一次 1000ms 置零
                     was_aligning = 0;            // 触发后立即清除标记
                 }
             }
@@ -199,8 +195,6 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
             if (fabsf(yaw_diff) < 3.0f) {
                 is_turning = 0;          
                 search_wait_timer = 0;
-                // 【新增】：一次扫描转动刚刚结束
-                //car_en_disable_timer = ROTATE_RECOVER_TIME; // 触发 1000ms 置零
             }
         }
 #else
@@ -236,17 +230,7 @@ void Flight_Hover_Control_Task(void) {
     if (last_ang_cnt != 0) real_dt_ang = dataC.pit0_cnt - last_ang_cnt;
     last_ang_cnt = dataC.pit0_cnt;
 
-    // ---------- 【新增】: 倒计时器处理及 car_en 赋值 ----------
-    if (car_en_disable_timer > 0) {
-        car_en_disable_timer -= real_dt_ang;
-        car_en = 0; // 倒计时期间强制保持为 0
-    } else {
-        if(was_aligning == 0){
-            car_en = 1;
-        }else{
-            car_en = 0;
-        }
-    }
+    // car_en 只由飞控锁定/解锁/降落/急停维护，视觉对准不再让小车完全停止。
 
     // ================== 有目标视野逻辑 ==================
     if (locked_lights == 1 || locked_lights == 3) {
