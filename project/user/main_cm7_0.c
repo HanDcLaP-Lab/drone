@@ -78,7 +78,6 @@ int main(void) {
         Board_Comm_Init();
         small_driver_uart_init();
         small_driver_get_speed();
-        //upixels_init();
         Flight_Control_Init();
         dataC.camera_offset_x = CAM_OFFSET_X;
         dataC.camera_offset_y = CAM_OFFSET_Y;

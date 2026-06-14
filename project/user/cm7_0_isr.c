@@ -92,9 +92,6 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
     //wireless_uart_output_imu();
     //wireless_uart_output_groud();
     //wireless_uart_output_yaw();
-    // if (upixels_data.valid == 0xF5) {
-    //     printf("%f,%f\n", upixels_data.opt_vel_x , upixels_data.opt_vel_y);
-    // }
     // extern float share_data_from_1[];
     // extern float car_pos_sol1_0,car_pos_sol1_1;
     // printf("%.2f,%.2f,%.2f,%.2f\n",car_pos_sol1_0,car_pos_sol1_1,share_data_from_1[3]*0.833f,share_data_from_1[4]*0.833f);
@@ -225,13 +222,6 @@ void uart3_isr (void)
 {
     if(uart_isr_mask(UART_3))            // 串口3接收中断
     {
-        uint8_t rx_data;
-        if(uart_query_byte(UART_3, &rx_data)) {
-            // 解析成功一帧，立刻解算速度
-            if (upixels_parse_byte(rx_data) == 1) {
-                upixels_calc_velocity(imu_data.z); 
-            }
-        }
     }
     else                                
     {

@@ -121,6 +121,7 @@ static void Flight_Hover_Position_Control(float car_pos_x, float car_pos_y, floa
  */
 static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) {
     // 逻辑A：当锁定了双目标（看到信标）
+#if TARGET_ALIGN_ENABLE
     if (locked_lights == 3) {
         if (imu_data.z > 0.85f * TARGET_HEIGHT_CM) has_seen_beacon = 1;
         float target_pos_x = share_data_from_1[S1_TARGET_X] - dataC.camera_offset_x;
@@ -139,11 +140,7 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
             
             // 3. 角度死区判定：如果偏角大于死区，才更新目标航向
             if (fabsf(yaw_error) >= YAW_MIN_ERROR) {
-#if TARGET_ALIGN_ENABLE
                 flight_target.target_yaw = snapshot_yaw + yaw_error; // 使用相机曝光一瞬间的snapshot_yaw
-#else
-                flight_target.target_yaw = TARGET_ALIGN_DISABLE_YAW; // 当前为特殊值禁用对准
-#endif
                 // 4. 叠加全局硬限幅保护
                 if (flight_target.target_yaw > TWO_MAX_YAW_DEV) {
                     flight_target.target_yaw = TWO_MAX_YAW_DEV;
@@ -171,6 +168,9 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
             was_aligning = 0; 
         }
     }
+#else
+    flight_target.target_yaw = TARGET_ALIGN_DISABLE_YAW; // 当前为特殊值禁用对准
+#endif
 
     // 逻辑B：仅看到单目标（小车），执行定时定角停留 + 定向跳变扫描
     if (locked_lights == 1 && has_seen_beacon == 1) {
@@ -199,8 +199,8 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
         }
 #else
         // 若宏开关彻底关闭，清空转动状态，避免干扰
-        search_wait_timer = 0;
-        is_turning = 0;
+        // search_wait_timer = 0;
+        // is_turning = 0;
 #endif
     }
 }
