@@ -73,7 +73,8 @@ void (*uart_isr_func[7])() = {uart0_isr, uart1_isr, uart2_isr, uart3_isr, uart4_
 cy_stc_scb_uart_context_t  uart_context[7] = {0}; 
 volatile stc_SCB_t* scb_module[7] = {SCB0, SCB5, SCB4, SCB3, SCB2, SCB7, SCB6};
 
-static uint8 uart_data_buffer[7] = {0};
+static uint8 uart_data_buffer[7][16] = {0};
+static uint8 uart_data_buffer_count[7] = {0};
 static uint8 uart_data_refresh[7] = {0};
 
 //-------------------------------------------------------------------------------------------------------------------
@@ -86,19 +87,54 @@ static uint8 uart_data_refresh[7] = {0};
 uint8 uart_isr_mask(uart_index_enum uart_n)
 {
     uint8 isr_type = 1;                                                                     // 中断类型  0：发送中断   1：接收中断  
-  
-    if(Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & CY_SCB_UART_RX_NOT_EMPTY)            // 串口接收中断
+    uint8 rx_num = 0;
+    uint8 scb_int_msk = 0;
+    volatile stc_SCB_t* scb_module_temp = scb_module[uart_n];
+    
+    if(scb_module_temp->unRX_FIFO_CTRL.stcField.u8TRIGGER_LEVEL != 0)
     {
-        if(Cy_SCB_GetNumInRxFifo(scb_module[uart_n]))
+        scb_int_msk = CY_SCB_UART_RX_TRIGGER;
+    }
+    else
+    {
+        scb_int_msk = CY_SCB_UART_RX_NOT_EMPTY;
+    }
+    
+    if(Cy_SCB_GetRxInterruptMask(scb_module_temp) & scb_int_msk)            // 串口接收中断
+    {
+        if(scb_int_msk == CY_SCB_UART_RX_TRIGGER)
         {
-            uart_data_buffer[uart_n]  = (uint8)Cy_SCB_ReadRxFifo(scb_module[uart_n]);
+            rx_num = Cy_SCB_GetNumInRxFifo(scb_module_temp);
+        
+            for(int i = 0; i < rx_num; i ++)
+            {
+                uart_data_buffer[uart_n][uart_data_buffer_count[uart_n] ++]  = (uint8)Cy_SCB_ReadRxFifo(scb_module_temp);
+                
+                if(uart_data_buffer_count[uart_n] > 15)
+                {
+                    Cy_SCB_ClearRxFifo(scb_module_temp);
+                    
+                    break;
+                }
+            }
+            
             uart_data_refresh[uart_n] = 1;
         }
-        Cy_SCB_ClearRxInterrupt(scb_module[uart_n], CY_SCB_UART_RX_NOT_EMPTY);              // 清除接收中断标志位
+        else
+        {
+            uart_data_buffer[uart_n][0]  = (uint8)Cy_SCB_ReadRxFifo(scb_module_temp);
+            
+            uart_data_buffer_count[uart_n] = 1;
+            
+            uart_data_refresh[uart_n] = 1;
+        }
+        
+        Cy_SCB_ClearRxInterrupt(scb_module_temp, scb_int_msk);                       // 清除接收中断标志位
+        
     }
-    else if(Cy_SCB_GetTxInterruptMask(scb_module[uart_n]) & CY_SCB_UART_TX_DONE)            // 串口0发送中断
+    else if(Cy_SCB_GetTxInterruptMask(scb_module_temp) & CY_SCB_UART_TX_DONE)        // 串口0发送中断
     {           
-        Cy_SCB_ClearTxInterrupt(scb_module[uart_n], CY_SCB_UART_TX_DONE);                   // 清除接收中断标志位
+        Cy_SCB_ClearTxInterrupt(scb_module_temp, CY_SCB_UART_TX_DONE);               // 清除接收中断标志位
         
         isr_type = 0;
     }
@@ -284,7 +320,7 @@ volatile stc_SCB_t* get_scb_module(uart_index_enum uart_n)
 // 参数说明       uart_n          串口模块号 参照 zf_driver_uart.h 内 uart_index_enum 枚举体定义
 // 参数说明       dat             需要发送的字节
 // 返回参数       void
-// 使用示例       uart_write_byte(UART_0, 0xA5);                    // 往串口1的发送缓冲区写入0xA5，写入后仍然会发送数据，但是会减少CPU在串口的执行时
+// 使用示例       uart_write_byte(UART_0, 0xA5);                    // 往串口0的发送缓冲区写入0xA5，写入后仍然会发送数据，但是会减少CPU在串口的执行时
 // 备注信息
 //-------------------------------------------------------------------------------------------------------------------
 void uart_write_byte (uart_index_enum uart_n, const uint8 dat)
@@ -330,25 +366,47 @@ void uart_write_string (uart_index_enum uart_n, const char *str)
     }
 }
 
+
 //-------------------------------------------------------------------------------------------------------------------
 // 函数简介       读取串口接收的数据（whlie等待）
 // 参数说明       uart_n          串口模块号 参照 zf_driver_uart.h 内 uart_index_enum 枚举体定义
 // 参数说明       *dat            接收数据的地址
 // 返回参数       uint8           接收的数据
-// 使用示例       uint8 dat = uart_read_byte(UART_0);             // 接收 UART_1 数据  存在在 dat 变量里
+// 使用示例       uint8 dat = uart_read_byte(UART_0);             // 接收 UART_0 数据  存在在 dat 变量里
 // 备注信息
 //-------------------------------------------------------------------------------------------------------------------
 uint8 uart_read_byte (uart_index_enum uart_n)
 {
+    uint8 return_data = 0;
+    
     while(uart_data_refresh[uart_n] == 0);
-    return uart_data_buffer[uart_n];		
+    
+    return_data = uart_data_buffer[uart_n][0];
+    
+    uart_data_buffer_count[uart_n] --;
+        
+    if(uart_data_buffer_count[uart_n] > 0)
+    {
+        for(int i = 0; i < uart_data_buffer_count[uart_n]; i ++)
+        {
+            uart_data_buffer[uart_n][i] = uart_data_buffer[uart_n][i + 1];
+        }
+    }
+    else
+    {
+        uart_data_refresh[uart_n] = 0;
+    }
+
+    return return_data;		
 }
+
+
 //-------------------------------------------------------------------------------------------------------------------
-// 函数简介       读取串口接收的数据（查询接收）
+// 函数简介       读取串口接收的单个数据（查询接收）
 // 参数说明       uart_n          串口模块号 参照 zf_driver_uart.h 内 uart_index_enum 枚举体定义
 // 参数说明       *dat            接收数据的地址
 // 返回参数       uint8           1：接收成功   0：未接收到数据
-// 使用示例       uint8 dat; uart_query_byte(UART_0, &dat);       // 接收 UART_1 数据  存在在 dat 变量里
+// 使用示例       uint8 dat; uart_query_byte(UART_0, &dat);       // 接收 UART_0 数据  存在在 dat 变量里
 // 备注信息
 //-------------------------------------------------------------------------------------------------------------------
 uint8 uart_query_byte (uart_index_enum uart_n, uint8 *dat)
@@ -357,14 +415,62 @@ uint8 uart_query_byte (uart_index_enum uart_n, uint8 *dat)
     
     if(uart_data_refresh[uart_n])
     {
-        *dat = uart_data_buffer[uart_n];
-        uart_data_refresh[uart_n] = 0;
+        *dat = uart_data_buffer[uart_n][0];
+        
+        uart_data_buffer_count[uart_n] --;
+        
+        if(uart_data_buffer_count[uart_n] > 0)
+        {
+            for(int i = 0; i < uart_data_buffer_count[uart_n]; i ++)
+            {
+                uart_data_buffer[uart_n][i] = uart_data_buffer[uart_n][i + 1];
+            }
+        }
+        else
+        {
+            uart_data_refresh[uart_n] = 0;
+        }
+        
         return_data = 1;
     }
     else
     {
         return_data = 0;
     }
+    
+    return return_data;
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介       读取串口接收的数组（查询接收）
+// 参数说明       uart_n          串口模块号 参照 zf_driver_uart.h 内 uart_index_enum 枚举体定义
+// 参数说明       *dat            接收数据的地址
+// 返回参数       uint8           成功接收到多少个数据
+// 使用示例       uint8 dat[16]; uart_query_buffer(UART_0, dat);       // 接收 UART_0 数据  存在在 dat 数组里
+// 备注信息
+//-------------------------------------------------------------------------------------------------------------------
+uint8 uart_query_buffer (uart_index_enum uart_n, uint8 *dat)
+{
+    uint8 return_data = 0;
+    
+    if(uart_data_refresh[uart_n])
+    {
+        return_data = uart_data_buffer_count[uart_n];
+        
+        uart_data_buffer_count[uart_n] = 0;
+        
+        for(int i = 0; i < return_data; i ++)
+        {
+            *(dat ++) = uart_data_buffer[uart_n][i];
+        }
+        
+        uart_data_refresh[uart_n] = 0;
+    }
+    else
+    {
+        return_data = 0;
+    }
+    
     return return_data;
 }
 
@@ -395,6 +501,8 @@ void uart_tx_interrupt (uart_index_enum uart_n, uint32 status)
         Cy_SCB_SetTxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_TX_DONE);
     }	
 }
+
+
 //-------------------------------------------------------------------------------------------------------------------
 // 函数简介       串口接收中断设置
 // 参数说明       uart_n           串口模块号
@@ -405,20 +513,54 @@ void uart_tx_interrupt (uart_index_enum uart_n, uint32 status)
 //-------------------------------------------------------------------------------------------------------------------
 void uart_rx_interrupt (uart_index_enum uart_n, uint32 status)
 {
-    Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_TRIGGER);
     Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_FULL);
     Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_OVERFLOW);
     Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_ERR_FRAME);
     Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_ERR_PARITY);
     Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_BREAK_DETECT);
-    if(status)
+    
+    if(scb_module[uart_n]->unRX_FIFO_CTRL.stcField.u8TRIGGER_LEVEL != 0)
     {
-        Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) | CY_SCB_UART_RX_NOT_EMPTY);
-    }
+        if(status)
+        {
+            Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_NOT_EMPTY);
+            Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) | CY_SCB_UART_RX_TRIGGER);
+        }
+        else
+        {
+            Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_NOT_EMPTY);
+            Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_TRIGGER);
+        }
+    }	
     else
     {
-        Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_NOT_EMPTY);
-    }	
+        if(status)
+        {
+            Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_TRIGGER);
+            Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) | CY_SCB_UART_RX_NOT_EMPTY);
+        }
+        else
+        {
+            Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_TRIGGER);
+            Cy_SCB_SetRxInterruptMask(scb_module[uart_n], Cy_SCB_GetRxInterruptMask(scb_module[uart_n]) & ~CY_SCB_UART_RX_NOT_EMPTY);
+        }
+    }
+}
+
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介       串口接收中断触发配置
+// 参数说明       uart_n           串口模块号
+// 参数说明       trigger_num      接受到多少个数据才触发一次中断  默认 1个数据  数据可填写范围 0~15
+// 返回参数       void
+// 使用示例       uart_rx_trigger_interrupt(UART_0, 9);     // 配置串口0接收到10个数据才触发一次串口中断
+// 备注信息	      
+//-------------------------------------------------------------------------------------------------------------------
+void uart_rx_trigger_interrupt (uart_index_enum uart_n, uint8 trigger_num)
+{
+    zf_assert(trigger_num <= 15);
+    
+    Cy_SCB_SetRxFifoLevel(scb_module[uart_n], trigger_num);
 }
 
 //-------------------------------------------------------------------------------------------------------------------

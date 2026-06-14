@@ -106,9 +106,11 @@ void    uart_write_string                   (uart_index_enum uartn, const char *
 
 uint8   uart_read_byte                      (uart_index_enum uartn);
 uint8   uart_query_byte                     (uart_index_enum uartn, uint8 *dat);
+uint8   uart_query_buffer                   (uart_index_enum uart_n, uint8 *dat);
 
 void    uart_tx_interrupt                   (uart_index_enum uartn, uint32 status);
 void    uart_rx_interrupt                   (uart_index_enum uartn, uint32 status);
+void    uart_rx_trigger_interrupt           (uart_index_enum uart_n, uint8 trigger_num);
 
 void    uart_sbus_init                      (uart_index_enum uartn, uint32 baud, uart_tx_pin_enum tx_pin, uart_rx_pin_enum rx_pin);
 void    uart_init                           (uart_index_enum uartn, uint32 baud, uart_tx_pin_enum tx_pin, uart_rx_pin_enum rx_pin);
