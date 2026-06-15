@@ -629,6 +629,12 @@ static void sort_lights(CameraObject *cam) {
     }
     
     // 2. 寻找信标 (排除小车后，选距离小车最近的作为信标)
+    // [修复] 添加迟滞(hysteresis)：记住上一帧选中的信标地面坐标，
+    // 同一信标在擂台比较时获得等效距离优惠，防止双信标场景下帧间选取翻转导致小车震荡。
+    static float last_target_ground_x = 0.0f;
+    static float last_target_ground_y = 0.0f;
+    static uint8_t has_last_target = 0;
+
     float min_sort_dist_sq = 999999.0f;
     target_idx = -1; // 确保重置
 
@@ -673,13 +679,35 @@ static void sort_lights(CameraObject *cam) {
                 sort_dist_sq = phys_dist_sq[i];
             }
 
-            if (sort_dist_sq < min_sort_dist_sq) {
-                min_sort_dist_sq = sort_dist_sq;
+            // [修复] 迟滞：若候选与上一帧选中信标地面位置接近（同一信标），
+            // 给予等效距离优惠，防止因微小距离变化导致选取翻转到另一信标。
+            float hysteresis_bonus = 0.0f;
+            if (has_last_target && car_idx != -1) {
+                float dx_last = ground_x[i] - last_target_ground_x;
+                float dy_last = ground_y[i] - last_target_ground_y;
+                float dist_to_last_sq = dx_last * dx_last + dy_last * dy_last;
+                if (dist_to_last_sq < HYSTERESIS_MATCH_RADIUS_SQ) {
+                    hysteresis_bonus = -HYSTERESIS_DIST_BIAS;
+                }
+            }
+            float effective_dist_sq = sort_dist_sq + hysteresis_bonus;
+
+            if (effective_dist_sq < min_sort_dist_sq) {
+                min_sort_dist_sq = effective_dist_sq;
                 target_idx = i;
             }
             cam->debug.pass_target++;
         }
     }
+
+    // 更新迟滞记忆：记录本帧最终选中的信标地面坐标
+    if (target_idx != -1) {
+        last_target_ground_x = ground_x[target_idx];
+        last_target_ground_y = ground_y[target_idx];
+        has_last_target = 1;
+    }
+    // 注意：target_idx == -1 时不清除 has_last_target，
+    // 短暂丢失后恢复时仍能匹配到之前的信标。
 
     // 3. 将结果输出到专属的安全变量中 (不破坏原始 centers 数组)
     if (car_idx != -1) {

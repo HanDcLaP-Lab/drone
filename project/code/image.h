@@ -78,6 +78,12 @@
 #define DEGENERATE_RATIO_MARK   99.0f   // 退化标记排除值 (ratio==100视为无效)
 #define TARGET_MIN_CONSECUTIVE_FRAMES 5 // 连续检测到信标多少帧后允许保持
 #define TARGET_HOLD_FRAMES      5       // 丢失后保持最后位置的帧数
+
+// ================= 信标选取迟滞 (防双信标震荡) =================
+// 原理：若当前候选与上一帧选中信标的地面位置接近（同一信标），在擂台比较时
+// 获得等效距离优惠，避免因微小距离变化（drone 微动/图像噪声）导致帧间选取翻转。
+#define HYSTERESIS_MATCH_RADIUS_SQ 900.0f   // 30cm² — 同一信标的匹配半径平方
+#define HYSTERESIS_DIST_BIAS       50.0f    // 等效距离优惠(cm) — 旧目标获得 50cm 容差
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---
