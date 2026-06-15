@@ -43,7 +43,7 @@ static double sum_ax = 0, sum_ay = 0, sum_az = 0;
 static uint16_t calib_cnt = 0;
 static uint16_t tof_timeout_cnt = 0; // ToF超时计数器
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
-
+static int z_filter_vaild = 0;
 // ================= 陷波滤波器 (电机振动抑制, IMU 特化) =================
 #if NOTCH_ENABLE
 
@@ -326,7 +326,7 @@ static void Navigation_Update(float ax, float ay, float az) {
             float z_error = tof_height_cm - imu_data.z;
 
             // 修正位置 (Proportional term)
-            imu_data.z += z_error * Z_CORRECT_POS_GAIN;
+            if(z_filter_vaild) imu_data.z += z_error * Z_CORRECT_POS_GAIN;
 
             // 修正速度 (Integral term / Velocity correction)
             // 逻辑：如果位置一直偏低，说明速度估算偏小，需要补偿速度
@@ -341,6 +341,7 @@ static void Navigation_Update(float ax, float ay, float az) {
         }
     }
 
+    if(imu_data.z > TOF_FILTER_INIT_HEIGHT) z_filter_vaild = 1;
     // ================== 水平通道清零 ==================
     // 强制清零，避免数据漂移干扰判断
     imu_data.vx = 0;

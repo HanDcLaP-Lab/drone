@@ -56,13 +56,14 @@
 #define NOTCH_CHANNEL_AZ    0x20
 #define NOTCH_CHANNEL_MASK  (NOTCH_CHANNEL_GX | NOTCH_CHANNEL_GY | NOTCH_CHANNEL_GZ)  // 仅陀螺
 
+#define TOF_FILTER_INIT_HEIGHT  90.0f
 #include "filters.h"   // KalmanFilter1, NotchFilter_t, NotchConfig_t 等通用滤波器定义
 
 extern const NotchConfig_t notch_cfg;       // IMU 专用陷波配置 (fs=1000, q=5, min=5Hz, max=480Hz)
 extern uint8_t notch_active_count;          // 调试: 当前生效的陷波切片数 (NOTCH_ENABLE时有效)
 
 // ================= Z轴融合参数 =================
-#define Z_CORRECT_POS_GAIN  0.3f   // 位置修正系数
+#define Z_CORRECT_POS_GAIN  0.1f   // 位置修正系数
 #define Z_CORRECT_VEL_GAIN  0.3f   // 速度修正系数
 
 #ifndef PI
