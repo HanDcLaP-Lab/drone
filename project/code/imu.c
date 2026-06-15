@@ -326,8 +326,11 @@ static void Navigation_Update(float ax, float ay, float az) {
             float z_error = tof_height_cm - imu_data.z;
 
             // 修正位置 (Proportional term)
-            if(z_filter_vaild) imu_data.z += z_error * Z_CORRECT_POS_GAIN;
-
+            if(z_filter_vaild){
+                imu_data.z += z_error * Z_CORRECT_POS_GAIN;
+            }else{
+                imu_data.z += z_error * Z_CORRECT_POS_GAIN * 3;
+            }
             // 修正速度 (Integral term / Velocity correction)
             // 逻辑：如果位置一直偏低，说明速度估算偏小，需要补偿速度
             imu_data.vz += z_error * Z_CORRECT_VEL_GAIN;
