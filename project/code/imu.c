@@ -46,13 +46,13 @@ static float tof_height_lpf_cm = 0.0f;
 static uint8_t tof_height_lpf_active = 0;
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
 
-static void tof_filter_Reset(void)
+static void Tof_Height_LowPass_Reset(void)
 {
     tof_height_lpf_cm = 0.0f;
     tof_height_lpf_active = 0;
 }
 
-static float tof_filter(float tof_height_cm)
+static float Tof_Height_LowPass(float tof_height_cm)
 {
     if (!tof_height_lpf_active) {
         tof_height_lpf_cm = tof_height_cm;
@@ -313,6 +313,7 @@ static void Navigation_Update(float ax, float ay, float az) {
     imu_data.world_ay = w_ay;
     imu_data.world_az = w_az;
 
+    // ================== Z轴二阶观测器融合 (核心修改) ==================
     float acc_up_cms2 = w_az * 100.0f; // m/s^2 -> cm/s^2
     
     // 1. 惯性导航预测 (先只靠加速度计推算)
@@ -339,14 +340,14 @@ static void Navigation_Update(float ax, float ay, float az) {
             float kc = fabsf(cosf(rad_roll) * cosf(rad_pitch));
             
             float tof_height_cm = (tof_z_mm / 10.0f) * kc;
-            tof_height_cm = tof_filter(tof_height_cm);
+            tof_height_cm = Tof_Height_LowPass(tof_height_cm);
 
             // --- 核心算法：二阶互补/观测器 ---
             // 计算 "测量值" 与 "估计值" 的偏差
             float z_error = tof_height_cm - imu_data.z;
 
             // 修正位置 (Proportional term)
-            //imu_data.z += z_error * Z_CORRECT_POS_GAIN;
+            imu_data.z += z_error * Z_CORRECT_POS_GAIN;
 
             // 修正速度 (Integral term / Velocity correction)
             // 逻辑：如果位置一直偏低，说明速度估算偏小，需要补偿速度
@@ -463,7 +464,7 @@ void IMU_Update_Loop(void) {
             imu_data.is_calibrated = 1;
             imu_data.z = 0.0f;
             imu_data.vz = 0.0f; // 校准完成，速度清零
-            tof_filter_Reset();
+            Tof_Height_LowPass_Reset();
             imu_data.yaw = 0.0f;
             prev_raw_yaw = 0.0f;
         }
