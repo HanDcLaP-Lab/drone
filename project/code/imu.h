@@ -64,8 +64,6 @@ extern uint8_t notch_active_count;          // 调试: 当前生效的陷波切�
 // ================= Z轴融合参数 =================
 #define Z_CORRECT_POS_GAIN  0.3f   // 位置修正系数
 #define Z_CORRECT_VEL_GAIN  0.3f   // 速度修正系数
-#define TOF_HEIGHT_LPF_START_CM 90.0f
-#define TOF_HEIGHT_LPF_ALPHA    0.10f
 
 #ifndef PI
 #define PI 3.1415926535f

@@ -42,27 +42,7 @@ static double sum_ax = 0, sum_ay = 0, sum_az = 0;
 
 static uint16_t calib_cnt = 0;
 static uint16_t tof_timeout_cnt = 0; // ToF超时计数器
-static float tof_height_lpf_cm = 0.0f;
-static uint8_t tof_height_lpf_active = 0;
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
-
-static void Tof_Height_LowPass_Reset(void)
-{
-    tof_height_lpf_cm = 0.0f;
-    tof_height_lpf_active = 0;
-}
-
-static float Tof_Height_LowPass(float tof_height_cm)
-{
-    if (!tof_height_lpf_active) {
-        tof_height_lpf_cm = tof_height_cm;
-        tof_height_lpf_active = (tof_height_cm > TOF_HEIGHT_LPF_START_CM);
-        return tof_height_cm;
-    }
-
-    tof_height_lpf_cm += (tof_height_cm - tof_height_lpf_cm) * TOF_HEIGHT_LPF_ALPHA;
-    return tof_height_lpf_cm;
-}
 
 // ================= 陷波滤波器 (电机振动抑制, IMU 特化) =================
 #if NOTCH_ENABLE
@@ -340,7 +320,6 @@ static void Navigation_Update(float ax, float ay, float az) {
             float kc = fabsf(cosf(rad_roll) * cosf(rad_pitch));
             
             float tof_height_cm = (tof_z_mm / 10.0f) * kc;
-            tof_height_cm = Tof_Height_LowPass(tof_height_cm);
 
             // --- 核心算法：二阶互补/观测器 ---
             // 计算 "测量值" 与 "估计值" 的偏差
@@ -464,7 +443,6 @@ void IMU_Update_Loop(void) {
             imu_data.is_calibrated = 1;
             imu_data.z = 0.0f;
             imu_data.vz = 0.0f; // 校准完成，速度清零
-            Tof_Height_LowPass_Reset();
             imu_data.yaw = 0.0f;
             prev_raw_yaw = 0.0f;
         }
