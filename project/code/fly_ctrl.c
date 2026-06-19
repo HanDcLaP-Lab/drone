@@ -34,7 +34,8 @@ Nonline_PID_t pid_image_y;
 PID_t pid_g_roll;
 PID_t pid_g_pitch;
 PID_t pid_g_yaw;
-
+float z_rate = 0;
+float z_acc = 0;
 // =================== 内部辅助函数 ===================
 static float Constrain_Float(float val, float min, float max) {
     if (val > max) return max;
@@ -163,10 +164,12 @@ static int16_t Flight_Control_Height(void) {
     // 位置环
     float height_error = flight_target.height - imu_data.z;
     float target_climb_rate = PID_Calculate(&pid_height_pos, height_error, CTRL_DT_CTLOOP);
+    z_rate = target_climb_rate;
 
     // 速度环
     float climb_rate_error = target_climb_rate - imu_data.vz;
     float throttle_adj = PID_Calculate(&pid_height_vel, climb_rate_error, CTRL_DT_CTLOOP);
+    z_acc = throttle_adj;
 
     
     // 倾角补偿

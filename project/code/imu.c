@@ -39,7 +39,8 @@ static double offset_gx = 0, offset_gy = 0, offset_gz = 0;
 static float  offset_az = 0.0f; // [新增] 加速度计Z轴零偏 (map_az基准偏差, 单位m/s^2)
 static double sum_gx = 0, sum_gy = 0, sum_gz = 0;
 static double sum_ax = 0, sum_ay = 0, sum_az = 0;
-
+float z_temp = 0;
+float tof_z = 0;
 static uint16_t calib_cnt = 0;
 static uint16_t tof_timeout_cnt = 0; // ToF超时计数器
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
@@ -301,7 +302,7 @@ static void Navigation_Update(float ax, float ay, float az) {
     imu_data.vz += acc_up_cms2 * DT;
     // 位置 += 速度 * dt
     imu_data.z += imu_data.vz * DT + 0.5f * acc_up_cms2 * DT * DT;
-    
+    z_temp = imu_data.z;
     // 2. ToF 观测修正
     if (dl1b_finsh_flag == 1) {
         dl1b_finsh_flag = 0;
@@ -310,6 +311,7 @@ static void Navigation_Update(float ax, float ay, float az) {
         uint16_t tof_z_mm = dl1b_distance_mm;
         // 物理限幅
         if (tof_z_mm > 1500) tof_z_mm = 1500;
+        tof_z = tof_z_mm / 10.0f;
 
         // 有效范围判断
         if (tof_z_mm > 10) {
