@@ -34,8 +34,6 @@ Nonline_PID_t pid_image_y;
 PID_t pid_g_roll;
 PID_t pid_g_pitch;
 PID_t pid_g_yaw;
-float z_rate = 0;
-float z_acc = 0;
 // =================== 内部辅助函数 ===================
 static float Constrain_Float(float val, float min, float max) {
     if (val > max) return max;
@@ -151,38 +149,27 @@ static void Flight_State_Update(void) {
         default:
             break;
     }
+
+    // 高度目标平滑 (每 1ms, 时间常数 ~1s, 独立于 TOF 数据速率)
+    flight_target.height = flight_target.height * 0.999f + flight_target.target_height * 0.001f;
 }
 
 /**
- * @brief 高度环控制 (串级PID: 位置 -> 速度 -> 油门)
- * @return 基础油门值 (base_throttle)
+ * @brief 高度环油门输出 (倾角补偿)
+ * @return 油门值 (base_throttle × 倾角补偿)
+ * @note  高度 PID 已移至 tof_update() 内部, 响应数据就绪 + 实测 dt
+ *        此处仅每 1ms 更新倾角补偿以匹配当前姿态
  */
 static int16_t Flight_Control_Height(void) {
-    // 平滑目标高度
-    flight_target.height = flight_target.height * 0.999f + flight_target.target_height * 0.001f;
-
-    // 位置环
-    float height_error = flight_target.height - imu_data.z;
-    float target_climb_rate = PID_Calculate(&pid_height_pos, height_error, CTRL_DT_CTLOOP);
-    z_rate = target_climb_rate;
-
-    // 速度环
-    float climb_rate_error = target_climb_rate - imu_data.vz;
-    float throttle_adj = PID_Calculate(&pid_height_vel, climb_rate_error, CTRL_DT_CTLOOP);
-    z_acc = throttle_adj;
-
-    
-    // 倾角补偿
     float roll_rad = imu_data.roll * (PI / 180.0f);
     float pitch_rad = imu_data.pitch * (PI / 180.0f);
     float cos_tilt = cosf(roll_rad) * cosf(pitch_rad);
     float compensation_factor = 1.0f;
-    if (cos_tilt > 0.1f) { // 避免除以过小的数
+    if (cos_tilt > 0.1f) {
         compensation_factor = 1.0f / cos_tilt;
     }
-    // 限制补偿系数
-    compensation_factor = Constrain_Float(compensation_factor, 1.0f, 1.5f); 
-    return (int16_t)((HOVER_THROTTLE + throttle_adj) * compensation_factor);
+    compensation_factor = Constrain_Float(compensation_factor, 1.0f, 1.5f);
+    return (int16_t)(tof_base_throttle * compensation_factor);
 }
 
 void Flight_Control_Angle(void) {

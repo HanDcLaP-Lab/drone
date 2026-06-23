@@ -3,28 +3,28 @@
 #include "small_driver_uart_control.h"
 
 // ******************************************************************************
-// 传感器融合架构 (Mahony姿态 + Z轴二阶导航观测器)
+// 传感器融合架构 (Mahony姿态 + 世界加速度观测)
 //
 //   IMU_Update_Loop() (1ms ISR调用)
 //        │
 //   ┌────┴─────────────────────────────────────────────┐
-//   │ 1. 读取原始传感器 (IMU660RA + ToF DL1B)           │
-//   │ 2. 电机振动陷波滤波 (自适应跟踪平均转速基频)        │
-//   │ 3. 卡尔曼滤波 (6轴加速度+陀螺仪)                   │
-//   │ 4. 2500次采样校准 → 初始姿态四元数 + 陀螺零偏       │
-//   │ 5. Mahony_Update()   姿态融合 (自适应加速度权重)    │
+//   │ 1. 读取原始传感器 (IMU660RA)                          │
+//   │ 2. tof_update()  → 获取高度/速度 + 运行高度PID        │
+//   │    (tof.c 内部处理传感器差异, 仅当数据就绪时计算)       │
+//   │ 3. 电机振动陷波滤波 (自适应跟踪平均转速基频)        │
+//   │ 4. 卡尔曼滤波 (6轴加速度+陀螺仪)                   │
+//   │ 5. 2500次采样校准 → 初始姿态四元数 + 陀螺零偏       │
+//   │ 6. Mahony_Update()   姿态融合 (自适应加速度权重)    │
 //   │    ├─ 连续误差补偿: 运动剧烈→降权, 静止→全信        │
 //   │    ├─ 积分修正: 仅静止时累积 (防止Yaw漂移)          │
 //   │    └─ Z轴仅靠陀螺仪积分 (不接受加速度计修正)         │
-//   │ 6. 四元数→欧拉角 (roll/pitch/yaw)                  │
-//   │ 7. Yaw增量累加 (支持连续旋转, 不受±180°跳变影响)     │
-//   │ 8. Navigation_Update()  Z轴二阶互补观测器          │
-//   │    ├─ 惯性推算: 加速度积分→速度→位置                │
-//   │    ├─ ToF修正: 倾角补偿 + 比例/速度修正增益          │
-//   │    └─ 超时阻尼: ToF丢失100ms后速度衰减              │
+//   │ 7. 四元数→欧拉角 (roll/pitch/yaw)                  │
+//   │ 8. Yaw增量累加 (支持连续旋转, 不受±180°跳变影响)     │
+//   │ 9. Navigation_Update() → 仅计算世界加速度 (观测用)   │
 //   └──────────────────────────────────────────────────┘
 //
-// 输出: imu_data (roll, pitch, yaw, groll, gpitch, gyaw, z, vz)
+// 输出: imu_data (roll, pitch, yaw, groll, gpitch, gyaw, z, vz, world_a*)
+// 注意: z/vz 由 tof_update() 写入, Navigation_Update 不再参与 Z 轴融合
 // ******************************************************************************
 
 // ================= 全局变量定义 =================
@@ -39,12 +39,8 @@ static double offset_gx = 0, offset_gy = 0, offset_gz = 0;
 static float  offset_az = 0.0f; // [新增] 加速度计Z轴零偏 (map_az基准偏差, 单位m/s^2)
 static double sum_gx = 0, sum_gy = 0, sum_gz = 0;
 static double sum_ax = 0, sum_ay = 0, sum_az = 0;
-float z_temp = 0;
-float tof_z = 0;
 static uint16_t calib_cnt = 0;
-static uint16_t tof_timeout_cnt = 0; // ToF超时计数器
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
-static int z_filter_vaild = 0;
 // ================= 陷波滤波器 (电机振动抑制, IMU 特化) =================
 #if NOTCH_ENABLE
 
@@ -168,20 +164,6 @@ void imu_init(void){
     }
 }
 
-void tof_init(void){
-    while(1)
-    {
-        if(dl1b_init())
-            printf("tof_init_error");
-        else
-            {
-                printf("tof_init_done");
-                break;
-
-            }
-        system_delay_ms(1000); 
-    }
-}
 static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, float az) {
     float norm;
     float vx, vy, vz;
@@ -294,59 +276,9 @@ static void Navigation_Update(float ax, float ay, float az) {
     imu_data.world_ay = w_ay;
     imu_data.world_az = w_az;
 
-    // ================== Z轴二阶观测器融合 (核心修改) ==================
-    float acc_up_cms2 = w_az * 100.0f; // m/s^2 -> cm/s^2
-    
-    // 1. 惯性导航预测 (先只靠加速度计推算)
-    // 速度 += 加速度 * dt
-    imu_data.vz += acc_up_cms2 * DT;
-    // 位置 += 速度 * dt
-    imu_data.z += imu_data.vz * DT + 0.5f * acc_up_cms2 * DT * DT;
-    z_temp = imu_data.z;
-    // 2. ToF 观测修正
-    if (dl1b_finsh_flag == 1) {
-        dl1b_finsh_flag = 0;
-        tof_timeout_cnt = 0; // 重置超时计数
-        
-        uint16_t tof_z_mm = dl1b_distance_mm;
-        // 物理限幅
-        if (tof_z_mm > 1500) tof_z_mm = 1500;
-        tof_z = tof_z_mm / 10.0f;
+    // Z 轴位置/速度由 tof_update() 独立处理 (TOF-only, 不依赖加速度估计)
+    // Navigation_Update 仅负责世界加速度观测
 
-        // 有效范围判断
-        if (tof_z_mm > 10) {
-            
-            // 倾角补偿 (将斜边距离换算为垂直高度)
-            float rad_roll = imu_data.roll * (PI / 180.0f);
-            float rad_pitch = imu_data.pitch * (PI / 180.0f);
-            float kc = fabsf(cosf(rad_roll) * cosf(rad_pitch));
-            
-            float tof_height_cm = (tof_z_mm / 10.0f) * kc;
-
-            // --- 核心算法：二阶互补/观测器 ---
-            // 计算 "测量值" 与 "估计值" 的偏差
-            float z_error = tof_height_cm - imu_data.z;
-
-            // 修正位置 (Proportional term)
-            if(z_filter_vaild){
-                imu_data.z += z_error * Z_CORRECT_POS_GAIN;
-            }else{
-                imu_data.z += z_error * Z_CORRECT_POS_GAIN * 3;
-            }
-            // 修正速度 (Integral term / Velocity correction)
-            // 逻辑：如果位置一直偏低，说明速度估算偏小，需要补偿速度
-            imu_data.vz += z_error * Z_CORRECT_VEL_GAIN;
-        }
-    } else {
-        // [修正] 仅在 ToF 数据超时(如 >100ms)时才进行阻尼，防止正常间隔内的速度衰减
-        tof_timeout_cnt++;
-        if (tof_timeout_cnt > 100) { // 100ms 无数据视为丢失
-            imu_data.vz *= 0.98f; 
-            if(tof_timeout_cnt > 200) tof_timeout_cnt = 200; // 防止溢出
-        }
-    }
-
-    if(imu_data.z > TOF_FILTER_INIT_HEIGHT) z_filter_vaild = 1;
     // ================== 水平通道清零 ==================
     // 强制清零，避免数据漂移干扰判断
     imu_data.vx = 0;
@@ -361,8 +293,8 @@ void IMU_Update_Loop(void) {
   
     imu660ra_get_acc();
     imu660ra_get_gyro();
-    dl1b_get_distance();
-    
+    // tof_update() 已移至 ISR 层: VL53L8CX→gpio_2_exti, DL1B→pit0_ch0
+
     float raw_gx = imu660ra_gyro_transition(imu660ra_gyro_x);
     float raw_gy = imu660ra_gyro_transition(imu660ra_gyro_y);
     float raw_gz = imu660ra_gyro_transition(imu660ra_gyro_z);

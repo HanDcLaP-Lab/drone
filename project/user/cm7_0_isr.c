@@ -45,7 +45,7 @@ uint16_t has_stopped = 0;
 void pit0_ch0_isr() {
     pit_isr_flag_clear(PIT_CH0);
     dataC.pit0_cnt++;
-    // 自动解锁逻辑已移至 Flight_Control_Loop -> Flight_State_Update 中
+    tof_update();
     IMU_Update_Loop();
 
     Flight_Control_Loop(); 
@@ -303,17 +303,18 @@ void gpio_1_exti_isr()                  // 外部 GPIO_1 中断服务函数
     }
 }
 
-void gpio_2_exti_isr()                  // 外部 GPIO_2 中断服务函数     
+void gpio_2_exti_isr()                  // 外部 GPIO_2 中断服务函数
 {
     if(exti_flag_get(P02_0))
     {
-            
-            
+
+
     }
     if(exti_flag_get(P02_4))
     {
-            
-            
+#if TOF_SENSOR_VL53L8CX
+        vl53l8cx_data_ready = 1;   // VL53L8CX INT 数据就绪, tof_update 在下次 1ms tick 读取
+#endif
     }
 
 }

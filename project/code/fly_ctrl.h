@@ -30,8 +30,6 @@
 #define CAM_OFFSET_Y   -4.0f  // 假设左右居中无偏移
 
 
-extern float z_rate;
-extern float z_acc;
 //--------------------飞行状态----------------------//
 typedef enum {
     normal,       // 正常飞行

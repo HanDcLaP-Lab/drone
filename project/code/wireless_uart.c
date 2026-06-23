@@ -141,9 +141,9 @@ void wireless_uart_output_height(void){
     wireless_uart_send_string(",");
     wireless_uart_send_float(imu_data.vz);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(z_temp);
+    wireless_uart_send_float(imu_data.z);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(tof_z);
+    wireless_uart_send_float(imu_data.z);
     wireless_uart_send_string(",");
     wireless_uart_send_float(z_rate);
     wireless_uart_send_string(",");
