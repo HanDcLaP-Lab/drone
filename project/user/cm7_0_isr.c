@@ -310,19 +310,19 @@ void gpio_2_exti_isr()                  // 外部 GPIO_2 中断服务函数
 
 
     }
-    if(exti_flag_get(P02_4))
-    {
-#if TOF_SENSOR_VL53L8CX
-        vl53l8cx_data_ready = 1;   // VL53L8CX INT 数据就绪, tof_update 在下次 1ms tick 读取
-#endif
-    }
+
 
 }
 
 void gpio_3_exti_isr()                  // 外部 GPIO_3 中断服务函数     
 {
 
-
+    if(exti_flag_get(VL53L8CX_INT_PIN))
+    {
+#if TOF_SENSOR_VL53L8CX
+        vl53l8cx_data_ready = 1;   // VL53L8CX INT 数据就绪, tof_update 在下次 1ms tick 读取
+#endif
+    }
 
 }
 

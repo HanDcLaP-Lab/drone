@@ -3,7 +3,7 @@
 
 // ================== 传感器切换与引脚配置 ==================
 // 1 = VL53L8CX (SPI), 0 = DL1B (软I2C, 逐飞库)
-#define TOF_SENSOR_VL53L8CX  0
+#define TOF_SENSOR_VL53L8CX  1
 
 // SPI 引脚 (SPI_2, P15 端口 — 复用 IMU 位置测试)
 #define VL53L8CX_SPI_IDX      SPI_3
@@ -12,8 +12,8 @@
 #define VL53L8CX_SPI_MISO     SPI3_MISO_P03_0
 #define VL53L8CX_CS_PIN       P03_3
 //#define VL53L8CX_XSHUT_PIN    P07_2     // LPn 硬件拉高
-#define VL53L8CX_INT_PIN      P02_4       // INT/GPIO1, 数据就绪中断
-#define VL53L8CX_SPI_BAUDRATE (10 * 1000 * 1000)  // 10 MHz
+#define VL53L8CX_INT_PIN      P03_4       // INT/GPIO1, 数据就绪中断
+#define VL53L8CX_SPI_BAUDRATE (5 * 1000 * 1000)  // 5 MHz (match drone_test)
 
 // ================== VL53L8CX 传感器声明 ==================
 #if TOF_SENSOR_VL53L8CX
