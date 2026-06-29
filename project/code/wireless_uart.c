@@ -1,5 +1,6 @@
 #include "fly_ctrl.h"
 #include "zf_common_headfile.h"
+#include "duplex_comm.h"   // 板间双向通讯计数器/原因码 (wireless_uart_output_duplex 使用)
 
 uint8 data_buffer[32];
 char buf[16];
@@ -148,5 +149,28 @@ void wireless_uart_output_height(void){
     wireless_uart_send_float(z_rate);
     wireless_uart_send_string(",");
     wireless_uart_send_float(z_acc);
+    wireless_uart_send_string("\n");
+}
+
+// 板间双向通讯收发统计调试输出 (格式同 output_coast: 纯数字 + 逗号, 结尾换行)
+// 输出: <TX请求>,<成功>,<超时>,<解码失败>,<命令字不匹配>,<FIFO溢出>\n
+//   TX请求       = duplex_request_count   (已发起并完成发送的请求帧数)
+//   成功         = duplex_reply_ok_count  (成功收到小车应答帧)
+//   超时         = duplex_timeout_count   (超时未收到应答, 主要丢包来源)
+//   解码失败     = duplex_decode_fail_count (帧头/帧尾/校验损坏)
+//   命令字不匹配 = duplex_cmd_mismatch_count (收到帧但 cmd 非 CMD_SLAVE)
+//   FIFO溢出     = duplex_rx_fifo_drop_count (接收缓冲写满丢字节)
+void wireless_uart_output_duplex(void){
+    wireless_uart_send_int((int32_t)duplex_request_count);
+    wireless_uart_send_string(",");
+    wireless_uart_send_int((int32_t)duplex_reply_ok_count);
+    wireless_uart_send_string(",");
+    wireless_uart_send_int((int32_t)duplex_timeout_count);
+    wireless_uart_send_string(",");
+    wireless_uart_send_int((int32_t)duplex_decode_fail_count);
+    wireless_uart_send_string(",");
+    wireless_uart_send_int((int32_t)duplex_cmd_mismatch_count);
+    wireless_uart_send_string(",");
+    wireless_uart_send_int((int32_t)duplex_rx_fifo_drop_count);
     wireless_uart_send_string("\n");
 }

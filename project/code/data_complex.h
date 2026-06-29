@@ -4,6 +4,14 @@
 #include "zf_common_headfile.h"
 #include "image_process.h"
 
+// ================= 板间通讯模式编译期开关 =================
+// DUPLEX_SWITCH: 板间通讯模式总开关 (编译期生效)
+//   1 = 启用双向 duplex_comm 主从请求-应答通讯 (无人机=主机, 小车=从机)
+//   0 = 回退到原单向发送 (无人机 → 小车, 仅 Board_Comm_Init/Board_Comm_Send_Data)
+// 回退用途: 双向链路异常或联调对比时, 改为 0 重新编译即可退回已验证的原单向逻辑,
+//           本开关用于隔离改造范围, 不影响跨核共享内存与 Float_Buffer_write 等其它逻辑。
+#define DUPLEX_SWITCH 1
+
 // ================= 板间通讯硬件配置 (发送端: UART4 → 小车UART1) =================
 #define BOARD_UART       UART_4          
 #define BOARD_BAUDRATE   115200          

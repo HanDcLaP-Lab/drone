@@ -38,6 +38,8 @@
 
 #include "zf_common_headfile.h"
 #include "debug_data.h"
+#include "duplex_comm.h"               // 双向板间通讯主机接口 (Duplex_Comm_On_Uart_Rx)
+                                       // 注: DUPLEX_SWITCH 宏定义于 data_complex.h, 已由 zf_common_headfile.h 包含
 
 uint16_t target = 0;
 uint16_t has_stopped = 0;
@@ -45,7 +47,8 @@ uint16_t has_stopped = 0;
 void pit0_ch0_isr() {
     pit_isr_flag_clear(PIT_CH0);
     dataC.pit0_cnt++;
-    tof_update();
+    // [临时] 关闭 TOF 数据更新 (联调板间通讯期间暂停 TOF)
+    // tof_update();
     IMU_Update_Loop();
 
     Flight_Control_Loop(); 
@@ -69,6 +72,7 @@ void pit0_ch1_isr()
 
     
     // 悬停控制任务
+    
     //Flight_Hover_Control_Task(); 
     
 }
@@ -76,6 +80,7 @@ void pit0_ch1_isr()
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
+    wireless_uart_output_duplex();
 
     // wireless_uart_send_float(imu_data.yaw);
     // wireless_uart_send_string(",");
@@ -233,9 +238,21 @@ void uart4_isr (void)
 {
     if(uart_isr_mask(UART_4))            // 串口4接收中断
     {
-
-        uart_receiver_handler();                                                                // 串口接收机回调函数
-       
+        // ============================================================================
+        // 板间双向通讯接入点 (DUPLEX_SWITCH 宏隔离)
+        //   DUPLEX_SWITCH = 1 (双向模式): UART4 RX 被 duplex_comm 用于接收小车 CMD_SLAVE
+        //                                 应答帧, 收到的字节写入 duplex 接收 FIFO,
+        //                                 由主循环 Duplex_Comm_Poll() 解析。
+        //   DUPLEX_SWITCH = 0 (单向模式): 维持原行为, 调用接收机回调 uart_receiver_handler()。
+        // 注意(需硬件确认): 双向模式下 UART4 由 duplex_comm 独占用于接收小车应答帧;
+        //   若 UART4 同时被遥控接收机占用, 则两者会冲突, 此点需由用户确认硬件接线。
+        //   原 uart_receiver_handler() 仅在单向模式 (DUPLEX_SWITCH=0) 下生效。
+        // ============================================================================
+#if DUPLEX_SWITCH
+        Duplex_Comm_On_Uart_Rx();        // 双向: 接收小车应答帧入 duplex FIFO
+#else
+        uart_receiver_handler();         // 单向(原行为): 串口接收机回调函数
+#endif
     }
     else                                // 串口4发送中断
     {

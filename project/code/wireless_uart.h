@@ -16,4 +16,5 @@ void wireless_uart_output_yaw(void);
 void wireless_uart_output_motor(void);
 void wireless_uart_output_groud(void);
 void wireless_uart_output_height(void);
+void wireless_uart_output_duplex(void);   // 板间双向通讯收发统计: 成功数,失败数,原因码
 #endif

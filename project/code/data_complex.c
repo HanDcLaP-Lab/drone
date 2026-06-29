@@ -30,6 +30,15 @@ uint8_t car_en = 1;
 #if defined(CY_CORE_CM7_0)
 
 
+// ================= 原单向板间发送实体 (双向模式下关闭) =================
+// 当 DUPLEX_SWITCH=1 (启用双向 duplex_comm 主从请求-应答) 时，下面这段原单向
+// 发送逻辑 (send_buffer / FRAME_* 宏 / Board_Comm_Init / Board_Comm_Send_Data)
+// 整体不参与编译，板间发送改由独立的 duplex_comm 模块负责。
+// 当 DUPLEX_SWITCH=0 时回退编译本段，恢复已验证的原单向发送行为。
+// 注意：本段仅包裹「板间单向发送」职责，跨核共享内存定义、M7_0/1_data_send、
+//       Float_Buffer_write 均不在此范围内 (Float_Buffer_write 仍是双向下传数据来源)。
+#if !DUPLEX_SWITCH
+
 static uint8_t send_buffer[36]; // 发送缓冲区：2字节帧头 + 32字节(8个float) + 1字节校验和 + 1字节帧尾 = 36字节
 // ================= 板间通讯协议配置 =================
 #define FRAME_HEADER1 0xAA
@@ -71,6 +80,8 @@ void Board_Comm_Send_Data(volatile float *data_array)
     // 5. 物理发送整包数据 (36字节)
     uart_write_buffer(BOARD_UART, send_buffer, sizeof(send_buffer));
 }
+
+#endif // !DUPLEX_SWITCH (原单向板间发送实体结束)
 
 //===========================通讯传递数组赋值==============================
 //请将所有通讯赋值在下面三个函数完成

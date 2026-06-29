@@ -125,4 +125,5 @@
 #include "upixel.h"
 #include "small_driver_uart_control.h"
 #include "debug_data.h"
+#include "duplex_comm.h"
 #endif

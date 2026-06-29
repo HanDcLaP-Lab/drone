@@ -35,6 +35,7 @@
 
 #include "zf_common_headfile.h"
 #include "debug_data.h"
+#include "duplex_comm.h"  // 双向板间通讯 (DUPLEX_SWITCH=1 时启用主从请求-应答)
 // 打开新的工程或者工程移动了位置务必执行以下操作
 // 第一步 关闭上面所有打开的文件
 // 第二步 project->clean  等待下方进度条走完
@@ -62,6 +63,9 @@ int main(void) {
 
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(1500);
+    // 注意: DUPLEX_SWITCH=1 时, P19_2 作为 RS485 方向引脚由 Duplex_Comm_Init 接管
+    // (会把 P19_2 置为接收态 LOW)。此处先按原逻辑初始化为输出高, 随后由 Duplex_Comm_Init 接管;
+    // DUPLEX_SWITCH=0 时仍保留本行的原有用途, 故不删除。
     gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL); //uart
 
     app_init();
@@ -72,10 +76,17 @@ int main(void) {
         main_kalman_init();
         // 2. 初始化底层传感器与执行器
         imu_init();
-        tof_init();
+        // [临时] 关闭 TOF 初始化 (联调板间通讯期间暂停 TOF)
+        // tof_init();
         wireless_uart_init_();
         seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
+#if DUPLEX_SWITCH
+        // 双向模式: 初始化 UART4/方向引脚(P19_2)/接收FIFO, 并接管 P19_2 进入接收态(LOW)
+        Duplex_Comm_Init();
+#else
+        // 单向模式: 原单向板间发送初始化
         Board_Comm_Init();
+#endif
         small_driver_uart_init();
         //small_driver_get_speed();
         Flight_Control_Init();
@@ -84,7 +95,7 @@ int main(void) {
 
         // 3. 启动周期中断
         pit_ms_init(PIT_CH1, 20); //图像
-        pit_ms_init(PIT_CH2, 500); //打印
+        pit_ms_init(PIT_CH2, 5000); //打印
         system_delay_ms(1000);     // 等待传感器数据稳定
 
         pit_ms_init(PIT_CH0, 1);   // 开启核心飞控中断 (1ms)
@@ -130,7 +141,13 @@ int main(void) {
             Float_Buffer_write(float_buffer, share_data_from_1);
             //send_cnt++;
             //if(send_cnt == 10){
+#if DUPLEX_SWITCH
+            // 双向模式: 视觉事件触发一次主从请求-应答 (内部对每次触发至多发送一帧请求)
+            Duplex_Comm_Trigger(float_buffer);
+#else
+            // 单向模式: 原单向发送
             Board_Comm_Send_Data(float_buffer);
+#endif
             //   send_cnt = 0;
             //}
         }
@@ -162,6 +179,19 @@ int main(void) {
         // wireless_uart_send_string("\n");
         print_cnt = 0;
         }
+#if DUPLEX_SWITCH
+        // 启动约 3 秒后自动清零一次通讯统计, 避开上电/接线稳定前的瞬态, 便于统计稳态丢包率
+        // (dataC.pit0_cnt 为 1ms 周期中断累加, 3000 ≈ 3s)
+        static uint8_t duplex_stats_reset_done = 0;
+        if (!duplex_stats_reset_done && dataC.pit0_cnt >= 3000u) {
+            Duplex_Comm_Reset_Stats();
+            duplex_stats_reset_done = 1;
+        }
+        // 双向模式: 每轮喂入毫秒时基 (dataC.pit0_cnt 由 pit0_ch0_isr 每 1ms 累加),
+        // 并轮询排空接收 FIFO 处理应答与超时判丢包 (远快于视觉 20ms 周期, 保证及时处理)
+        Duplex_Comm_Set_Now_Ms(dataC.pit0_cnt);
+        Duplex_Comm_Poll();
+#endif
         system_delay_us(400); // 
     }
 }
