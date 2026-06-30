@@ -62,13 +62,24 @@ void wireless_uart_output_status(void){   //打印目标倾角和实际倾角
 }
 
 void wireless_uart_output_imu(void){   //打印imu数据
-    wireless_uart_send_float(imu_data.roll);
+    // wireless_uart_send_float(imu_data.roll);
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_float(imu_data.pitch);
+    // wireless_uart_send_string(",");
+    // wireless_uart_send_float(imu_data.yaw);
+    // wireless_uart_send_string(",");
+    wireless_uart_send_float(motor_out.lf);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(imu_data.pitch);
+    wireless_uart_send_int(tof_base_throttle);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(imu_data.yaw);
+    wireless_uart_send_float(flight_target.target_roll);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(flight_target.target_pitch);
     wireless_uart_send_string(",");
     wireless_uart_send_float(imu_data.z);
+    wireless_uart_send_string(",");
+    extern uint16_t tof_cnt;
+    wireless_uart_send_float(tof_cnt);tof_cnt=0;
     wireless_uart_send_string("\n");
 }
 

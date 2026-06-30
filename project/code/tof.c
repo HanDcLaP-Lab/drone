@@ -13,6 +13,7 @@ int16_t  tof_base_throttle = HOVER_THROTTLE; // 高度 PID 计算的基础油门
 float    z_rate           = 0;               // 调试: 高度位置环输出 (目标爬升率 cm/s)
 float    z_acc            = 0;               // 调试: 高度速度环输出 (油门增量)
 
+uint16_t tof_cnt = 0;
 // ================== TOF 帧间差分状态 (双传感器共用) ==================
 static float    tof_z_prev    = 0.0f;
 static float    tof_vz_filt   = 0.0f;
@@ -36,28 +37,39 @@ static uint16_t VL53L8CX_Trimmed_Mean_MM(void) {
             valid_dist[valid_cnt++] = d;
     }
 
-    if (valid_cnt >= 4) {
-        // 冒泡排序
-        for (int i = 0; i < valid_cnt - 1; i++)
-            for (int j = 0; j < valid_cnt - 1 - i; j++)
-                if (valid_dist[j] > valid_dist[j+1]) {
-                    int16_t tmp = valid_dist[j];
-                    valid_dist[j] = valid_dist[j+1]; valid_dist[j+1] = tmp;
-                }
-        // 修剪两端各 25% 后取均值
-        int trim = valid_cnt / 4, sum = 0;
-        for (int i = trim; i < valid_cnt - trim; i++) sum += valid_dist[i];
-        return (uint16_t)(sum / (valid_cnt - 2 * trim));
-    } else if (valid_cnt > 0) {
-        for (int i = 0; i < valid_cnt - 1; i++)
-            for (int j = 0; j < valid_cnt - 1 - i; j++)
-                if (valid_dist[j] > valid_dist[j+1]) {
-                    int16_t t = valid_dist[j];
-                    valid_dist[j] = valid_dist[j+1]; valid_dist[j+1] = t;
-                }
+    if (valid_cnt == 0) return 0;
+
+    // 冒泡排序
+    for (int i = 0; i < valid_cnt - 1; i++)
+        for (int j = 0; j < valid_cnt - 1 - i; j++)
+            if (valid_dist[j] > valid_dist[j+1]) {
+                int16_t tmp = valid_dist[j];
+                valid_dist[j] = valid_dist[j+1]; valid_dist[j+1] = tmp;
+            }
+
+    // 计算小端/大端舍弃个数
+    int trim_lo = 0, trim_hi = 0;
+    if (TOF_TRIM_LO_PCT > 0) {
+        trim_lo = valid_cnt * TOF_TRIM_LO_PCT / 100;
+        if (trim_lo < 1) trim_lo = 1;
+    }
+    if (TOF_TRIM_HI_PCT > 0) {
+        trim_hi = valid_cnt * TOF_TRIM_HI_PCT / 100;
+        if (trim_hi < 1) trim_hi = 1;
+    }
+
+    int remaining = valid_cnt - trim_lo - trim_hi;
+
+    if (remaining > 2) {
+        // 修剪均值
+        int sum = 0;
+        for (int i = trim_lo; i < valid_cnt - trim_hi; i++)
+            sum += valid_dist[i];
+        return (uint16_t)(sum / remaining);
+    } else {
+        // 有效点太少，回退到中位数
         return (uint16_t)valid_dist[valid_cnt / 2];
     }
-    return 0; // 无有效数据
 }
 #endif
 
@@ -110,8 +122,9 @@ void tof_init(void){
     // xshut_pin 不赋值 — LPn 硬件接高电平
 
     gpio_init(VL53L8CX_CS_PIN,  GPO, GPIO_HIGH, GPO_PUSH_PULL);
-    gpio_init(VL53L8CX_INT_PIN,   GPI, 0,         GPI_FLOATING_IN);
-    exti_init(VL53L8CX_INT_PIN, EXTI_TRIGGER_FALLING); // INT 低有效 → 下降沿
+    // gpio_init(VL53L8CX_INT_PIN,   GPI, 0,         GPI_FLOATING_IN);
+    // exti_init(VL53L8CX_INT_PIN, EXTI_TRIGGER_FALLING); // INT 低有效 → 下降沿
+    // ↑ INT 引脚改用 SPI 轮询 (排线串扰会导致伪中断)
 
     // 2. 检测传感器是否存在
     while (1) {
@@ -159,9 +172,12 @@ void tof_init(void){
 // ================== tof_update ==================
 void tof_update(void) {
 #if TOF_SENSOR_VL53L8CX
-    // ---- VL53L8CX: INT 已由 ISR 置位，无需 SPI 轮询 check_data_ready ----
-    if (!vl53l8cx_data_ready) return;
-    vl53l8cx_data_ready = 0;
+    // ---- VL53L8CX: SPI 轮询 check_data_ready (排线串扰导致 INT 引脚伪中断) ----
+    {
+        uint8_t ready = 0;
+        vl53l8cx_check_data_ready(&vl53l8cx_dev, &ready);
+        if (!ready) return;
+    }
 
     vl53l8cx_get_ranging_data(&vl53l8cx_dev, &vl53l8cx_results);
 
@@ -171,13 +187,15 @@ void tof_update(void) {
     // 实测 dt (基于 1ms tick 计数器)
     uint16_t dt_ticks = dataC.pit0_cnt - tof_last_ready_tick;
     float dt = dt_ticks * 0.001f;
-    if (dt < 0.005f) dt = 0.02f;  // 首帧/异常: 回退到标称 20ms
+    //if (dt < 0.005f) dt = 0.02f;  // 首帧/异常: 回退到标称 20ms
     if (dt > 0.1f)   dt = 0.1f;   // 超时上限: 10Hz 等效
     tof_last_ready_tick = dataC.pit0_cnt;
     tof_actual_dt = dt;
 
     tof_process_z((float)raw_mm, dt);
 
+    
+    tof_cnt++;
 #else
     // ---- DL1B: 数据就绪标志触发 → TOF-only 处理 (不再依赖 IMU 加速度) ----
     dl1b_get_distance();

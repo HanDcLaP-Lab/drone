@@ -39,17 +39,23 @@
 #include "zf_common_headfile.h"
 #include "debug_data.h"
 
+#define DEBUG_PROBE (P02_0)
 uint16_t target = 0;
 uint16_t has_stopped = 0;
 // **************************** PIT中断函数 (1ms一次) ****************************
 void pit0_ch0_isr() {
     pit_isr_flag_clear(PIT_CH0);
+    gpio_high(DEBUG_PROBE);
     dataC.pit0_cnt++;
+
+    //extern uint16_t tof_cnt;
+    //if(dataC.pit0_cnt%2000==0){printf("%d",tof_cnt);tof_cnt=0;}
+
     tof_update();
     IMU_Update_Loop();
 
     Flight_Control_Loop(); 
-    if(fabsf(imu_data.pitch) > 21.0f || fabsf(imu_data.roll) > 21.0f){
+    if(fabsf(imu_data.pitch) > MAX_REAL_ANGLE || fabsf(imu_data.roll) > MAX_REAL_ANGLE){
         if(has_stopped == 0){
             wireless_uart_send_string("emergency stop\r\n");
             car_en = 0;
@@ -61,6 +67,7 @@ void pit0_ch0_isr() {
     motor_pwm_set();
     debug_data_get();
 
+    gpio_low(DEBUG_PROBE);
 }
 
 void pit0_ch1_isr() 
@@ -89,7 +96,7 @@ void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
     // wireless_uart_send_string("\n"wireless_uart_output_，ptor();
     //wireless_uart_output_motor();
     //printf("%d",notch_active_count);
-    //wireless_uart_output_imu();
+    wireless_uart_output_imu();
     //wireless_uart_output_groud();
     //wireless_uart_output_yaw();
     // extern float share_data_from_1[];
@@ -317,12 +324,11 @@ void gpio_2_exti_isr()                  // 外部 GPIO_2 中断服务函数
 void gpio_3_exti_isr()                  // 外部 GPIO_3 中断服务函数     
 {
 
-    if(exti_flag_get(VL53L8CX_INT_PIN))
-    {
-#if TOF_SENSOR_VL53L8CX
-        vl53l8cx_data_ready = 1;   // VL53L8CX INT 数据就绪, tof_update 在下次 1ms tick 读取
-#endif
-    }
+    // if(exti_flag_get(VL53L8CX_INT_PIN))
+    // {
+    //     vl53l8cx_data_ready = 1;   // VL53L8CX INT 数据就绪
+    // }
+    // ↑ 排线串扰导致 INT 引脚伪中断，改用 SPI 轮询 check_data_ready
 
 }
 

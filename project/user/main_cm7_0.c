@@ -51,6 +51,7 @@
 
 #define LED1 (P19_0)
 #define UART_KEY (P19_2)
+#define DEBUG_PROBE (P02_0)  // 示波器探头: 高=ISR执行中
 
 float float_buffer[UART_DATA_LENGTH] = {0};
 
@@ -63,6 +64,7 @@ int main(void) {
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(1500);
     gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL); //uart
+    gpio_init(DEBUG_PROBE, GPO, GPIO_LOW, GPO_PUSH_PULL); // 示波器探头
 
     app_init();
     share_data_from_0[S0_DRONE_STATE] = (float)current_drone_state;
@@ -77,7 +79,7 @@ int main(void) {
         seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
         Board_Comm_Init();
         small_driver_uart_init();
-        //small_driver_get_speed();
+        small_driver_get_speed();
         Flight_Control_Init();
         dataC.camera_offset_x = CAM_OFFSET_X;
         dataC.camera_offset_y = CAM_OFFSET_Y;
@@ -108,7 +110,7 @@ int main(void) {
                 // 将参数应用到 PID (通道号 = 索引 + 1)
                 // seekfree_assistant_parameter[i] 是接收到的浮点数值
                 //Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]); 
-                Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]);
+                Fly_Param_Update_height(i + 1, seekfree_assistant_parameter[i]);
                 
                 // 可选：通过无线串口回传确认，告诉上位机收到并更新了
                 // wireless_uart_send_string("Param Updated\r\n");
