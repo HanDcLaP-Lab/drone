@@ -44,11 +44,13 @@ uint16_t fov_left_bound[MT9V03X_H];
 uint16_t fov_right_bound[MT9V03X_H];
 uint16_t morph_left_bound[MT9V03X_H];
 uint16_t morph_right_bound[MT9V03X_H];
+uint16_t edge_clean_left_bound[MT9V03X_H];   // 边缘泛光清除圆 (独立于FOV)
+uint16_t edge_clean_right_bound[MT9V03X_H];
 
 // =========================================================
 // 预计算FOV边沿内侧像素索引 (用于清除触碰边缘的光斑污染)
 // =========================================================
-#define MAX_BORDER_POINTS 400  // FOV周长上限 (~2*PI*63.75 ≈ 400)
+#define MAX_BORDER_POINTS 400  // 边缘清除圆周长上限 (~2*PI*63.75 ≈ 400)
 static uint16_t border_indices[MAX_BORDER_POINTS];
 static int border_pixel_count = 0;
 
@@ -114,34 +116,48 @@ void camera_init(void) {
             morph_left_bound[r] = left;
             morph_right_bound[r] = right;
         }
+
+        // [新增] 边缘泛光清除圆 (独立于FOV，可单独调整直径)
+        if (dy_sq > EDGE_CLEAN_RADIUS_SQ) {
+            edge_clean_left_bound[r] = MT9V03X_W;
+            edge_clean_right_bound[r] = 0;
+        } else {
+            float dx = sqrtf(EDGE_CLEAN_RADIUS_SQ - dy_sq);
+            int left = (int)(CAM_CX - dx);
+            int right = (int)(CAM_CX + dx);
+            if (left < 0) left = 0;
+            if (right > MT9V03X_W) right = MT9V03X_W;
+            edge_clean_left_bound[r] = left;
+            edge_clean_right_bound[r] = right;
+        }
     }
 
-    // 预计算FOV边沿内侧像素索引 (触碰边缘的光斑将在二值化后被清除)
+    // 预计算边缘泛光清除圆边沿内侧像素索引 (触碰边缘的光斑将在二值化前被清除)
     border_pixel_count = 0;
     // 从第1行到倒数第2行遍历 (避免上下邻居检查时越界)
     for (uint16_t r = 1; r < MT9V03X_H - 1; r++) {
-        uint16_t c_start = fov_left_bound[r];
-        uint16_t c_end   = fov_right_bound[r];
-        if (c_start >= c_end) continue; // 该行完全在FOV外
+        uint16_t c_start = edge_clean_left_bound[r];
+        uint16_t c_end   = edge_clean_right_bound[r];
+        if (c_start >= c_end) continue; // 该行完全在清除圆外
 
         // 确保列边界不超出图像1像素 (防止左右邻居检查时越界)
         if (c_start < 1) c_start = 1;
         if (c_end > MT9V03X_W - 1) c_end = MT9V03X_W - 1;
 
         for (uint16_t c = c_start; c < c_end; c++) {
-            // 检查该FOV内像素是否与FOV外像素相邻 (4邻域)
+            // 检查该边缘圆内像素是否与边缘圆外像素相邻 (4邻域)
             int is_edge = 0;
 
-            // 上邻域在FOV外?
-            if (c < fov_left_bound[r - 1] || c >= fov_right_bound[r - 1])
+            // 上邻域在边缘圆外?
+            if (c < edge_clean_left_bound[r - 1] || c >= edge_clean_right_bound[r - 1])
                 is_edge = 1;
-            // 下邻域在FOV外?
-            else if (c < fov_left_bound[r + 1] || c >= fov_right_bound[r + 1])
+            // 下邻域在边缘圆外?
+            else if (c < edge_clean_left_bound[r + 1] || c >= edge_clean_right_bound[r + 1])
                 is_edge = 1;
-            // 左邻域在FOV外? (即当前列是本行FOV的最左列)
+            // 左邻域在边缘圆外? (即当前列是本行边缘圆的最左列)
             else if (c == c_start)
                 is_edge = 1;
-            // 右邻域在FOV外? (即当前列是本行FOV的最右列)
+            // 右邻域在边缘圆外? (即当前列是本行边缘圆的最右列)
             else if (c + 1 >= c_end)
                 is_edge = 1;
 
@@ -261,19 +277,32 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
 // [新增] 超高速边界光斑清除：查表法 + 一维 Flood-fill
 // 遍历所有FOV边沿内侧像素，发现白色即作为种子点进行泛洪填充，
 // 将整个触碰FOV边缘的连通域染黑，防止其在后续膨胀中向内污染信标区域
+// 清除FOV边缘泛光污染 —— 在二值化前于原始灰度图上运行。
+// EDGE_BLOB_THRESHOLD 远比二值化阈值(130→5)敏感，尽早消除边缘光晕向内扩散的风险。
 static void clear_edge_blobs(CameraObject *cam) {
     uint16_t w = cam->width;
     uint16_t h = cam->height;
+    uint32_t total = (uint32_t)w * h;
 
+    // 一级栈（静态，零额外开销）
     static uint16_t stack[STACK_SIZE];
     int top = -1;
 
-    // 1. O(N) 查表扫描：发现FOV边沿上的白点，染黑并入栈
+    // 二级栈（借用 binarized_image，此时尚未被二值化 memset 使用）
+    // 22560 字节 → 11280 个 uint16_t，总量 4096 + 11280 > FOV 面积，永不溢出
+    uint16_t *spill = (uint16_t *)cam->binarized_image;
+    uint32_t spill_wr = 0;  // 二级栈写入位置
+    uint32_t spill_rd = 0;  // 二级栈读出位置
+
+    // 1. O(N) 查表扫描：发现FOV边沿上灰度值超过阈值的像素，清零并入栈
     for (int i = 0; i < border_pixel_count; i++) {
         uint32_t idx = border_indices[i];
-        if (cam->binarized_image[idx] == 1) {
-            cam->binarized_image[idx] = 0;
-            if (top < STACK_SIZE - 1) stack[++top] = (uint16_t)idx;
+        if (cam->raw_image[idx] > EDGE_BLOB_THRESHOLD) {
+            cam->raw_image[idx] = 0;
+            if (top < STACK_SIZE - 1)
+                stack[++top] = (uint16_t)idx;
+            else
+                spill[spill_wr++] = (uint16_t)idx;
         }
     }
 
@@ -281,18 +310,25 @@ static void clear_edge_blobs(CameraObject *cam) {
     const int32_t d_idx[] = {-w, 1, w, -1,                 // 上、右、下、左
                              -w - 1, -w + 1, w - 1, w + 1}; // 左上、右上、左下、右下
 
-    while (top >= 0) {
-        uint16_t curr_idx = stack[top--];
+    while (1) {
+        uint16_t curr_idx;
+        // 优先消费二级栈 (FIFO)，空则回退到一级栈 (LIFO)
+        if (spill_rd < spill_wr)
+            curr_idx = spill[spill_rd++];
+        else if (top >= 0)
+            curr_idx = stack[top--];
+        else
+            break;
+
         for (int i = 0; i < 8; i++) {
             uint32_t nidx = curr_idx + d_idx[i];
 
-            // 利用无符号溢出特性，一次判定防越界：
-            // FOV外像素在二值化后必定为0，只需确保不越过物理内存(w*h)即可
-            if (nidx < (uint32_t)(w * h) && cam->binarized_image[nidx] == 1) {
-                cam->binarized_image[nidx] = 0;
-                if (top < STACK_SIZE - 1) {
+            if (nidx < total && cam->raw_image[nidx] > EDGE_BLOB_THRESHOLD) {
+                cam->raw_image[nidx] = 0;
+                if (top < STACK_SIZE - 1)
                     stack[++top] = (uint16_t)nidx;
-                }
+                else
+                    spill[spill_wr++] = (uint16_t)nidx;
             }
         }
     }
@@ -498,6 +534,34 @@ static void apply_target_hold_logic(CameraObject *cam) {
     }
 }
 
+// 处理小车丢失后的保持逻辑 (防 locked_lights 单帧从3骤降至0)
+static void apply_car_hold_logic(CameraObject *cam) {
+    static uint8_t car_consecutive_frames = 0;
+    static uint8_t car_hold_frames = 0;
+
+    if (cam->car_valid) {
+        // 本帧有效锁定到了小车
+        if (car_consecutive_frames < 255) {
+            car_consecutive_frames++;
+        }
+        car_hold_frames = 0;
+    } else {
+        // 本帧没有锁定到小车
+        if (car_consecutive_frames >= CAR_MIN_CONSECUTIVE_FRAMES && car_hold_frames < CAR_HOLD_FRAMES) {
+            // 满足保持条件，强行锁定并沿用上一次的值
+            cam->car_valid = 1;
+            car_hold_frames++;
+        } else {
+            // 保持时间结束或未达到保持条件，彻底清除数据
+            car_consecutive_frames = 0;
+            cam->car_dot_num = 0;
+            cam->car_ratio = 0.0f;
+            cam->car_center_x = 0.0f;
+            cam->car_center_y = 0.0f;
+        }
+    }
+}
+
 static void sort_lights(CameraObject *cam) {
     // 默认清除上一帧的锁定状态
     cam->car_valid = 0;
@@ -514,6 +578,7 @@ static void sort_lights(CameraObject *cam) {
         cam->debug.pass_car = 0;
         cam->debug.pass_target = 0;
         apply_target_hold_logic(cam);
+        apply_car_hold_logic(cam);
         return;
     }
 
@@ -643,7 +708,7 @@ static void sort_lights(CameraObject *cam) {
         if (!is_valid_blob[i]) continue;
 
         // 限制：找信标距离在10m以内 (1000cm)
-        if (phys_dist_sq[i] > 1000.0f * 1000.0f) continue;
+        if (phys_dist_sq[i] > 1200.0f * 1200.0f) continue;
 
         // 计算目标质心到画面中心的像素距离平方 (用于边缘畸变补偿)
         float dx_c = cam->centers[i][1] - CAM_CX;
@@ -660,7 +725,7 @@ static void sort_lights(CameraObject *cam) {
 
         // 动态面积门槛平滑过渡：正上方(0m)要求面积>25，4m(400cm)处降为0
         float out_dist = sqrtf(phys_dist_sq[i]);
-        float min_target_area = 25.0f * (1.0f - out_dist / 250.0f);
+        float min_target_area = 25.0f * (1.0f - out_dist / 200.0f);
         if (min_target_area < 0.0f) min_target_area = 0.0f;
 
         // 面积不达标直接排除
@@ -728,15 +793,17 @@ static void sort_lights(CameraObject *cam) {
     
     // 应用信标丢失保持逻辑
     apply_target_hold_logic(cam);
+    // 应用小车丢失保持逻辑 (防 locked_lights 单帧骤降)
+    apply_car_hold_logic(cam);
 }
 
 // --- 4. 外部调用的处理入口 ---
 void image_processing_loop(void) {
+    // [新] 预先清除FOV边缘泛光污染 — 在二值化前的原始灰度图上进行
+    clear_edge_blobs(&cam_down);
+
     // 1. 逐像素动态阈值二值化 (越靠近图像边缘阈值越低)
     binarize_pass(&cam_down);
-
-    // [新增] 清除触碰视场边缘的光斑污染，防止向内膨胀吸纳信标
-    clear_edge_blobs(&cam_down);
 
     // 2. 双重闭运算: dilate → erode → dilate → erode (桥接线缆造成的断裂)
     uint8_t *bin = (uint8_t *)cam_down.binarized_image;

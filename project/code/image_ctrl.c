@@ -77,7 +77,8 @@ static uint32_t search_wait_timer = 0; // 停留计时器 (ms)
 static uint8_t is_turning = 0;         // 是否正在转向中 (0:停留计时, 1:转向中)
 static const float search_yaw_seq[SEARCH_YAW_SEQ_NUM] = SEARCH_YAW_SEQ_ARRAY; // 目标跳变序列
 
-static uint8_t was_aligning = 0;         // 标记飞机之前是否正处于“对准”转动状态
+static uint8_t was_aligning = 0;         // 标记飞机之前是否正处于”对准”转动状态
+static uint8_t lost_frames = 0;          // 连续丢失目标帧数 (防单帧噪点误触发回平)
 // =================== 内部辅助控制函数 ===================
 
 /**
@@ -243,24 +244,30 @@ void Flight_Hover_Control_Task(void) {
         // 2. 调用航向环控制计算目标 Yaw
         Flight_Hover_Yaw_Control(locked_lights, snapshot_yaw);
 
-        last_locked_lights = locked_lights; 
+        last_locked_lights = locked_lights;
+        lost_frames = 0; // 有目标，清零丢失计数器
         Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
 
     } 
     // ================== 完全丢失目标逻辑 ==================
     else {
-        Nonline_PID_Reset(&pid_image_x);
-        Nonline_PID_Reset(&pid_image_y);
-        
-        Set_Target_Attitude(0.0f, 0.0f, flight_target.target_yaw);
-        
-        // 清理所有扫描与防抖状态
-        last_locked_lights = 0; 
-        has_seen_beacon = 0;
-        
-        search_seq_idx = 0;
-        search_wait_timer = 0;
-        is_turning = 0;
-        was_aligning = 0;
+        lost_frames++;
+        if (lost_frames >= LOST_TOLERANCE_FRAMES) {
+            Nonline_PID_Reset(&pid_image_x);
+            Nonline_PID_Reset(&pid_image_y);
+
+            Set_Target_Attitude(0.0f, 0.0f, flight_target.target_yaw);
+
+            // 清理所有扫描与防抖状态
+            last_locked_lights = 0;
+            has_seen_beacon = 0;
+
+            search_seq_idx = 0;
+            search_wait_timer = 0;
+            is_turning = 0;
+            was_aligning = 0;
+
+            lost_frames = LOST_TOLERANCE_FRAMES; // 钳位，防溢出
+        }
     }                                                                                                                                                                                         
 }

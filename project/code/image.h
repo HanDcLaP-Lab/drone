@@ -29,6 +29,10 @@
 #define MORPH_MASK_RADIUS (MORPH_MASK_DIAMETER / 2.0f)
 #define MORPH_MASK_RADIUS_SQ (MORPH_MASK_RADIUS * MORPH_MASK_RADIUS)
 
+#define EDGE_CLEAN_DIAMETER 120.0f  // [新增] 边缘泛光清除圆直径(从FOV独立出来，可单独调整)
+#define EDGE_CLEAN_RADIUS (EDGE_CLEAN_DIAMETER / 2.0f)
+#define EDGE_CLEAN_RADIUS_SQ (EDGE_CLEAN_RADIUS * EDGE_CLEAN_RADIUS)
+
 #define CAR_MAX_DISTANCE  180.0f  //小车最大距离，超过不认为是小车
 #define TARGET_MAX_DISTANCE  1000.0f  //信标最大距离，超过不认为是小车
 // =========================================================
@@ -65,6 +69,9 @@
 // ================= 形态学参数 =================
 #define ERODE_MIN_NEIGHBORS     7       // 腐蚀: 8邻域至少保留此数亮像素
 
+// ================= 边缘泛光清除 =================
+#define EDGE_BLOB_THRESHOLD     8      // 二值化前清除边缘泛光的灰度阈值 (0~255)
+
 // ================= 距离估算 =================
 #define HEIGHT_ESTIMATE_MIN     30.0f   // 距离估算最低高度 (cm)
 #define DIST_COMP_THRESHOLD     150.0f  // 距离补偿起效距离 (cm)
@@ -78,6 +85,10 @@
 #define DEGENERATE_RATIO_MARK   99.0f   // 退化标记排除值 (ratio==100视为无效)
 #define TARGET_MIN_CONSECUTIVE_FRAMES 5 // 连续检测到信标多少帧后允许保持
 #define TARGET_HOLD_FRAMES      5       // 丢失后保持最后位置的帧数
+
+// ================= 小车检测保持 (防 locked_lights 骤降) =================
+#define CAR_MIN_CONSECUTIVE_FRAMES  3   // 连续检测到小车多少帧后允许保持
+#define CAR_HOLD_FRAMES             3   // 丢失后保持最后位置的帧数
 
 // ================= 信标选取迟滞 (防双信标震荡) =================
 // 原理：若当前候选与上一帧选中信标的地面位置接近（同一信标），在擂台比较时

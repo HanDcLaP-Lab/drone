@@ -11,6 +11,9 @@
 
 #define ROTATE_RECOVER_TIME 1000
 
+// =================== 目标丢失容忍宏定义 ===================
+#define LOST_TOLERANCE_FRAMES   3       // 连续丢失多少帧后才触发 PID 复位+回平 (防单帧噪点误触发)
+
 // =================== 偏航搜索与对准宏定义 ===================
 #define TARGET_ALIGN_ENABLE      0       // 开启/关闭信标对准机制 (1:开启, 0:关闭)
 #define TARGET_ALIGN_DISABLE_YAW 0.0f    // 对准关闭时的固定偏航角 (保留的特殊值)
