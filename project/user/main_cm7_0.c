@@ -56,6 +56,10 @@
 float float_buffer[UART_DATA_LENGTH] = {0};
 
 int vis_cnt = 0;
+
+/* [移出ISR] ISR 置位、主循环消费的无线打印标志 (定义在 cm7_0_isr.c) */
+extern volatile uint8_t imu_print_pending;
+
 // int send_cnt = 0;
 int main(void) {
     clock_init(SYSTEM_CLOCK_250M);  // 时钟配置及系统初始化<务必保留>
@@ -95,6 +99,8 @@ int main(void) {
     // 此处编写用户代码 例如外设初始化代码等
 
     while (true) {
+        gpio_high(DEBUG_PROBE);
+
         app_state_machine_update(); // 状态机轮询，检测模式切换
         debug_data_notify_handler();
         debug_data_send_handler();
@@ -120,7 +126,6 @@ int main(void) {
         // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
         static uint32_t vision_timeout_cnt = 0; // [新增] 视觉失联看门狗计数器
-        static uint32_t print_cnt = 0; 
         if (share_data_from_1[S1_PROCESS_DONE] != 0.0f)
         {
             vision_timeout_cnt = 0; // 成功收到数据，喂狗清零
@@ -154,16 +159,15 @@ int main(void) {
         // 2. 刷入 RAM 供 Core 1 读取
         M7_0_data_send(share_data_from_0);
         SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
-        print_cnt++;
-        if(print_cnt == 100){
-        // wireless_uart_send_float(imu_data.yaw);
-        // wireless_uart_send_string(",");
-        // wireless_uart_send_float(share_data_from_1[S1_K_CAR_X]);
-        // wireless_uart_send_string(",");
-        // wireless_uart_send_float(share_data_from_1[S1_K_CAR_Y]);
-        // wireless_uart_send_string("\n");
-        print_cnt = 0;
+
+/* 无线串口打印开始 */
+        if (imu_print_pending) {
+            imu_print_pending = 0;
+            //wireless_uart_output_imu();
         }
+/* 无线串口打印结束 */
+
+        gpio_low(DEBUG_PROBE);
         system_delay_us(400); // 
     }
 }

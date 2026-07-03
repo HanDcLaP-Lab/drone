@@ -6,7 +6,7 @@
 
 // ================= 板间通讯硬件配置 (发送端: UART4 → 小车UART1) =================
 #define BOARD_UART       UART_4          
-#define BOARD_BAUDRATE   115200          
+#define BOARD_BAUDRATE   1000000
 #define BOARD_TX_PIN     UART4_TX_P14_1  
 #define BOARD_RX_PIN     UART4_RX_P14_0  
 #define UART_DATA_LENGTH 8  // 下传数组长度 (8个float)
