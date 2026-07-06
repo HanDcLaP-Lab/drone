@@ -137,13 +137,25 @@ void wireless_uart_output_motor(void){
 }
 
 void wireless_uart_output_groud(void){
-    wireless_uart_send_float(share_data_from_1[S1_RAW_CAR_X]);
-    wireless_uart_send_string(",");
     wireless_uart_send_float(share_data_from_1[S1_K_CAR_X]);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(share_data_from_1[S1_K_CAR_Y]);
     // wireless_uart_send_string(",");
     // wireless_uart_send_float(share_data_from_1[10]); // reserved
     //wireless_uart_send_string(",");
     //wireless_uart_send_float(share_data_from_1[S1_K_CAR_Y]);
+    wireless_uart_send_string("\n");
+}
+
+void wireless_uart_output_imu_sample_rate(void){
+    uint16_t gyro_count = imu_gyro_new_sample_count;
+    uint16_t acc_count = imu_acc_new_sample_count;
+    imu_gyro_new_sample_count = 0;
+    imu_acc_new_sample_count = 0;
+
+    wireless_uart_send_int((int32_t)gyro_count);
+    wireless_uart_send_string(",");
+    wireless_uart_send_int((int32_t)acc_count);
     wireless_uart_send_string("\n");
 }
 

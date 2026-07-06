@@ -96,6 +96,8 @@ typedef struct {
 } IMU_Data_t;
 
 extern IMU_Data_t imu_data;
+extern volatile uint16_t imu_gyro_new_sample_count;
+extern volatile uint16_t imu_acc_new_sample_count;
 
 // ================= 函数声明 =================
 void IMU_Update_Loop(void);

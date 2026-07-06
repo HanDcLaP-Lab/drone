@@ -163,7 +163,7 @@ int main(void) {
 /* 无线串口打印开始 */
         if (imu_print_pending) {
             imu_print_pending = 0;
-            //wireless_uart_output_imu();
+            //wireless_uart_output_imu_sample_rate();
         }
 /* 无线串口打印结束 */
 

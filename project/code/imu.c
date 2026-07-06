@@ -29,6 +29,8 @@
 
 // ================= 全局变量定义 =================
 IMU_Data_t imu_data = {0}; 
+volatile uint16_t imu_gyro_new_sample_count = 0;
+volatile uint16_t imu_acc_new_sample_count = 0;
 
 // 内部算法变量
 static float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f; // 四元数
@@ -294,6 +296,33 @@ void IMU_Update_Loop(void) {
     imu660ra_get_acc();
     imu660ra_get_gyro();
     // tof_update() 已移至 ISR 层: VL53L8CX→gpio_2_exti, DL1B→pit0_ch0
+
+    // [新增] 统计原始寄存器值变化次数, 用于估算 IMU 实际数据更新率
+    static int16 last_raw_acc_x = 0, last_raw_acc_y = 0, last_raw_acc_z = 0;
+    static int16 last_raw_gyro_x = 0, last_raw_gyro_y = 0, last_raw_gyro_z = 0;
+    static uint8_t imu_sample_counter_inited = 0;
+    if (!imu_sample_counter_inited) {
+        last_raw_acc_x = imu660ra_acc_x;
+        last_raw_acc_y = imu660ra_acc_y;
+        last_raw_acc_z = imu660ra_acc_z;
+        last_raw_gyro_x = imu660ra_gyro_x;
+        last_raw_gyro_y = imu660ra_gyro_y;
+        last_raw_gyro_z = imu660ra_gyro_z;
+        imu_sample_counter_inited = 1;
+    } else {
+        if (imu660ra_acc_x != last_raw_acc_x || imu660ra_acc_y != last_raw_acc_y || imu660ra_acc_z != last_raw_acc_z) {
+            imu_acc_new_sample_count++;
+            last_raw_acc_x = imu660ra_acc_x;
+            last_raw_acc_y = imu660ra_acc_y;
+            last_raw_acc_z = imu660ra_acc_z;
+        }
+        if (imu660ra_gyro_x != last_raw_gyro_x || imu660ra_gyro_y != last_raw_gyro_y || imu660ra_gyro_z != last_raw_gyro_z) {
+            imu_gyro_new_sample_count++;
+            last_raw_gyro_x = imu660ra_gyro_x;
+            last_raw_gyro_y = imu660ra_gyro_y;
+            last_raw_gyro_z = imu660ra_gyro_z;
+        }
+    }
 
     float raw_gx = imu660ra_gyro_transition(imu660ra_gyro_x);
     float raw_gy = imu660ra_gyro_transition(imu660ra_gyro_y);
