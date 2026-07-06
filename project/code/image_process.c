@@ -27,8 +27,8 @@
 // 1. 常量参数
 // ==========================================
 // 畸变中心 (Distortion Center)
-const double CX = 95.5754542924;
-const double CY = 56.0345163934;
+const double CX = 95.7727039954;
+const double CY = 60.4063207741;
 
 // 逆拉伸矩阵 (Inverse Stretch Matrix)
 const double INV_S11 = 1.0000000000;
@@ -37,10 +37,10 @@ const double INV_S21 = 0.0000000000;
 const double INV_S22 = 1.0000000000;
 
 // 映射多项式系数 (Mapping Coefficients)
-const double A0 = 53.5431129928;
-const double A2 = -0.0157824974;
-const double A3 = 0.0002786109;
-const double A4 = -0.0000044018;
+const double A0 = 55.2438766932;
+const double A2 = -0.0121333670;
+const double A3 = 0.0001089566;
+const double A4 = -0.0000023005;
 
 // 定义 3D 空间向量
 typedef struct { double x, y, z; } Vector3D;
