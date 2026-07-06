@@ -70,26 +70,18 @@ void Fly_Param_Update(uint8_t ch, float val) {
         // === 第二组：角速度环 (PID) ===
         // 包含 kp, kd (通常速度环 ki 给 0 或很小，这里只调 kp, kd)
         case 4: // 角速度环 KI
-            // pid_g_roll.ki = val;
-            // pid_g_pitch.ki = val;
-            //pid_g_yaw.ki = val * 0.5f;
-            //search_yaw_rate = val;
-            //pid_image_x.kp = val;
-            // pid_image_x.ki = val;
-            // pid_image_y.ki = val;
-            //car_en = val;
             pid_roll.ki = val;
             pid_pitch.ki = val;
             break;
             
         case 5: // 角速度环 KD
-            pid_g_roll.kp = val;
-            pid_g_pitch.kp = val;
+            pid_roll.kp2 = val;
+            pid_pitch.kp2 = val;
             break;
         
         case 6:
-            pid_g_roll.ki = val;
-            pid_g_pitch.ki = val;
+            pid_image_x.kp2 = val;
+            pid_image_y.kp2 = val;
             break;
         case 7:
             pid_g_roll.kd = val;
