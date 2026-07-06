@@ -5,7 +5,7 @@
 // ******************************************************************************
 // 传感器融合架构 (Mahony姿态 + 世界加速度观测)
 //
-//   IMU_Update_Loop() (1ms ISR调用)
+//   IMU_Update_Loop() (1.25ms ISR调用)
 //        │
 //   ┌────┴─────────────────────────────────────────────┐
 //   │ 1. 读取原始传感器 (IMU660RA)                          │
@@ -13,7 +13,7 @@
 //   │    (tof.c 内部处理传感器差异, 仅当数据就绪时计算)       │
 //   │ 3. 电机振动陷波滤波 (自适应跟踪平均转速基频)        │
 //   │ 4. 卡尔曼滤波 (6轴加速度+陀螺仪)                   │
-//   │ 5. 2500次采样校准 → 初始姿态四元数 + 陀螺零偏       │
+//   │ 5. 约2.5s采样校准 → 初始姿态四元数 + 陀螺零偏       │
 //   │ 6. Mahony_Update()   姿态融合 (自适应加速度权重)    │
 //   │    ├─ 连续误差补偿: 运动剧烈→降权, 静止→全信        │
 //   │    ├─ 积分修正: 仅静止时累积 (防止Yaw漂移)          │
@@ -32,10 +32,11 @@ IMU_Data_t imu_data = {0};
 volatile uint16_t imu_gyro_new_sample_count = 0;
 volatile uint16_t imu_acc_new_sample_count = 0;
 
+#define IMU_CALIB_SAMPLES 2000u
+
 // 内部算法变量
 static float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f; // 四元数
 static float exInt = 0.0f, eyInt = 0.0f, ezInt = 0.0f;   // 积分误差
-static float prev_raw_yaw = 0.0f;
 // 陀螺仪校准相关
 static double offset_gx = 0, offset_gy = 0, offset_gz = 0;
 static float  offset_az = 0.0f; // [新增] 加速度计Z轴零偏 (map_az基准偏差, 单位m/s^2)
@@ -67,7 +68,7 @@ static NotchFilter_t notch_ax[NOTCH_SLICE_COUNT];
 static NotchFilter_t notch_ay[NOTCH_SLICE_COUNT];
 static NotchFilter_t notch_az[NOTCH_SLICE_COUNT];
 
-static uint16_t notch_timeout_cnt;   // 距上次转速更新的毫秒数
+static uint16_t notch_timeout_cnt;   // 距上次转速更新的飞控周期数
 static uint8_t  notch_active;        // 0=旁通(超时/未收到数据), 1=工作中
 uint8_t         notch_active_count;  // 当前生效的陷波切片数 0~12 (调试接口)
 
@@ -81,7 +82,7 @@ static void Notch_InitAll(void) {
         if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AY) Notch_Init(&notch_ay[i]);
         if (NOTCH_CHANNEL_MASK & NOTCH_CHANNEL_AZ) Notch_Init(&notch_az[i]);
     }
-    notch_timeout_cnt = NOTCH_TIMEOUT_MS + 1;
+    notch_timeout_cnt = NOTCH_TIMEOUT_TICKS + 1;
     notch_active = 0;
 }
 
@@ -110,7 +111,7 @@ static void Notch_UpdateAllFreqs(void) {
     notch_active_count = active_cnt;
 }
 
-// 每 1ms 调用: 检查转速数据有效期, 更新激活状态
+// 每 1.25ms 调用: 检查转速数据有效期, 更新激活状态
 static void Notch_CheckTimeout(void) {
     if (motor_value.speed_data_updated) {
         motor_value.speed_data_updated = 0;
@@ -123,7 +124,7 @@ static void Notch_CheckTimeout(void) {
         Notch_UpdateAllFreqs();
     } else if (notch_active) {
         notch_timeout_cnt++;
-        if (notch_timeout_cnt > NOTCH_TIMEOUT_MS) {
+        if (notch_timeout_cnt > NOTCH_TIMEOUT_TICKS) {
             notch_active = 0;
             notch_active_count = 0;
         }
@@ -365,17 +366,17 @@ void IMU_Update_Loop(void) {
         sum_ay += raw_ay;
         sum_az += raw_az;
         
-        if (calib_cnt >= 2500) {
+        if (calib_cnt >= IMU_CALIB_SAMPLES) {
             // 计算平均值
-            offset_gx = (float)(sum_gx / 2500.0);
-            offset_gy = (float)(sum_gy / 2500.0);
-            offset_gz = (float)(sum_gz / 2500.0);
+            offset_gx = (float)(sum_gx / (double)IMU_CALIB_SAMPLES);
+            offset_gy = (float)(sum_gy / (double)IMU_CALIB_SAMPLES);
+            offset_gz = (float)(sum_gz / (double)IMU_CALIB_SAMPLES);
 
             // [新增] 核心改进：基于平均加速度计算初始姿态四元数
             // 解决"任意静止姿态启动"的问题
-            float avg_ax = (float)(sum_ax / 2500.0);
-            float avg_ay = (float)(sum_ay / 2500.0);
-            float avg_az = (float)(sum_az / 2500.0);
+            float avg_ax = (float)(sum_ax / (double)IMU_CALIB_SAMPLES);
+            float avg_ay = (float)(sum_ay / (double)IMU_CALIB_SAMPLES);
+            float avg_az = (float)(sum_az / (double)IMU_CALIB_SAMPLES);
 
             // 映射到机体坐标系 (使用宏定义保持一致)
             float init_ax = IMU_MAP_AX(avg_ax, avg_ay, avg_az);
@@ -411,7 +412,6 @@ void IMU_Update_Loop(void) {
             imu_data.z = 0.0f;
             imu_data.vz = 0.0f; // 校准完成，速度清零
             imu_data.yaw = 0.0f;
-            prev_raw_yaw = 0.0f;
         }
         return; 
     }
@@ -454,25 +454,16 @@ void IMU_Update_Loop(void) {
     imu_data.roll  -= IMU_MOUNT_ADJUST_ROLL;
     imu_data.pitch -= IMU_MOUNT_ADJUST_PITCH;
     
-    // 【修改】：使用增量法实现 Yaw 的连续累加
-    // 1. 算出现有四元数对应的标准欧拉角 (-180 到 180)
-    float raw_yaw = atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 180.0f / PI;
-    
-    // 2. 计算这一帧与上一帧的差值
-    float delta_yaw = raw_yaw - prev_raw_yaw;
-    
-    // 3. 处理 180 度和 -180 度处的跳变边界 (保证拿到的永远是转过的真实物理小角度)
-    if (delta_yaw > 180.0f) {
-        delta_yaw -= 360.0f;
-    } else if (delta_yaw < -180.0f) {
-        delta_yaw += 360.0f;
+    // Yaw 不再从四元数欧拉角差分得到，避免 roll/pitch 加速度修正耦合进 yaw。
+    // 这里使用机体系角速度换算出的欧拉 yaw rate 做连续积分。
+    float yaw_roll_rad = imu_data.roll * (PI / 180.0f);
+    float yaw_pitch_rad = imu_data.pitch * (PI / 180.0f);
+    float cos_pitch = cosf(yaw_pitch_rad);
+    if (fabsf(cos_pitch) < 0.1f) {
+        cos_pitch = (cos_pitch >= 0.0f) ? 0.1f : -0.1f;
     }
-    
-    // 4. 将真实的转动差值累加到全局的连续 Yaw 变量中
-    imu_data.yaw += delta_yaw;
-    
-    // 5. 更新历史值供下一帧使用
-    prev_raw_yaw = raw_yaw;
+    float yaw_rate = (map_gy * sinf(yaw_roll_rad) + map_gz * cosf(yaw_roll_rad)) / cos_pitch;
+    imu_data.yaw += yaw_rate * DT;
 
     Navigation_Update(map_ax, map_ay, map_az);
 }

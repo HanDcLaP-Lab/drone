@@ -46,7 +46,7 @@ uint16_t has_stopped = 0;
 /* [移出ISR] ISR 仅置标志位，主循环消费并实际发送无线串口数据 */
 volatile uint8_t imu_print_pending = 0;   /* pit0_ch2: IMU 调试打印 (500ms) */
 
-// **************************** PIT中断函数 (1ms一次) ****************************
+// **************************** PIT中断函数 ****************************
 void pit0_ch0_isr() {
     pit_isr_flag_clear(PIT_CH0);
     //gpio_high(DEBUG_PROBE);
@@ -56,11 +56,19 @@ void pit0_ch0_isr() {
     //if(dataC.pit0_cnt%2000==0){printf("%d",tof_cnt);tof_cnt=0;}
 
     tof_update();
-    IMU_Update_Loop();
 
+    //gpio_low(DEBUG_PROBE);
+}
+
+void pit0_ch1_isr()
+{
+    pit_isr_flag_clear(PIT_CH1);
+
+    IMU_Update_Loop();
     Flight_Control_Loop();
-    if(fabsf(imu_data.pitch) > MAX_REAL_ANGLE || fabsf(imu_data.roll) > MAX_REAL_ANGLE){
-        if(has_stopped == 0){
+
+    if (fabsf(imu_data.pitch) > MAX_REAL_ANGLE || fabsf(imu_data.roll) > MAX_REAL_ANGLE) {
+        if (has_stopped == 0) {
             wireless_uart_send_string("emergency stop\r\n");
             car_en = 0;
         }
@@ -70,18 +78,6 @@ void pit0_ch0_isr() {
 
     motor_pwm_set();
     debug_data_get();
-
-    //gpio_low(DEBUG_PROBE);
-}
-
-void pit0_ch1_isr() 
-{
-    pit_isr_flag_clear(PIT_CH1);
-
-    
-    // 悬停控制任务
-    //Flight_Hover_Control_Task(); 
-    
 }
 
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数

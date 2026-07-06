@@ -9,7 +9,7 @@
 // ================= 配置参数 =================
 #define KP 0.93f          // 互补滤波比例增益
 #define KI 0.0015f        // 互补滤波积分增益
-#define DT 0.001f        // 运行周期 1ms (1000Hz)
+#define DT 0.00125f      // 运行周期 1.25ms (800Hz)
 #define GRAVITY_MSS 9.789f // 标准重力加速度
 #define VALID_G_MIN 0.2f
 
@@ -39,13 +39,13 @@
 
 // ================= 陷波滤波参数 (电机振动抑制) =================
 #define NOTCH_ENABLE            0       // 1: 使能陷波滤波, 0: 关闭
-#define NOTCH_FS                1000.0f // 采样频率 (Hz) = 1/DT
+#define NOTCH_FS                800.0f  // 采样频率 (Hz) = 1/DT
 #define NOTCH_Q                 5.0f    // 品质因数 (越高越窄, 建议3~10)
 #define NOTCH_MIN_FREQ          5.0f    // 最低陷波频率 (Hz), 低于此值自动旁通
 #define NOTCH_MAX_FREQ          (NOTCH_FS * 0.48f) // 最高陷波频率 (Hz), 超过防Nyquist折叠
 #define NOTCH_MOTOR_COUNT       4       // 电机数量
 #define NOTCH_HARMONIC_COUNT    3       // 每电机谐波数 (1×/2×/6×), 级联 4×3=12 个biquad/通道
-#define NOTCH_TIMEOUT_MS        20      // 转速数据超时 (ms), 超时后旁通所有陷波
+#define NOTCH_TIMEOUT_TICKS     16      // 转速数据超时 (~20ms), 超时后旁通所有陷波
 
 // 通道掩码: bit0=gx, bit1=gy, bit2=gz, bit3=ax, bit4=ay, bit5=az
 #define NOTCH_CHANNEL_GX    0x01

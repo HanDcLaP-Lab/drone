@@ -10,7 +10,7 @@
 // ===== 可配置参数 =====
 #define DEBUG_DATA_FLOAT_COUNT   3     // 每帧 float 参数个数
 #define DEBUG_DATA_INT16_COUNT   4     // 每帧 int16 参数个数
-#define DEBUG_DATA_DURATION_MS   1024  // 采集时长 (ms)
+#define DEBUG_DATA_DURATION_MS   1280  // 采集时长 (ms): 1024帧 @ 800Hz
 #define DEBUG_DATA_MAX_SAMPLES   1024  // 采集帧数
 #define DEBUG_DATA_SEND_BATCH    2     // 主循环每次发送帧数 (非 ISR, 安全)
 
@@ -47,7 +47,7 @@ extern volatile uint8_t  debug_send_active;     // 1=发送中
 extern volatile uint8_t debug_notify_pending;
 
 // ===== API =====
-void debug_data_get(void);              // 1ms ISR 调用: 采集一帧
+void debug_data_get(void);              // 飞控 ISR 调用: 采集一帧
 void debug_data_send_handler(void);     // 主循环调用: 非阻塞批量发送
 void debug_data_start(void);            // 开始采集
 void debug_data_request_send(void);     // 请求发送已采集数据

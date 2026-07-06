@@ -19,7 +19,7 @@ volatile uint8_t  debug_notify_pending  = DEBUG_NOTIFY_NONE;
 
 static uint16_t send_cursor = 0;
 
-// ===== 1ms ISR 调用: 采集一帧 =====
+// ===== 飞控 ISR 调用: 采集一帧 =====
 void debug_data_get(void)
 {
     if (!debug_recording) return;

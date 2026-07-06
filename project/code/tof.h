@@ -35,6 +35,6 @@ extern float    z_rate;              // 调试: 高度位置环输出 (目标爬
 extern float    z_acc;               // 调试: 高度速度环输出 (油门增量)
 
 void tof_init(void);
-void tof_update(void);               // 每 1ms 调用，读取传感器 + 融合到 imu_data
+void tof_update(void);               // 每 1ms 调用，读取传感器并更新高度/高度PID
 
 #endif

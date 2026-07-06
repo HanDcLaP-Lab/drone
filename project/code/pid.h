@@ -75,7 +75,7 @@ void Nonline_PID_Reset(Nonline_PID_t *pid);
  * 计算 PID 输出
  * @param pid: 指向 PID 结构体的指针
  * @param error: 当前误差 (目标值 - 测量值)
- * @param dt: 控制周期 (单位: 秒)，例如 1ms 传 0.001f
+ * @param dt: 控制周期 (单位: 秒)，例如 1.25ms 传 0.00125f
  * @return: PID 计算出的控制量
  */
 float PID_Calculate(PID_t *pid, float error, float dt);

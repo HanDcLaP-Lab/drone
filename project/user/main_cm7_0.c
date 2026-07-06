@@ -89,11 +89,11 @@ int main(void) {
         dataC.camera_offset_y = CAM_OFFSET_Y;
 
         // 3. 启动周期中断
-        pit_ms_init(PIT_CH1, 20); //图像
-        pit_ms_init(PIT_CH2, 500); //打印
+        pit_ms_init(PIT_CH2, 500);  // 打印
         system_delay_ms(1000);     // 等待传感器数据稳定
 
-        pit_ms_init(PIT_CH0, 1);   // 开启核心飞控中断 (1ms)
+        pit_ms_init(PIT_CH0, 1);       // TOF + 1ms 计时
+        pit_us_init(PIT_CH1, 1250);    // IMU + 飞控 (1.25ms, 800Hz)
     }
 
     // 此处编写用户代码 例如外设初始化代码等
@@ -143,7 +143,7 @@ int main(void) {
         }
         else 
         {
-            // 如果 1ms 内没收到数据，计数器累加
+            // 主循环轮询未收到视觉数据时，计数器累加
             vision_timeout_cnt++;
             
             if (vision_timeout_cnt > 400) { // 没收到视觉数据

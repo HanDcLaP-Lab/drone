@@ -2,7 +2,7 @@
 
 // **************************** 三串级PID飞控架构 ****************************
 //
-//   Flight_Control_Loop() (1ms ISR调用)
+//   Flight_Control_Loop() (1.25ms ISR调用)
 //        │
 //   ┌────┴────────────────────────────────────────────┐
 //   │ 1. Flight_State_Update()    状态机/自动解锁/降落 │
@@ -133,7 +133,10 @@ static void Flight_State_Update(void) {
             flight_target.target_height = TARGET_HEIGHT_CM;
             if (flight_target.is_armed == 1) {
                 if (flight_target.start_up_scale < 1.0f) {
-                    flight_target.start_up_scale += 0.0005f;  // 约2秒加满 (1ms周期)
+                    flight_target.start_up_scale += CTRL_DT_CTLOOP * 0.5f;  // 约2秒加满
+                    if (flight_target.start_up_scale > 1.0f) {
+                        flight_target.start_up_scale = 1.0f;
+                    }
                 }
             }
             break;
@@ -143,22 +146,26 @@ static void Flight_State_Update(void) {
         case landing:
             // 降落阶段逐渐减小油门比例
             if (flight_target.start_up_scale > 0) {
-                flight_target.start_up_scale -= 0.002f;
+                flight_target.start_up_scale -= CTRL_DT_CTLOOP * 2.0f;
+                if (flight_target.start_up_scale < 0.0f) {
+                    flight_target.start_up_scale = 0.0f;
+                }
             }
             break;
         default:
             break;
     }
 
-    // 高度目标平滑 (每 1ms, 时间常数 ~1s, 独立于 TOF 数据速率)
-    flight_target.height = flight_target.height * 0.999f + flight_target.target_height * 0.001f;
+    // 高度目标平滑 (时间常数约 1s, 独立于 TOF 数据速率)
+    const float height_alpha = CTRL_DT_CTLOOP;
+    flight_target.height = flight_target.height * (1.0f - height_alpha) + flight_target.target_height * height_alpha;
 }
 
 /**
  * @brief 高度环油门输出 (倾角补偿)
  * @return 油门值 (base_throttle × 倾角补偿)
  * @note  高度 PID 已移至 tof_update() 内部, 响应数据就绪 + 实测 dt
- *        此处仅每 1ms 更新倾角补偿以匹配当前姿态
+ *        此处仅每 1.25ms 更新倾角补偿以匹配当前姿态
  */
 static int16_t Flight_Control_Height(void) {
     float roll_rad = imu_data.roll * (PI / 180.0f);
