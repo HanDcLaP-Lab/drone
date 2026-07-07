@@ -511,16 +511,21 @@ static void apply_target_hold_logic(CameraObject *cam) {
     static uint8_t target_consecutive_frames = 0;
     static uint8_t target_hold_frames = 0;
 
+    // sort_lights 通过此 flag 告知 hold：旧目标已消失但 switch confirm 尚未完成，
+    // 应将 hold 上限延长至 switch confirm 所需的帧数，并跳过 MIN_CONSECUTIVE 前置检查
+    // （因为 locked 身份已在 sort_lights 确认过，不需要 hold 再验证稳定性）。
+    uint8_t hold_skip_min = cam->target_hold_extend;
+    uint8_t hold_limit     = hold_skip_min ? TARGET_SWITCH_CONFIRM_FRAMES : TARGET_HOLD_FRAMES;
+    cam->target_hold_extend = 0; // 消费 flag
+
     if (cam->target_valid) {
-        // 本帧有效锁定到了信标
         if (target_consecutive_frames < 255) {
             target_consecutive_frames++;
         }
         target_hold_frames = 0;
     } else {
-        // 本帧没有锁定到信标
-        if (target_consecutive_frames >= TARGET_MIN_CONSECUTIVE_FRAMES && target_hold_frames < TARGET_HOLD_FRAMES) {
-            // 满足保持条件，强行锁定并沿用上一次的值
+        if ((hold_skip_min || target_consecutive_frames >= TARGET_MIN_CONSECUTIVE_FRAMES)
+            && target_hold_frames < hold_limit) {
             cam->target_valid = 1;
             target_hold_frames++;
         } else {
@@ -530,6 +535,10 @@ static void apply_target_hold_logic(CameraObject *cam) {
             cam->target_ratio = 0.0f;
             cam->target_center_x = 0.0f;
             cam->target_center_y = 0.0f;
+            // 通知 sort_lights 清除 locked 身份记忆（除非正在 switch confirm 中）
+            if (!hold_skip_min) {
+                cam->target_locked_reset = 1;
+            }
         }
     }
 }
@@ -579,7 +588,7 @@ static void sort_lights(CameraObject *cam) {
     cam->target_valid = 0;
     // 不在此处清除信标坐标等信息，以支持保持最后一次信标位置
 
-    // 信标身份记忆：同一目标获得80cm线性迟滞，新目标需连续胜出3帧才切换。
+    // 信标身份记忆：同一目标获得200cm线性迟滞，新目标需连续胜出10帧才切换。
     static float last_target_ground_x = 0.0f;
     static float last_target_ground_y = 0.0f;
     static uint8_t has_last_target = 0;
@@ -590,8 +599,18 @@ static void sort_lights(CameraObject *cam) {
     static float switch_candidate_ground_y = 0.0f;
     static uint8_t switch_candidate_frames = 0;
 
-    if (cam->light_number == 0) {
+    // hold 完全过期时清除身份记忆，下一个检测到的灯可直接锁定。
+    // 置于 early return 之前，确保空帧期间 hold 过期产生的 reset 能立即消费。
+    if (cam->target_locked_reset) {
+        has_locked_target = 0;
+        has_last_target = 0;
         switch_candidate_frames = 0;
+        cam->target_locked_reset = 0;
+    }
+
+    if (cam->light_number == 0) {
+        // 衰减而非归零：容忍空帧闪烁，防止switch confirm被单帧全灭打断后永不完结
+        if (switch_candidate_frames > 0) switch_candidate_frames--;
         cam->debug.pass_area = 0;
         cam->debug.pass_car = 0;
         cam->debug.pass_target = 0;
@@ -741,7 +760,7 @@ static void sort_lights(CameraObject *cam) {
 
         // 动态面积门槛平滑过渡：正上方(0m)要求面积>25，4m(400cm)处降为0
         float out_dist = sqrtf(phys_dist_sq[i]);
-        float min_target_area = 25.0f * (1.0f - out_dist / 200.0f);
+        float min_target_area = 15.0f * (1.0f - out_dist / 200.0f);
         if (min_target_area < 0.0f) min_target_area = 0.0f;
 
         // 面积不达标直接排除
@@ -819,12 +838,22 @@ static void sort_lights(CameraObject *cam) {
             }
 
             if (locked_idx == -1) {
-                // 原锁定信标已经不在候选集中时，立即接纳当前赢家，避免主动输出无信标。
-                target_idx = raw_target_idx;
-                locked_target_ground_x = ground_x[raw_target_idx];
-                locked_target_ground_y = ground_y[raw_target_idx];
-                has_locked_target = 1;
-                switch_candidate_frames = 0;
+                // 原锁定信标不在候选集中：保持身份记忆，输出-1让hold逻辑桥接短暂丢失。
+                // 若旧目标在hold窗口内重入则即时恢复；若switch_candidate持续胜出
+                // 超过确认帧数则执行切换。
+                if (switch_candidate_frames >= TARGET_SWITCH_CONFIRM_FRAMES) {
+                    // 新候选已确认足够长时间，旧目标确认消失，执行切换
+                    target_idx = raw_target_idx;
+                    locked_target_ground_x = ground_x[raw_target_idx];
+                    locked_target_ground_y = ground_y[raw_target_idx];
+                    has_locked_target = 1;
+                    switch_candidate_frames = 0;
+                } else {
+                    // 旧目标消失但未确认切换：通知hold逻辑延长保留期限，
+                    // 在switch confirm窗口内持续输出旧目标坐标。
+                    cam->target_hold_extend = 1;
+                    target_idx = -1;
+                }
             } else if (switch_candidate_frames >= TARGET_SWITCH_CONFIRM_FRAMES) {
                 target_idx = raw_target_idx;
                 locked_target_ground_x = ground_x[raw_target_idx];
@@ -840,7 +869,8 @@ static void sort_lights(CameraObject *cam) {
             }
         }
     } else {
-        switch_candidate_frames = 0;
+        // 本帧无候选：衰减而非归零，容忍单帧闪烁
+        if (switch_candidate_frames > 0) switch_candidate_frames--;
     }
 
     // 更新迟滞记忆：记录本帧最终输出的信标地面坐标

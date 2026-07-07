@@ -17,6 +17,7 @@ uint16_t tof_cnt = 0;
 // ================== TOF 帧间差分状态 (双传感器共用) ==================
 static float    tof_z_prev    = 0.0f;
 static float    tof_vz_filt   = 0.0f;
+static float    tof_z_filt    = 0.0f;       // Z位置低通滤波状态
 static uint8_t  tof_has_prev  = 0;
 static uint32_t tof_last_ready_tick = 0;  // 复用 dataC.pit0_cnt 做 dt 测量
 
@@ -88,20 +89,26 @@ static void tof_process_z(float raw_mm, float dt) {
     float kc = fabsf(cosf(rad_roll) * cosf(rad_pitch));
     float height_cm = (raw_mm / 10.0f) * kc;
 
-    // 4. 写入 Z
-    imu_data.z = height_cm;
+    // 4. Z 位置低通滤波 (EMA, alpha=0.2, τ≈100ms @50Hz)
+    //    滤除 TOF 帧间量化噪声，输出稳定高度供 PID 和外部模块使用
+    if (tof_has_prev) {
+        tof_z_filt += (height_cm - tof_z_filt) * 0.2f;
+    } else {
+        tof_z_filt = height_cm;  // 首帧直接初始化，不做渐变
+    }
+    imu_data.z = tof_z_filt;
 
-    // 5. VZ 帧间差分 + 低通滤波 (滤除传感器 1mm 量化噪声, Δh_min=0.1cm → vz步进=5cm/s)
-    if (tof_has_prev && height_cm > 10.0f) {
-        float vz_raw = (height_cm - tof_z_prev) / dt;
+    if (tof_has_prev && imu_data.z > 10.0f) {
+        float vz_raw = (tof_z_filt - tof_z_prev) / dt;
         tof_vz_filt += (vz_raw - tof_vz_filt) * 0.2f;
         imu_data.vz = tof_vz_filt;
     }
-    tof_z_prev = height_cm;
+    tof_z_prev = tof_z_filt;  // 记录本帧滤波值供下帧 VZ 差分
     tof_has_prev = 1;
 
     // 6. 高度 PID (位置环 → 速度环 → 基础油门, 不含倾角补偿)
-    float height_error = flight_target.height - height_cm;
+    //    全部使用滤波后的数据，高度环不需要响应速度、需要稳定
+    float height_error = flight_target.height - imu_data.z;
     float target_climb_rate = PID_Calculate(&pid_height_pos, height_error, dt);
     z_rate = target_climb_rate;
     float climb_rate_error = target_climb_rate - imu_data.vz;

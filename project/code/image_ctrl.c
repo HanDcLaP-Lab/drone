@@ -215,7 +215,7 @@ void Flight_Hover_Control_Task(void) {
     uint8_t locked_lights = (uint8_t)share_data_from_1[S1_LOCKED_COUNT];
     float snapshot_yaw = share_data_from_1[S1_SNAPSHOT_YAW];
     
-    if (locked_lights == 1 || locked_lights == 3) {
+    if (locked_lights == 1 || locked_lights == 3 || locked_lights == 4) {
         car_pos_x = car_pos_x - dataC.camera_offset_x;
         car_pos_y = car_pos_y - dataC.camera_offset_y;
     } 
@@ -234,7 +234,7 @@ void Flight_Hover_Control_Task(void) {
     // car_en 只由飞控锁定/解锁/降落/急停维护，视觉对准不再让小车完全停止。
 
     // ================== 有目标视野逻辑 ==================
-    if (locked_lights == 1 || locked_lights == 3) {
+    if (locked_lights == 1 || locked_lights == 3 || locked_lights == 4) {
         float target_roll_val = 0.0f;
         float target_pitch_val = 0.0f;
 

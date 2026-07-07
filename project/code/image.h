@@ -70,7 +70,7 @@
 #define ERODE_MIN_NEIGHBORS     7       // 腐蚀: 8邻域至少保留此数亮像素
 
 // ================= 边缘泛光清除 =================
-#define EDGE_BLOB_THRESHOLD     8      // 二值化前清除边缘泛光的灰度阈值 (0~255)
+#define EDGE_BLOB_THRESHOLD     15      // 二值化前清除边缘泛光的灰度阈值 (0~255)
 
 // ================= 距离估算 =================
 #define HEIGHT_ESTIMATE_MIN     30.0f   // 距离估算最低高度 (cm)
@@ -83,20 +83,20 @@
 // ================= 信标识别 =================
 #define SMALL_BLOB_DIRECT_AREA  20      // 小光斑面积上限 (≤此值直接通过形状筛选)
 #define DEGENERATE_RATIO_MARK   99.0f   // 退化标记排除值 (ratio==100视为无效)
-#define TARGET_MIN_CONSECUTIVE_FRAMES 5 // 连续检测到信标多少帧后允许保持
+#define TARGET_MIN_CONSECUTIVE_FRAMES 3 // 连续检测到信标多少帧后允许保持
 #define TARGET_HOLD_FRAMES      5       // 丢失后保持最后位置的帧数
 
 // ================= 小车检测保持 (防 locked_lights 骤降) =================
-#define CAR_MIN_CONSECUTIVE_FRAMES  3   // 连续检测到小车多少帧后允许保持
-#define CAR_HOLD_FRAMES             3   // 丢失后保持最后位置的帧数
+#define CAR_MIN_CONSECUTIVE_FRAMES  2   // 连续检测到小车多少帧后允许保持
+#define CAR_HOLD_FRAMES             5   // 丢失后保持最后位置的帧数
 
 // ================= 信标选取迟滞 (防双信标震荡) =================
 // 原理：若当前候选与上一帧选中信标的地面位置接近（同一信标），在擂台比较时
 // 获得线性距离优惠，避免固定平方优惠在远距离时等效增益过小。
-#define HYSTERESIS_MATCH_RADIUS_CM 40.0f
+#define HYSTERESIS_MATCH_RADIUS_CM 100.0f
 #define HYSTERESIS_MATCH_RADIUS_SQ (HYSTERESIS_MATCH_RADIUS_CM * HYSTERESIS_MATCH_RADIUS_CM)
-#define HYSTERESIS_DIST_BIAS_CM    80.0f    // 旧目标获得 80cm 线性距离优惠
-#define TARGET_SWITCH_CONFIRM_FRAMES 3      // 新信标连续胜出3帧后才允许切换
+#define HYSTERESIS_DIST_BIAS_CM    200.0f    // 旧目标获得 80cm 线性距离优惠
+#define TARGET_SWITCH_CONFIRM_FRAMES 10      // 新信标连续胜出10帧后才允许切换
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---
@@ -126,6 +126,8 @@ typedef struct {
     float target_center_x;       // 信标 Col (X)
     uint32_t target_dot_num;        // 信标面积
     float target_ratio;
+    uint8_t target_hold_extend;  // sort→hold: 等待switch confirm期间延长hold上限
+    uint8_t target_locked_reset; // hold→sort: hold完全过期时通知sort清除身份记忆
 
     // --- 调试字段 (ImageDebug_t, 不参与控制逻辑) ---
     struct {
