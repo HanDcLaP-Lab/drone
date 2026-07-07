@@ -246,7 +246,7 @@ uint8 imu660ra_init (void)
             break;
         }
         imu660ra_write_register(IMU660RA_PWR_CTRL, 0x0E);                       // 开启性能模式  使能陀螺仪、加速度、温度传感器
-        imu660ra_write_register(IMU660RA_ACC_CONF, 0xAB);                       // ACC ODR 200Hz
+        imu660ra_write_register(IMU660RA_ACC_CONF, 0xAB);                       // ACC ODR 800Hz
         imu660ra_write_register(IMU660RA_GYR_CONF, 0xAB);                       // Gyro ODR 800Hz
 
         // IMU660RA_ACC_SAMPLE寄存器          以下为25℃的转换比例 IMU660RA的加速度温漂系数为 0.004%/K  常值零偏的温度敏感系数为 ±0.25mg/K

@@ -562,6 +562,12 @@ static void apply_car_hold_logic(CameraObject *cam) {
     }
 }
 
+static uint8_t is_same_ground_target(float x1, float y1, float x2, float y2) {
+    float dx = x1 - x2;
+    float dy = y1 - y2;
+    return ((dx * dx + dy * dy) < HYSTERESIS_MATCH_RADIUS_SQ);
+}
+
 static void sort_lights(CameraObject *cam) {
     // 默认清除上一帧的锁定状态
     cam->car_valid = 0;
@@ -573,7 +579,19 @@ static void sort_lights(CameraObject *cam) {
     cam->target_valid = 0;
     // 不在此处清除信标坐标等信息，以支持保持最后一次信标位置
 
+    // 信标身份记忆：同一目标获得80cm线性迟滞，新目标需连续胜出3帧才切换。
+    static float last_target_ground_x = 0.0f;
+    static float last_target_ground_y = 0.0f;
+    static uint8_t has_last_target = 0;
+    static float locked_target_ground_x = 0.0f;
+    static float locked_target_ground_y = 0.0f;
+    static uint8_t has_locked_target = 0;
+    static float switch_candidate_ground_x = 0.0f;
+    static float switch_candidate_ground_y = 0.0f;
+    static uint8_t switch_candidate_frames = 0;
+
     if (cam->light_number == 0) {
+        switch_candidate_frames = 0;
         cam->debug.pass_area = 0;
         cam->debug.pass_car = 0;
         cam->debug.pass_target = 0;
@@ -592,6 +610,7 @@ static void sort_lights(CameraObject *cam) {
     float ground_x[MAX_LIGHTS] = {0};
     float ground_y[MAX_LIGHTS] = {0};
     uint8_t is_valid_blob[MAX_LIGHTS] = {0};
+    uint8_t is_target_candidate[MAX_LIGHTS] = {0};
 
     // =======================================================
     // 2. 计算精确物理距离，并做【面积动态过滤】
@@ -650,6 +669,7 @@ static void sort_lights(CameraObject *cam) {
     // =======================================================
 
     int car_idx = -1;
+    int raw_target_idx = -1;
     int target_idx = -1;
     // =========================================================
     // 1. 寻找小车 (加入动态阈值，边缘门槛自动抬高防信标混淆)
@@ -694,14 +714,10 @@ static void sort_lights(CameraObject *cam) {
     }
     
     // 2. 寻找信标 (排除小车后，选距离小车最近的作为信标)
-    // [修复] 添加迟滞(hysteresis)：记住上一帧选中的信标地面坐标，
-    // 同一信标在擂台比较时获得等效距离优惠，防止双信标场景下帧间选取翻转导致小车震荡。
-    static float last_target_ground_x = 0.0f;
-    static float last_target_ground_y = 0.0f;
-    static uint8_t has_last_target = 0;
+    // [修复] 迟滞 + 切换确认，防止双信标场景下帧间翻转导致小车震荡。
 
-    float min_sort_dist_sq = 999999.0f;
-    target_idx = -1; // 确保重置
+    float min_sort_dist = 999999.0f;
+    raw_target_idx = -1; // 确保重置
 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (i == car_idx) continue;
@@ -733,6 +749,7 @@ static void sort_lights(CameraObject *cam) {
 
         // 面积过小的连通域长宽比不可靠, 直接通过形状筛选
         if (cam->dot_num[i] <= SMALL_BLOB_DIRECT_AREA || cam->aspect_ratio[i] < dynamic_target_max_ratio) {
+            is_target_candidate[i] = 1;
 
             // 【核心：按地面实际距小车距离打擂台，小车不可见时回退到距无人机地面投影距离】
             float sort_dist_sq;
@@ -743,29 +760,90 @@ static void sort_lights(CameraObject *cam) {
             } else {
                 sort_dist_sq = phys_dist_sq[i];
             }
+            float sort_dist = sqrtf(sort_dist_sq);
 
             // [修复] 迟滞：若候选与上一帧选中信标地面位置接近（同一信标），
-            // 给予等效距离优惠，防止因微小距离变化导致选取翻转到另一信标。
+            // 给予线性距离优惠，防止远距离时固定平方优惠衰减过快。
             float hysteresis_bonus = 0.0f;
             if (has_last_target && car_idx != -1) {
                 float dx_last = ground_x[i] - last_target_ground_x;
                 float dy_last = ground_y[i] - last_target_ground_y;
                 float dist_to_last_sq = dx_last * dx_last + dy_last * dy_last;
                 if (dist_to_last_sq < HYSTERESIS_MATCH_RADIUS_SQ) {
-                    hysteresis_bonus = -HYSTERESIS_DIST_BIAS;
+                    hysteresis_bonus = -HYSTERESIS_DIST_BIAS_CM;
                 }
             }
-            float effective_dist_sq = sort_dist_sq + hysteresis_bonus;
+            float effective_dist = sort_dist + hysteresis_bonus;
 
-            if (effective_dist_sq < min_sort_dist_sq) {
-                min_sort_dist_sq = effective_dist_sq;
-                target_idx = i;
+            if (effective_dist < min_sort_dist) {
+                min_sort_dist = effective_dist;
+                raw_target_idx = i;
             }
             cam->debug.pass_target++;
         }
     }
 
-    // 更新迟滞记忆：记录本帧最终选中的信标地面坐标
+    // 新信标切换确认：原始赢家需连续3帧稳定胜出，才替换当前锁定信标。
+    target_idx = raw_target_idx;
+    if (raw_target_idx != -1) {
+        if (!has_locked_target ||
+            is_same_ground_target(ground_x[raw_target_idx], ground_y[raw_target_idx],
+                                  locked_target_ground_x, locked_target_ground_y)) {
+            target_idx = raw_target_idx;
+            locked_target_ground_x = ground_x[raw_target_idx];
+            locked_target_ground_y = ground_y[raw_target_idx];
+            has_locked_target = 1;
+            switch_candidate_frames = 0;
+        } else {
+            int locked_idx = -1;
+            for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
+                if (i == car_idx) continue;
+                if (!is_target_candidate[i]) continue;
+                if (is_same_ground_target(ground_x[i], ground_y[i],
+                                          locked_target_ground_x, locked_target_ground_y)) {
+                    locked_idx = i;
+                    break;
+                }
+            }
+
+            if (switch_candidate_frames > 0 &&
+                is_same_ground_target(ground_x[raw_target_idx], ground_y[raw_target_idx],
+                                      switch_candidate_ground_x, switch_candidate_ground_y)) {
+                if (switch_candidate_frames < TARGET_SWITCH_CONFIRM_FRAMES) {
+                    switch_candidate_frames++;
+                }
+            } else {
+                switch_candidate_ground_x = ground_x[raw_target_idx];
+                switch_candidate_ground_y = ground_y[raw_target_idx];
+                switch_candidate_frames = 1;
+            }
+
+            if (locked_idx == -1) {
+                // 原锁定信标已经不在候选集中时，立即接纳当前赢家，避免主动输出无信标。
+                target_idx = raw_target_idx;
+                locked_target_ground_x = ground_x[raw_target_idx];
+                locked_target_ground_y = ground_y[raw_target_idx];
+                has_locked_target = 1;
+                switch_candidate_frames = 0;
+            } else if (switch_candidate_frames >= TARGET_SWITCH_CONFIRM_FRAMES) {
+                target_idx = raw_target_idx;
+                locked_target_ground_x = ground_x[raw_target_idx];
+                locked_target_ground_y = ground_y[raw_target_idx];
+                has_locked_target = 1;
+                switch_candidate_frames = 0;
+            } else {
+                target_idx = locked_idx;
+                if (locked_idx != -1) {
+                    locked_target_ground_x = ground_x[locked_idx];
+                    locked_target_ground_y = ground_y[locked_idx];
+                }
+            }
+        }
+    } else {
+        switch_candidate_frames = 0;
+    }
+
+    // 更新迟滞记忆：记录本帧最终输出的信标地面坐标
     if (target_idx != -1) {
         last_target_ground_x = ground_x[target_idx];
         last_target_ground_y = ground_y[target_idx];
