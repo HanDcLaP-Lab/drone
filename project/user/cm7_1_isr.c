@@ -64,6 +64,7 @@ void pit0_ch2_isr()                     // 定时器通道 2 周期中断服务�
 void pit0_ch10_isr()                    // 定时器通道 10 周期中断服务函数      
 {
     pit_isr_flag_clear(PIT_CH10);
+    dataC.pit0_cnt += 10;               // CM7_1 本地 10ms 计时，供视觉状态机/屏幕标记使用
     Key_Switch_Update_All();
     Key_Switch_Param_Edit();
 	

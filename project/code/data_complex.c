@@ -133,13 +133,10 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
     data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;
 
-#define FUSION_ARM_DIST_CM 60.0f
-#define FUSION_ARM_DIST_SQ (FUSION_ARM_DIST_CM * FUSION_ARM_DIST_CM)
-#define FUSION_REL_JUMP_CM 100.0f
-#define FUSION_REL_JUMP_SQ (FUSION_REL_JUMP_CM * FUSION_REL_JUMP_CM)
-#define FUSION_TARGET_AREA_MIN 15.0f
-#define FUSION_MAX_AREA_MIN 85U
+#define FUSION_DIRECT_DIST_CM 60.0f
+#define FUSION_DIRECT_DIST_SQ (FUSION_DIRECT_DIST_CM * FUSION_DIRECT_DIST_CM)
 #define FUSION_STATE4_HOLD_FRAMES 3U
+#define FUSION_STATE4_COOLDOWN_MS 1000U
 #define LOCKED_STATE_MIN_HEIGHT_CM 90.0f
 #define LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES 5U // 图像约50Hz，5帧约100ms
 
@@ -152,24 +149,23 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     if (cam_down.target_raw_valid) raw_locked_count += 2;
 
     // --- 近距融合事件检测 ---
-    static float armed_rel_x = 0.0f;
-    static float armed_rel_y = 0.0f;
-    static float armed_target_area_avg = 0.0f;
-    static uint8_t fusion_armed = 0;
     static uint8_t fusion_state4_hold_frames = 0;
+    static uint32_t last_fusion_trigger_ms = 0;
+    static uint8_t has_last_fusion_trigger_ms = 0;
     static uint8_t low_height_frame_cnt = 0;
     uint8_t trigger_fusion = 0;
+    uint32_t now_ms = dataC.pit0_cnt;
+    uint8_t fusion_cooldown_elapsed = (!has_last_fusion_trigger_ms ||
+        (uint32_t)(now_ms - last_fusion_trigger_ms) >= FUSION_STATE4_COOLDOWN_MS);
 
     if (img_imu_snap.height < LOCKED_STATE_MIN_HEIGHT_CM) {
         if (low_height_frame_cnt < LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES) {
             low_height_frame_cnt++;
         }
         if (low_height_frame_cnt >= LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES) {
-            armed_rel_x = 0.0f;
-            armed_rel_y = 0.0f;
-            armed_target_area_avg = 0.0f;
-            fusion_armed = 0;
             fusion_state4_hold_frames = 0;
+            last_fusion_trigger_ms = 0;
+            has_last_fusion_trigger_ms = 0;
             data_out[S1_LOCKED_COUNT] = 0.0f;
             if (!cam_down.car_valid) {
                 data_out[S1_CAR_DOT_NUM] = 0;
@@ -183,50 +179,23 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     if (fusion_state4_hold_frames > 0) {
         trigger_fusion = 1;
         fusion_state4_hold_frames--;
-    } else if (fusion_armed && cam_down.max_area > FUSION_MAX_AREA_MIN) {
-        uint8_t target_lost = !cam_down.target_raw_valid;
-        uint8_t relative_jump = 0;
-
-        if (raw_locked_count == 3) {
+    } else {
+        if (raw_locked_count == 3 && fusion_cooldown_elapsed) {
             float current_rel_x = (float)(pos.raw_target.x - pos.raw_car.x);
             float current_rel_y = (float)(pos.raw_target.y - pos.raw_car.y);
-            float jump_dx = current_rel_x - armed_rel_x;
-            float jump_dy = current_rel_y - armed_rel_y;
-            float jump_dist_sq = jump_dx * jump_dx + jump_dy * jump_dy;
-            relative_jump = (jump_dist_sq > FUSION_REL_JUMP_SQ);
-        }
+            float rel_dist_sq = current_rel_x * current_rel_x + current_rel_y * current_rel_y;
 
-        if (target_lost || relative_jump) {
-            trigger_fusion = 1;
-            fusion_armed = 0;
-            armed_target_area_avg = 0.0f;
-            fusion_state4_hold_frames = FUSION_STATE4_HOLD_FRAMES - 1U;
+            if (rel_dist_sq <= FUSION_DIRECT_DIST_SQ) {
+                trigger_fusion = 1;
+                fusion_state4_hold_frames = FUSION_STATE4_HOLD_FRAMES - 1U;
+                last_fusion_trigger_ms = now_ms;
+                has_last_fusion_trigger_ms = 1;
+            }
         }
     }
 
     if (trigger_fusion) {
         locked_count = 4; // 触发或维持新建状态 4
-    } else {
-        if (raw_locked_count == 3) {
-            float current_rel_x = (float)(pos.raw_target.x - pos.raw_car.x);
-            float current_rel_y = (float)(pos.raw_target.y - pos.raw_car.y);
-            float rel_dist_sq = current_rel_x * current_rel_x + current_rel_y * current_rel_y;
-            float target_area = (float)cam_down.target_dot_num;
-
-            if (armed_target_area_avg <= 0.0f) {
-                armed_target_area_avg = target_area;
-            } else {
-                armed_target_area_avg = (armed_target_area_avg + target_area) * 0.5f;
-            }
-
-            if (rel_dist_sq <= FUSION_ARM_DIST_SQ && armed_target_area_avg > FUSION_TARGET_AREA_MIN) {
-                armed_rel_x = current_rel_x;
-                armed_rel_y = current_rel_y;
-                fusion_armed = 1;
-            } else {
-                fusion_armed = 0;
-            }
-        }
     }
 
     data_out[S1_LOCKED_COUNT] = (float)locked_count;

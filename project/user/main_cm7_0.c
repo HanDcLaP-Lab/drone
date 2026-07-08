@@ -59,6 +59,8 @@ int vis_cnt = 0;
 
 /* [移出ISR] ISR 置位、主循环消费的无线打印标志 (定义在 cm7_0_isr.c) */
 extern volatile uint8_t imu_print_pending;
+static uint8_t merge_print_pending = 0;
+static uint8_t last_vision_locked_state = 0;
 
 // int send_cnt = 0;
 int main(void) {
@@ -130,6 +132,12 @@ int main(void) {
         {
             vision_timeout_cnt = 0; // 成功收到数据，喂狗清零
 
+            uint8_t locked_state = (uint8_t)share_data_from_1[S1_LOCKED_COUNT];
+            if (locked_state == 4 && last_vision_locked_state != 4) {
+                merge_print_pending = 1;
+            }
+            last_vision_locked_state = locked_state;
+
             share_data_from_1[S1_PROCESS_DONE] = 0.0f;
             Flight_Hover_Control_Task(); 
             SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
@@ -153,6 +161,7 @@ int main(void) {
                 Set_Target_Attitude(0, 0, flight_target.target_yaw);
                 
                 vision_timeout_cnt = 400; // 防止计数器溢出
+                last_vision_locked_state = 0;
             }
         }
         
@@ -164,6 +173,10 @@ int main(void) {
         if (imu_print_pending) {
             imu_print_pending = 0;
             //wireless_uart_output_imu_sample_rate();
+        }
+        if (merge_print_pending) {
+            merge_print_pending = 0;
+            //wireless_uart_send_string("merge\r\n");
         }
 /* 无线串口打印结束 */
 

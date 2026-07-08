@@ -95,7 +95,7 @@
 // 获得线性距离优惠，避免固定平方优惠在远距离时等效增益过小。
 #define HYSTERESIS_MATCH_RADIUS_CM 80.0f
 #define HYSTERESIS_MATCH_RADIUS_SQ (HYSTERESIS_MATCH_RADIUS_CM * HYSTERESIS_MATCH_RADIUS_CM)
-#define HYSTERESIS_DIST_BIAS_CM    0.0f    // 旧目标获得 120cm 线性距离优惠
+#define HYSTERESIS_DIST_BIAS_CM    0.0f    // 旧目标线性距离优惠，0表示关闭
 #define TARGET_SWITCH_CONFIRM_FRAMES 10      // 新信标连续胜出10帧后才允许切换
 // --- 摄像头对象结构体 ---
 typedef struct {
@@ -141,7 +141,7 @@ typedef struct {
         float   min_ratio;          // 本帧最小长宽比 (排除退化标记值)
     } debug;
 
-    uint32_t max_area;           // [新增] 本帧最大连通域面积，用于融合检测
+    uint32_t max_area;           // [新增] 本帧最大连通域面积，供调试观察
 } CameraObject;
 
 typedef struct {

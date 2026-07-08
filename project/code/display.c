@@ -2,6 +2,8 @@
 #include "zf_common_headfile.h"
 #include "key_switch.h"
 
+#define MERGE_MARK_HOLD_MS 1000U
+
 void display_init()
 {
     ips200_set_dir(IPS200_PORTAIT);
@@ -119,6 +121,21 @@ void display_image_display(void){
 }
 
 void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, float target_x, float target_y, uint8_t target_valid){
+    static uint8_t last_display_locked_state = 0;
+    static uint8_t merge_mark_active = 0;
+    static uint32_t merge_mark_start_ms = 0;
+    uint8_t display_locked_state = (uint8_t)share_data_from_1[S1_LOCKED_COUNT];
+    uint32_t now_ms = dataC.pit0_cnt;
+
+    if (display_locked_state == 4 && last_display_locked_state != 4) {
+        merge_mark_start_ms = now_ms;
+        merge_mark_active = 1;
+    }
+    last_display_locked_state = display_locked_state;
+    if (merge_mark_active && (uint32_t)(now_ms - merge_mark_start_ms) >= MERGE_MARK_HOLD_MS) {
+        merge_mark_active = 0;
+    }
+
     // 将底层的 0/1 放大为 0/255 以便屏幕显示
     for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++) {
         image_copy[0][i] = cam_down.binarized_image[i] ? 255 : 0;
@@ -184,6 +201,8 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
     // 显示页面号
     ips200_show_string(160, 16*10, "P:");
     ips200_show_int(176, 16*10, display_page_idx, 1);
+    ips200_show_string(160, 16*18, "M:");
+    ips200_show_int(176, 16*18, merge_mark_active, 1);
 
     // 页面0：核心状态
     if(display_page_idx == 0)
