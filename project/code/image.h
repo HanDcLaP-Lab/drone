@@ -70,7 +70,7 @@
 #define ERODE_MIN_NEIGHBORS     7       // 腐蚀: 8邻域至少保留此数亮像素
 
 // ================= 边缘泛光清除 =================
-#define EDGE_BLOB_THRESHOLD     15      // 二值化前清除边缘泛光的灰度阈值 (0~255)
+#define EDGE_BLOB_THRESHOLD      8    // 二值化前清除边缘泛光的灰度阈值 (0~255)
 
 // ================= 距离估算 =================
 #define HEIGHT_ESTIMATE_MIN     30.0f   // 距离估算最低高度 (cm)
@@ -93,9 +93,9 @@
 // ================= 信标选取迟滞 (防双信标震荡) =================
 // 原理：若当前候选与上一帧选中信标的地面位置接近（同一信标），在擂台比较时
 // 获得线性距离优惠，避免固定平方优惠在远距离时等效增益过小。
-#define HYSTERESIS_MATCH_RADIUS_CM 100.0f
+#define HYSTERESIS_MATCH_RADIUS_CM 80.0f
 #define HYSTERESIS_MATCH_RADIUS_SQ (HYSTERESIS_MATCH_RADIUS_CM * HYSTERESIS_MATCH_RADIUS_CM)
-#define HYSTERESIS_DIST_BIAS_CM    200.0f    // 旧目标获得 80cm 线性距离优惠
+#define HYSTERESIS_DIST_BIAS_CM    0.0f    // 旧目标获得 120cm 线性距离优惠
 #define TARGET_SWITCH_CONFIRM_FRAMES 10      // 新信标连续胜出10帧后才允许切换
 // --- 摄像头对象结构体 ---
 typedef struct {
@@ -116,12 +116,14 @@ typedef struct {
     uint8_t components_count;        
 
     uint8_t car_valid;           // 是否锁定小车 (1:是, 0:否)
+    uint8_t car_raw_valid;       // 本帧真实识别到小车，未经过 hold 补偿
     float car_center_y;          // 小车 Row (Y)
     float car_center_x;          // 小车 Col (X)
     uint32_t car_dot_num;           // 小车面积
     float car_ratio;
 
     uint8_t target_valid;        // 是否锁定信标 (1:是, 0:否)
+    uint8_t target_raw_valid;    // 本帧真实识别到信标，未经过 hold 补偿
     float target_center_y;       // 信标 Row (Y)
     float target_center_x;       // 信标 Col (X)
     uint32_t target_dot_num;        // 信标面积

@@ -511,21 +511,16 @@ static void apply_target_hold_logic(CameraObject *cam) {
     static uint8_t target_consecutive_frames = 0;
     static uint8_t target_hold_frames = 0;
 
-    // sort_lights 通过此 flag 告知 hold：旧目标已消失但 switch confirm 尚未完成，
-    // 应将 hold 上限延长至 switch confirm 所需的帧数，并跳过 MIN_CONSECUTIVE 前置检查
-    // （因为 locked 身份已在 sort_lights 确认过，不需要 hold 再验证稳定性）。
-    uint8_t hold_skip_min = cam->target_hold_extend;
-    uint8_t hold_limit     = hold_skip_min ? TARGET_SWITCH_CONFIRM_FRAMES : TARGET_HOLD_FRAMES;
-    cam->target_hold_extend = 0; // 消费 flag
-
     if (cam->target_valid) {
+        // 本帧有效锁定到了信标
         if (target_consecutive_frames < 255) {
             target_consecutive_frames++;
         }
         target_hold_frames = 0;
     } else {
-        if ((hold_skip_min || target_consecutive_frames >= TARGET_MIN_CONSECUTIVE_FRAMES)
-            && target_hold_frames < hold_limit) {
+        // 本帧没有锁定到信标
+        if (target_consecutive_frames >= TARGET_MIN_CONSECUTIVE_FRAMES && target_hold_frames < TARGET_HOLD_FRAMES) {
+            // 满足保持条件，强行锁定并沿用上一次的值
             cam->target_valid = 1;
             target_hold_frames++;
         } else {
@@ -535,10 +530,6 @@ static void apply_target_hold_logic(CameraObject *cam) {
             cam->target_ratio = 0.0f;
             cam->target_center_x = 0.0f;
             cam->target_center_y = 0.0f;
-            // 通知 sort_lights 清除 locked 身份记忆（除非正在 switch confirm 中）
-            if (!hold_skip_min) {
-                cam->target_locked_reset = 1;
-            }
         }
     }
 }
@@ -571,46 +562,25 @@ static void apply_car_hold_logic(CameraObject *cam) {
     }
 }
 
-static uint8_t is_same_ground_target(float x1, float y1, float x2, float y2) {
-    float dx = x1 - x2;
-    float dy = y1 - y2;
-    return ((dx * dx + dy * dy) < HYSTERESIS_MATCH_RADIUS_SQ);
-}
-
 static void sort_lights(CameraObject *cam) {
     // 默认清除上一帧的锁定状态
     cam->car_valid = 0;
+    cam->car_raw_valid = 0;
     cam->car_dot_num = 0;
     cam->car_ratio = 0.0f;
     cam->car_center_x = 0.0f;
     cam->car_center_y = 0.0f;
 
     cam->target_valid = 0;
+    cam->target_raw_valid = 0;
     // 不在此处清除信标坐标等信息，以支持保持最后一次信标位置
 
-    // 信标身份记忆：同一目标获得200cm线性迟滞，新目标需连续胜出10帧才切换。
+    // 信标身份记忆：同一目标获得线性距离优惠，避免双信标场景下频繁翻转。
     static float last_target_ground_x = 0.0f;
     static float last_target_ground_y = 0.0f;
     static uint8_t has_last_target = 0;
-    static float locked_target_ground_x = 0.0f;
-    static float locked_target_ground_y = 0.0f;
-    static uint8_t has_locked_target = 0;
-    static float switch_candidate_ground_x = 0.0f;
-    static float switch_candidate_ground_y = 0.0f;
-    static uint8_t switch_candidate_frames = 0;
-
-    // hold 完全过期时清除身份记忆，下一个检测到的灯可直接锁定。
-    // 置于 early return 之前，确保空帧期间 hold 过期产生的 reset 能立即消费。
-    if (cam->target_locked_reset) {
-        has_locked_target = 0;
-        has_last_target = 0;
-        switch_candidate_frames = 0;
-        cam->target_locked_reset = 0;
-    }
 
     if (cam->light_number == 0) {
-        // 衰减而非归零：容忍空帧闪烁，防止switch confirm被单帧全灭打断后永不完结
-        if (switch_candidate_frames > 0) switch_candidate_frames--;
         cam->debug.pass_area = 0;
         cam->debug.pass_car = 0;
         cam->debug.pass_target = 0;
@@ -629,7 +599,6 @@ static void sort_lights(CameraObject *cam) {
     float ground_x[MAX_LIGHTS] = {0};
     float ground_y[MAX_LIGHTS] = {0};
     uint8_t is_valid_blob[MAX_LIGHTS] = {0};
-    uint8_t is_target_candidate[MAX_LIGHTS] = {0};
 
     // =======================================================
     // 2. 计算精确物理距离，并做【面积动态过滤】
@@ -688,7 +657,6 @@ static void sort_lights(CameraObject *cam) {
     // =======================================================
 
     int car_idx = -1;
-    int raw_target_idx = -1;
     int target_idx = -1;
     // =========================================================
     // 1. 寻找小车 (加入动态阈值，边缘门槛自动抬高防信标混淆)
@@ -733,10 +701,10 @@ static void sort_lights(CameraObject *cam) {
     }
     
     // 2. 寻找信标 (排除小车后，选距离小车最近的作为信标)
-    // [修复] 迟滞 + 切换确认，防止双信标场景下帧间翻转导致小车震荡。
+    // [修复] 线性迟滞，防止远距离时固定平方优惠衰减过快。
 
     float min_sort_dist = 999999.0f;
-    raw_target_idx = -1; // 确保重置
+    target_idx = -1; // 确保重置
 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (i == car_idx) continue;
@@ -768,8 +736,6 @@ static void sort_lights(CameraObject *cam) {
 
         // 面积过小的连通域长宽比不可靠, 直接通过形状筛选
         if (cam->dot_num[i] <= SMALL_BLOB_DIRECT_AREA || cam->aspect_ratio[i] < dynamic_target_max_ratio) {
-            is_target_candidate[i] = 1;
-
             // 【核心：按地面实际距小车距离打擂台，小车不可见时回退到距无人机地面投影距离】
             float sort_dist_sq;
             if (car_idx != -1) {
@@ -796,81 +762,10 @@ static void sort_lights(CameraObject *cam) {
 
             if (effective_dist < min_sort_dist) {
                 min_sort_dist = effective_dist;
-                raw_target_idx = i;
+                target_idx = i;
             }
             cam->debug.pass_target++;
         }
-    }
-
-    // 新信标切换确认：原始赢家需连续3帧稳定胜出，才替换当前锁定信标。
-    target_idx = raw_target_idx;
-    if (raw_target_idx != -1) {
-        if (!has_locked_target ||
-            is_same_ground_target(ground_x[raw_target_idx], ground_y[raw_target_idx],
-                                  locked_target_ground_x, locked_target_ground_y)) {
-            target_idx = raw_target_idx;
-            locked_target_ground_x = ground_x[raw_target_idx];
-            locked_target_ground_y = ground_y[raw_target_idx];
-            has_locked_target = 1;
-            switch_candidate_frames = 0;
-        } else {
-            int locked_idx = -1;
-            for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
-                if (i == car_idx) continue;
-                if (!is_target_candidate[i]) continue;
-                if (is_same_ground_target(ground_x[i], ground_y[i],
-                                          locked_target_ground_x, locked_target_ground_y)) {
-                    locked_idx = i;
-                    break;
-                }
-            }
-
-            if (switch_candidate_frames > 0 &&
-                is_same_ground_target(ground_x[raw_target_idx], ground_y[raw_target_idx],
-                                      switch_candidate_ground_x, switch_candidate_ground_y)) {
-                if (switch_candidate_frames < TARGET_SWITCH_CONFIRM_FRAMES) {
-                    switch_candidate_frames++;
-                }
-            } else {
-                switch_candidate_ground_x = ground_x[raw_target_idx];
-                switch_candidate_ground_y = ground_y[raw_target_idx];
-                switch_candidate_frames = 1;
-            }
-
-            if (locked_idx == -1) {
-                // 原锁定信标不在候选集中：保持身份记忆，输出-1让hold逻辑桥接短暂丢失。
-                // 若旧目标在hold窗口内重入则即时恢复；若switch_candidate持续胜出
-                // 超过确认帧数则执行切换。
-                if (switch_candidate_frames >= TARGET_SWITCH_CONFIRM_FRAMES) {
-                    // 新候选已确认足够长时间，旧目标确认消失，执行切换
-                    target_idx = raw_target_idx;
-                    locked_target_ground_x = ground_x[raw_target_idx];
-                    locked_target_ground_y = ground_y[raw_target_idx];
-                    has_locked_target = 1;
-                    switch_candidate_frames = 0;
-                } else {
-                    // 旧目标消失但未确认切换：通知hold逻辑延长保留期限，
-                    // 在switch confirm窗口内持续输出旧目标坐标。
-                    cam->target_hold_extend = 1;
-                    target_idx = -1;
-                }
-            } else if (switch_candidate_frames >= TARGET_SWITCH_CONFIRM_FRAMES) {
-                target_idx = raw_target_idx;
-                locked_target_ground_x = ground_x[raw_target_idx];
-                locked_target_ground_y = ground_y[raw_target_idx];
-                has_locked_target = 1;
-                switch_candidate_frames = 0;
-            } else {
-                target_idx = locked_idx;
-                if (locked_idx != -1) {
-                    locked_target_ground_x = ground_x[locked_idx];
-                    locked_target_ground_y = ground_y[locked_idx];
-                }
-            }
-        }
-    } else {
-        // 本帧无候选：衰减而非归零，容忍单帧闪烁
-        if (switch_candidate_frames > 0) switch_candidate_frames--;
     }
 
     // 更新迟滞记忆：记录本帧最终输出的信标地面坐标
@@ -885,6 +780,7 @@ static void sort_lights(CameraObject *cam) {
     // 3. 将结果输出到专属的安全变量中 (不破坏原始 centers 数组)
     if (car_idx != -1) {
         cam->car_valid = 1;
+        cam->car_raw_valid = 1;
         cam->car_center_y = cam->centers[car_idx][0];
         cam->car_center_x = cam->centers[car_idx][1];
         cam->car_dot_num = cam->dot_num[car_idx];
@@ -893,6 +789,7 @@ static void sort_lights(CameraObject *cam) {
     
     if (target_idx != -1) {
         cam->target_valid = 1;
+        cam->target_raw_valid = 1;
         cam->target_center_y = cam->centers[target_idx][0];
         cam->target_center_x = cam->centers[target_idx][1];
         cam->target_dot_num = cam->dot_num[target_idx];

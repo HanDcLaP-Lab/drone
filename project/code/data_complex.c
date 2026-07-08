@@ -133,8 +133,13 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
     data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;
 
-#define FUSION_AREA_SUM_RATIO 0.8f // [重构] 融合判定的面积求和阈值比例
-#define FUSION_JUMP_DIST_MAX 50.0f
+#define FUSION_ARM_DIST_CM 60.0f
+#define FUSION_ARM_DIST_SQ (FUSION_ARM_DIST_CM * FUSION_ARM_DIST_CM)
+#define FUSION_REL_JUMP_CM 100.0f
+#define FUSION_REL_JUMP_SQ (FUSION_REL_JUMP_CM * FUSION_REL_JUMP_CM)
+#define FUSION_TARGET_AREA_MIN 15.0f
+#define FUSION_MAX_AREA_MIN 85U
+#define FUSION_STATE4_HOLD_FRAMES 3U
 #define LOCKED_STATE_MIN_HEIGHT_CM 90.0f
 #define LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES 5U // 图像约50Hz，5帧约100ms
 
@@ -142,13 +147,16 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     if (cam_down.car_valid) locked_count++;
     if (cam_down.target_valid) locked_count += 2;
 
-    // --- 融合异常检测 ---
-    static uint32_t last_target_area = 0;
-    static uint32_t last_car_area = 0; // [新增]
-    static float last_target_x = 0.0f;
-    static float last_target_y = 0.0f;
-    static uint8_t last_locked_state = 0;
-    static uint8_t jump_cnt = 0;
+    uint8_t raw_locked_count = 0;
+    if (cam_down.car_raw_valid) raw_locked_count++;
+    if (cam_down.target_raw_valid) raw_locked_count += 2;
+
+    // --- 近距融合事件检测 ---
+    static float armed_rel_x = 0.0f;
+    static float armed_rel_y = 0.0f;
+    static float armed_target_area_avg = 0.0f;
+    static uint8_t fusion_armed = 0;
+    static uint8_t fusion_state4_hold_frames = 0;
     static uint8_t low_height_frame_cnt = 0;
     uint8_t trigger_fusion = 0;
 
@@ -157,12 +165,11 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
             low_height_frame_cnt++;
         }
         if (low_height_frame_cnt >= LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES) {
-            last_target_area = 0;
-            last_car_area = 0;
-            last_target_x = 0.0f;
-            last_target_y = 0.0f;
-            last_locked_state = 0;
-            jump_cnt = 0;
+            armed_rel_x = 0.0f;
+            armed_rel_y = 0.0f;
+            armed_target_area_avg = 0.0f;
+            fusion_armed = 0;
+            fusion_state4_hold_frames = 0;
             data_out[S1_LOCKED_COUNT] = 0.0f;
             if (!cam_down.car_valid) {
                 data_out[S1_CAR_DOT_NUM] = 0;
@@ -173,44 +180,54 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
         low_height_frame_cnt = 0;
     }
 
-    // [隐患修复1]: 必须加上 last_target_area > 15 的基础面积防御，防止0乘任何数还是0导致的起步噪点误判
-    uint32_t area_sum = last_car_area + last_target_area;
-    if (last_target_area > 15 && cam_down.max_area > (uint32_t)((float)area_sum * FUSION_AREA_SUM_RATIO)) {
-        // [隐患修复2]: 如果上一帧是 3 或 4，本帧由于连通域依然巨大只能算出单目标（可能判成了车=1，也可能判成了信标=2），则应继续维持 4
-        if ((last_locked_state == 3 || last_locked_state == 4) && (locked_count == 1 || locked_count == 2)) {
-            trigger_fusion = 1; 
-        } else if (cam_down.target_valid) {
-            float dx = pos.target.x - last_target_x;
-            float dy = pos.target.y - last_target_y;
-            float jump_dist_sq = dx * dx + dy * dy;
-            if (jump_dist_sq > (FUSION_JUMP_DIST_MAX * FUSION_JUMP_DIST_MAX)) {
-                jump_cnt++;
-                if (jump_cnt > 10) { // 连续10帧跳变，认定为真正的目标切换
-                    trigger_fusion = 0; 
-                    jump_cnt = 0;
-                } else {
-                    trigger_fusion = 1; 
-                }
-            } else {
-                jump_cnt = 0;
-            }
+    if (fusion_state4_hold_frames > 0) {
+        trigger_fusion = 1;
+        fusion_state4_hold_frames--;
+    } else if (fusion_armed && cam_down.max_area > FUSION_MAX_AREA_MIN) {
+        uint8_t target_lost = !cam_down.target_raw_valid;
+        uint8_t relative_jump = 0;
+
+        if (raw_locked_count == 3) {
+            float current_rel_x = (float)(pos.raw_target.x - pos.raw_car.x);
+            float current_rel_y = (float)(pos.raw_target.y - pos.raw_car.y);
+            float jump_dx = current_rel_x - armed_rel_x;
+            float jump_dy = current_rel_y - armed_rel_y;
+            float jump_dist_sq = jump_dx * jump_dx + jump_dy * jump_dy;
+            relative_jump = (jump_dist_sq > FUSION_REL_JUMP_SQ);
+        }
+
+        if (target_lost || relative_jump) {
+            trigger_fusion = 1;
+            fusion_armed = 0;
+            armed_target_area_avg = 0.0f;
+            fusion_state4_hold_frames = FUSION_STATE4_HOLD_FRAMES - 1U;
         }
     }
 
     if (trigger_fusion) {
         locked_count = 4; // 触发或维持新建状态 4
     } else {
-        // 未发生融合时，正常更新历史有效记录
-        if (cam_down.target_valid) {
-            last_target_area = cam_down.target_dot_num;
-            last_target_x = pos.target.x;
-            last_target_y = pos.target.y;
-        }
-        if (cam_down.car_valid) {
-            last_car_area = cam_down.car_dot_num;
+        if (raw_locked_count == 3) {
+            float current_rel_x = (float)(pos.raw_target.x - pos.raw_car.x);
+            float current_rel_y = (float)(pos.raw_target.y - pos.raw_car.y);
+            float rel_dist_sq = current_rel_x * current_rel_x + current_rel_y * current_rel_y;
+            float target_area = (float)cam_down.target_dot_num;
+
+            if (armed_target_area_avg <= 0.0f) {
+                armed_target_area_avg = target_area;
+            } else {
+                armed_target_area_avg = (armed_target_area_avg + target_area) * 0.5f;
+            }
+
+            if (rel_dist_sq <= FUSION_ARM_DIST_SQ && armed_target_area_avg > FUSION_TARGET_AREA_MIN) {
+                armed_rel_x = current_rel_x;
+                armed_rel_y = current_rel_y;
+                fusion_armed = 1;
+            } else {
+                fusion_armed = 0;
+            }
         }
     }
-    last_locked_state = locked_count; // 无论是否融合，都要更新 last_locked_state，才能维持状态 4
 
     data_out[S1_LOCKED_COUNT] = (float)locked_count;
 
