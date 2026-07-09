@@ -133,13 +133,6 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
     data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;
 
-#define FUSION_DIRECT_DIST_CM 60.0f
-#define FUSION_DIRECT_DIST_SQ (FUSION_DIRECT_DIST_CM * FUSION_DIRECT_DIST_CM)
-#define FUSION_STATE4_HOLD_FRAMES 3U
-#define FUSION_STATE4_COOLDOWN_MS 1000U
-#define LOCKED_STATE_MIN_HEIGHT_CM 90.0f
-#define LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES 5U // 图像约50Hz，5帧约100ms
-
     uint8_t locked_count = 0;
     if (cam_down.car_valid) locked_count++;
     if (cam_down.target_valid) locked_count += 2;
