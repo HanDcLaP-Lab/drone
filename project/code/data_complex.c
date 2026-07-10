@@ -119,6 +119,20 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
 }
 
 #elif defined(CY_CORE_CM7_1)
+static float Median_Of_Three(float a, float b, float c) {
+    if (a > b) {
+        float temp = a;
+        a = b;
+        b = temp;
+    }
+    if (b > c) {
+        float temp = b;
+        b = c;
+        c = temp;
+    }
+    return (a > b) ? a : b;
+}
+
 void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_data_from_1
     data_out[S1_CAR_CENTER_Y] = cam_down.car_center_y;
     data_out[S1_CAR_CENTER_X] = cam_down.car_center_x;
@@ -146,10 +160,29 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     static uint32_t last_fusion_trigger_ms = 0;
     static uint8_t has_last_fusion_trigger_ms = 0;
     static uint8_t low_height_frame_cnt = 0;
+    static float fusion_dist_history[FUSION_DIST_MEDIAN_FRAMES] = {0};
+    static uint8_t fusion_dist_history_count = 0;
     uint8_t trigger_fusion = 0;
     uint32_t now_ms = dataC.pit0_cnt;
     uint8_t fusion_cooldown_elapsed = (!has_last_fusion_trigger_ms ||
         (uint32_t)(now_ms - last_fusion_trigger_ms) >= FUSION_STATE4_COOLDOWN_MS);
+
+    // 仅连续、正常高度下的 raw 双目标帧参与近距判断，断帧或低高度后重新积累。
+    if (raw_locked_count == 3 && img_imu_snap.height >= LOCKED_STATE_MIN_HEIGHT_CM) {
+        float current_rel_x = (float)(pos.raw_target.x - pos.raw_car.x);
+        float current_rel_y = (float)(pos.raw_target.y - pos.raw_car.y);
+        float current_rel_dist = sqrtf(current_rel_x * current_rel_x +
+                                       current_rel_y * current_rel_y);
+
+        fusion_dist_history[0] = fusion_dist_history[1];
+        fusion_dist_history[1] = fusion_dist_history[2];
+        fusion_dist_history[2] = current_rel_dist;
+        if (fusion_dist_history_count < FUSION_DIST_MEDIAN_FRAMES) {
+            fusion_dist_history_count++;
+        }
+    } else {
+        fusion_dist_history_count = 0;
+    }
 
     if (img_imu_snap.height < LOCKED_STATE_MIN_HEIGHT_CM) {
         if (low_height_frame_cnt < LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES) {
@@ -157,6 +190,7 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
         }
         if (low_height_frame_cnt >= LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES) {
             fusion_state4_hold_frames = 0;
+            fusion_dist_history_count = 0; // 低高度投影不参与恢复后的3帧距离中值
             last_fusion_trigger_ms = 0;
             has_last_fusion_trigger_ms = 0;
             data_out[S1_LOCKED_COUNT] = 0.0f;
@@ -173,12 +207,12 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
         trigger_fusion = 1;
         fusion_state4_hold_frames--;
     } else {
-        if (raw_locked_count == 3 && fusion_cooldown_elapsed) {
-            float current_rel_x = (float)(pos.raw_target.x - pos.raw_car.x);
-            float current_rel_y = (float)(pos.raw_target.y - pos.raw_car.y);
-            float rel_dist_sq = current_rel_x * current_rel_x + current_rel_y * current_rel_y;
+        if (fusion_dist_history_count == FUSION_DIST_MEDIAN_FRAMES && fusion_cooldown_elapsed) {
+            float median_rel_dist = Median_Of_Three(fusion_dist_history[0],
+                                                    fusion_dist_history[1],
+                                                    fusion_dist_history[2]);
 
-            if (rel_dist_sq <= FUSION_DIRECT_DIST_SQ) {
+            if (median_rel_dist <= FUSION_DIRECT_DIST_CM) {
                 trigger_fusion = 1;
                 fusion_state4_hold_frames = FUSION_STATE4_HOLD_FRAMES - 1U;
                 last_fusion_trigger_ms = now_ms;

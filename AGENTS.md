@@ -56,6 +56,11 @@ Two `volatile float` arrays at fixed addresses:
 - **Brace style**: K&R dominant, some Allman mixed. Don't mix in same file.
 - **File encoding**: UTF-8 (changed at v1.28d).
 
+### 调试打印
+- **有线打印**: 使用 `printf()`。
+- **无线打印**: 使用 `wireless_uart_*()` / `wireless_uart` 开头的函数。
+- **数值类格式**: 数值之间用 `,` 分隔，结尾使用 `\r\n`，例如 `"dat1,dat2,dat3\r\n"`。
+
 ## ANTI-PATTERNS
 - **`while(1)` on init fail** — `imu.c`, `image.c`, `wireless_uart.c` hang forever instead of reporting error. Don't add more of these.
 - **`void` functions everywhere** — no error propagation. Only PID/Kalman return values.
