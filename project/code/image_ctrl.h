@@ -11,6 +11,10 @@
 
 #define ROTATE_RECOVER_TIME 1000
 
+// 从无人机上电yaw零点换算到小车固定地面系时减去的初始夹角。
+#define VISION_INITIAL_YAW_OFFSET_DEG 45.0f
+#define VISION_EARTH_YAW_DEG(yaw_deg) ((yaw_deg) - VISION_INITIAL_YAW_OFFSET_DEG)
+
 // =================== 目标丢失容忍宏定义 ===================
 #define LOST_TOLERANCE_FRAMES   3       // 连续丢失多少帧后才触发 PID 复位+回平 (防单帧噪点误触发)
 

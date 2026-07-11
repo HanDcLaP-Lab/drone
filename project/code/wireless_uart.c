@@ -136,6 +136,17 @@ void wireless_uart_output_motor(void){
     wireless_uart_send_string("\n");
 }
 
+void wireless_uart_output_motor_average(float lf, float rf, float lb, float rb){
+    wireless_uart_send_float(lf);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(rf);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(lb);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(rb);
+    wireless_uart_send_string("\r\n");
+}
+
 void wireless_uart_output_groud(void){
     wireless_uart_send_float(share_data_from_1[S1_K_CAR_X]);
     wireless_uart_send_string(",");

@@ -11,12 +11,12 @@
 //   │ 1. pixelTo3DRay(u,v)    像素→3D射线 (相机畸变校正) │
 //   │ 2. cameraToBody()        姿态旋转 (pitch/roll补偿)│
 //   │ 3. projectToGround()     相似三角形投影到水平地面   │
-//   │ 4. 地球系旋转 + 卡尔曼滤波 + 转回机体系             │
+//   │ 4. 上电航向固定系旋转 + 卡尔曼滤波 + 转回机体系       │
 //   └──────────────────────────────────────────────────┘
 //
-// 输出: pos.car (小车位置), pos.target (信标位置), pos.k_car (滤波后)
+// 输出: pos.raw_car/raw_target (原始位置), pos.k_car/k_target (Kalman滤波后)
 // 单位: cm (取决于传入的 height 参数单位)
-// 关键: 在大地坐标系下做卡尔曼滤波，避免机体旋转引起的滞后
+// 关键: 在无人机上电航向固定系下做卡尔曼滤波，避免机体旋转引起的滞后
 // ******************************************************************************
 
 #ifndef M_PI
@@ -166,10 +166,8 @@ void get_accurate_ground_distance(double u, double v, double height, double pitc
 // ==========================================
 // 6. 计算地面坐标主函数
 // ==========================================
-// 输出: pos.car.x (前), pos.car.y (右) 单位: cm (取决于height单位)
+// 输出坐标: x 向前、y 向右，单位 cm
 void calculate_ground_positions(double height, double pitch_deg, double roll_deg, double yaw_deg) {
-    const double k = 0.8; 
-    
     // 提前计算本帧统一的正余弦，避免目标循环中重复计算耗时
     double p_rad = pitch_deg * M_PI / 180.0;
     double r_rad = roll_deg * M_PI / 180.0;
@@ -186,7 +184,7 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         Vector3D body_car = cameraToBody(&ray_car, sinp, cosp, sinr, cosr);
         pos.raw_car = projectToGround(body_car, height);
 
-        // 将相对于机头的 XY 旋转为大地绝对坐标 North/East 后再滤波
+        // 将相对于机头的XY旋转到无人机上电航向固定系后再滤波（不是绝对North/East）
         // 防止机体旋转时相对坐标波动导致卡尔曼滤波产生巨大滞后
         double raw_earth_x = pos.raw_car.x * cosy - pos.raw_car.y * siny;
         double raw_earth_y = pos.raw_car.x * siny + pos.raw_car.y * cosy;
@@ -203,9 +201,6 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         pos.k_car.x = k_earth_x * cosy + k_earth_y * siny;
         pos.k_car.y = -k_earth_x * siny + k_earth_y * cosy;
 
-        pos.car.x = pos.car.x * (1.0 - k) + pos.raw_car.x * k;
-        pos.car.y = pos.car.y * (1.0 - k) + pos.raw_car.y * k;
-
     }
     // 注意：若未识别到，保持上一帧位置
 
@@ -214,15 +209,20 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         Vector3D ray_target = pixelTo3DRay((double)cam_down.target_center_x, (double)cam_down.target_center_y);
         Vector3D body_target = cameraToBody(&ray_target, sinp, cosp, sinr, cosr);
         pos.raw_target = projectToGround(body_target, height);
-        
-        pos.target.x = pos.target.x * (1.0 - k) + pos.raw_target.x * k;
-        pos.target.y = pos.target.y * (1.0 - k) + pos.raw_target.y * k;
+
+        double raw_earth_x = pos.raw_target.x * cosy - pos.raw_target.y * siny;
+        double raw_earth_y = pos.raw_target.x * siny + pos.raw_target.y * cosy;
+        double k_earth_x = Kalman_Update(&K_target_x, raw_earth_x);
+        double k_earth_y = Kalman_Update(&K_target_y, raw_earth_y);
+
+        pos.k_target.x = k_earth_x * cosy + k_earth_y * siny;
+        pos.k_target.y = -k_earth_x * siny + k_earth_y * cosy;
     }
 
-    // 计算双目标直线距离
+    // 车和信标使用相同参数的Kalman结果，避免不同滤波相位污染相对距离。
     if (cam_down.car_valid && cam_down.target_valid) {
-        double dx = pos.car.x - pos.target.x;
-        double dy = pos.car.y - pos.target.y;
+        double dx = pos.k_car.x - pos.k_target.x;
+        double dy = pos.k_car.y - pos.k_target.y;
         dataC.car_target_dist = (float)sqrt(dx * dx + dy * dy);
     }
 }

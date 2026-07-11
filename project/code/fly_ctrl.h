@@ -25,9 +25,12 @@
 
 #define ROLL_OFFSET 413.8f//424.0f      //补偿重心偏移
 #define PITCH_OFFSET 3.2f//0.0f      //补偿重心偏移
-// ================= 新增：摄像头物理偏心补偿 ================= 
-#define CAM_OFFSET_X   -9.0f  
-#define CAM_OFFSET_Y   -2.0f  // 假设左右居中无偏移
+// ================= 小车固定悬停点视觉补偿 =================
+// X前Y右，单位cm；数值是在无人机IMU yaw等于CAM_OFFSET_MEASURE_YAW_DEG时测得的机体系坐标。
+#define CAM_OFFSET_X                  -2.5f
+#define CAM_OFFSET_Y                  -9.5f
+// 该yaw以无人机上电朝向为0；使用时会与视觉坐标一同转换到小车固定地面系。
+#define CAM_OFFSET_MEASURE_YAW_DEG     0.0f
 
 
 //--------------------飞行状态----------------------//

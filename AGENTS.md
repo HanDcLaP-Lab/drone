@@ -59,6 +59,7 @@ Two `volatile float` arrays at fixed addresses:
 ### 调试打印
 - **有线打印**: 使用 `printf()`。
 - **无线打印**: 使用 `wireless_uart_*()` / `wireless_uart` 开头的函数。
+- **执行位置**: 所有有线/无线串口打印只能由 CM7_0 执行；运行期事件在 CM7_0 主循环打印，CM7_1 和中断只能传递数据或设置待打印标志。
 - **数值类格式**: 数值之间用 `,` 分隔，结尾使用 `\r\n`，例如 `"dat1,dat2,dat3\r\n"`。
 
 ## ANTI-PATTERNS

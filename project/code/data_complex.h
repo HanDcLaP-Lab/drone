@@ -38,10 +38,10 @@
 #define S1_CAR_CENTER_Y    0   // cam_down.car_center_y      小车中心Y坐标 (像素)
 #define S1_CAR_CENTER_X    1   // cam_down.car_center_x      小车中心X坐标 (像素)
 #define S1_CAR_DOT_NUM     2   // cam_down.car_dot_num       小车识别点数/面积
-#define S1_CAR_RAW_X       3   // pos.car.x                  小车原始位置X (cm)
-#define S1_CAR_RAW_Y       4   // pos.car.y                  小车原始位置Y (cm)
-#define S1_TARGET_X        5   // pos.target.x               目标(信标)位置X (cm)
-#define S1_TARGET_Y        6   // pos.target.y               目标(信标)位置Y (cm)
+#define S1_CAR_RAW_X       3   // pos.raw_car.x              小车未滤波位置X (cm)
+#define S1_CAR_RAW_Y       4   // pos.raw_car.y              小车未滤波位置Y (cm)
+#define S1_TARGET_X        5   // pos.k_target.x             目标(信标)Kalman位置X (cm)
+#define S1_TARGET_Y        6   // pos.k_target.y             目标(信标)Kalman位置Y (cm)
 #define S1_RAW_CAR_X       7   // pos.raw_car.x              小车未滤波X (cm)
 #define S1_SNAPSHOT_YAW    8   // img_imu_snap.yaw           快照偏航角 (deg)
 #define S1_K_CAR_X         9   // pos.k_car.x                卡尔曼滤波后小车X (cm)
@@ -60,7 +60,8 @@
 #define LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES 5U // 图像约50Hz，5帧约100ms
 
 typedef struct {
-    float debug_earth_err_x,debug_earth_err_y; //0
+    float debug_earth_err_x,debug_earth_err_y;
+    float debug_body_track_x,debug_body_track_y;
     float car_target_dist; //1
     uint32_t pit0_cnt; //0
     float camera_offset_x,camera_offset_y; //0

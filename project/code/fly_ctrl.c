@@ -217,7 +217,7 @@ static void Flight_Control_Rate(float *out_roll, float *out_pitch, float *out_ya
  */
 static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pitch, float out_yaw) {
 
-    // 静态补偿 — 仅在初始化时计算 (值恒为0, 因PITCH_OFFSET/ROLL_OFFSET均为0)
+    // 根据机架前后/左右静态偏差叠加电机补偿。
     motor_offset.lf = (int16_t)( PITCH_OFFSET + ROLL_OFFSET);
     motor_offset.rf = (int16_t)( PITCH_OFFSET - ROLL_OFFSET);
     motor_offset.lb = (int16_t)(-PITCH_OFFSET + ROLL_OFFSET);

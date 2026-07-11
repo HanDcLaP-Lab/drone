@@ -57,8 +57,14 @@ float float_buffer[UART_DATA_LENGTH] = {0};
 
 int vis_cnt = 0;
 
-/* [移出ISR] ISR 置位、主循环消费的无线打印标志 (定义在 cm7_0_isr.c) */
-extern volatile uint8_t imu_print_pending;
+/* ISR发布、主循环消费的500ms电机平均值快照 (定义在cm7_0_isr.c)。 */
+extern volatile uint8_t motor_avg_print_pending;
+extern volatile uint32_t motor_avg_sum_lf;
+extern volatile uint32_t motor_avg_sum_rf;
+extern volatile uint32_t motor_avg_sum_lb;
+extern volatile uint32_t motor_avg_sum_rb;
+extern volatile uint16_t motor_avg_window_samples;
+extern volatile uint8_t emergency_stop_print_pending;
 static uint8_t merge_print_pending = 0;
 static uint8_t last_vision_locked_state = 0;
 
@@ -148,6 +154,15 @@ int main(void) {
             Board_Comm_Send_Data(float_buffer);
             //   send_cnt = 0;
             //}
+            static uint32_t last_visual_pos_print_ms = 0;
+            if ((uint32_t)(dataC.pit0_cnt - last_visual_pos_print_ms) >= 500U) {
+                last_visual_pos_print_ms = dataC.pit0_cnt;
+                // printf("%.2f,%.2f,%.2f,%.2f\r\n",
+                //        share_data_from_1[S1_CAR_RAW_X],
+                //        share_data_from_1[S1_CAR_RAW_Y],
+                //        dataC.debug_body_track_x,
+                //        dataC.debug_body_track_y);
+            }
         }
         else 
         {
@@ -170,9 +185,31 @@ int main(void) {
         SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
 
 /* 无线串口打印开始 */
-        if (imu_print_pending) {
-            imu_print_pending = 0;
-            //wireless_uart_output_imu_sample_rate();
+        if (emergency_stop_print_pending) {
+            emergency_stop_print_pending = 0;
+            wireless_uart_send_string("emergency stop\r\n");
+        }
+        if (motor_avg_print_pending) {
+            uint32_t sum_lf;
+            uint32_t sum_rf;
+            uint32_t sum_lb;
+            uint32_t sum_rb;
+            uint16_t sample_count;
+            uint32_t primask = interrupt_global_disable();
+            sum_lf = motor_avg_sum_lf;
+            sum_rf = motor_avg_sum_rf;
+            sum_lb = motor_avg_sum_lb;
+            sum_rb = motor_avg_sum_rb;
+            sample_count = motor_avg_window_samples;
+            motor_avg_print_pending = 0;
+            interrupt_global_enable(primask);
+            if (sample_count > 0) {
+                float divisor = (float)sample_count;
+                wireless_uart_output_motor_average((float)sum_lf / divisor,
+                                                   (float)sum_rf / divisor,
+                                                   (float)sum_lb / divisor,
+                                                   (float)sum_rb / divisor);
+            }
         }
         if (merge_print_pending) {
             merge_print_pending = 0;

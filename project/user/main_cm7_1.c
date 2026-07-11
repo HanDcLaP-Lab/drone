@@ -58,11 +58,10 @@ int main(void)
     debug_info_init();                  // 调试串口信息初始化
 
     camera_init();
-    // 建议初始参数：Q=0.5 (信任小车本身的连续运动), R=10.0 (视觉噪点较大)
-    Kalman_Init(&K_car_x, 1.0f, 0.5f, 0.0f);
-    Kalman_Init(&K_car_y, 1.0f, 0.5f, 0.0f);
-    // Kalman_Init(&K_target_x, 0.1f, 15.0f, 0.0f); // 信标通常是静止的，Q可以给小一点，R给大一点让它更死区
-    // Kalman_Init(&K_target_y, 0.1f, 15.0f, 0.0f);
+    Kalman_Init(&K_car_x, IMAGE_POS_KALMAN_Q, IMAGE_POS_KALMAN_R, 0.0f);
+    Kalman_Init(&K_car_y, IMAGE_POS_KALMAN_Q, IMAGE_POS_KALMAN_R, 0.0f);
+    Kalman_Init(&K_target_x, IMAGE_POS_KALMAN_Q, IMAGE_POS_KALMAN_R, 0.0f);
+    Kalman_Init(&K_target_y, IMAGE_POS_KALMAN_Q, IMAGE_POS_KALMAN_R, 0.0f);
     system_delay_ms(2000);
     display_init();
     key_switch_init();
@@ -88,7 +87,6 @@ int main(void)
 
             image_processing_loop();               // 执行核心视觉算法
 
-
             // 2. 刷入 RAM 供 Core 0 读取
             M7_1_data_send(share_data_from_1);
             share_data_from_1[S1_PROCESS_DONE] = 1.0f; // 图像处理完成标志位，Core 0 可根据此位判断何时读取数据
@@ -105,7 +103,6 @@ int main(void)
             frame_cnt++;
             if (frame_cnt >= 100) {
                 frame_cnt = 0;
-                //printf("100");
             }
         }
     }

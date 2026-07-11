@@ -6,8 +6,8 @@
 //   Flight_Hover_Control_Task() (CM7_0主循环, ~25ms周期)
 //        │
 //   ┌────┴───────────────────────────────────────────────────┐
-//   │ 1. 读取Core1视觉结果 (S1_K_CAR_X/Y, S1_LOCKED_COUNT)  │
-//   │ 2. Flight_Hover_Position_Control()  位置环PID         │
+//   │ 1. 读取Core1原始小车坐标与锁定状态                      │
+//   │ 2. 大地系偏心补偿与滤波 → 位置环PID                     │
 //   │    ├─ 快照Yaw → 地球系误差 → PID → 目标加速度          │
 //   │    └─ 实时Yaw → 转回机体坐标系 → target_roll/pitch     │
 //   │ 4. Flight_Hover_Yaw_Control()  偏航搜索状态机          │
@@ -79,14 +79,52 @@ static const float search_yaw_seq[SEARCH_YAW_SEQ_NUM] = SEARCH_YAW_SEQ_ARRAY; //
 
 static uint8_t was_aligning = 0;         // 标记飞机之前是否正处于”对准”转动状态
 static uint8_t lost_frames = 0;          // 连续丢失目标帧数 (防单帧噪点误触发回平)
+static KalmanFilter1 hover_car_earth_x_filter;
+static KalmanFilter1 hover_car_earth_y_filter;
+static uint8_t hover_car_filter_initialized = 0;
 // =================== 内部辅助控制函数 ===================
+
+/**
+ * @brief 在小车固定地面系扣除悬停点偏移并滤波，输出供飞控使用的机体系位置
+ */
+static void Hover_Car_Position_Filter(float raw_car_x, float raw_car_y, float snapshot_yaw,
+                                      float *filtered_car_x, float *filtered_car_y) {
+    float yaw_rad = VISION_EARTH_YAW_DEG(snapshot_yaw) * 3.14159265f / 180.0f;
+    float cos_yaw = cosf(yaw_rad);
+    float sin_yaw = sinf(yaw_rad);
+    float offset_yaw_rad = VISION_EARTH_YAW_DEG(CAM_OFFSET_MEASURE_YAW_DEG) *
+                           3.14159265f / 180.0f;
+    float cos_offset_yaw = cosf(offset_yaw_rad);
+    float sin_offset_yaw = sinf(offset_yaw_rad);
+
+    float raw_earth_x = raw_car_x * cos_yaw - raw_car_y * sin_yaw;
+    float raw_earth_y = raw_car_x * sin_yaw + raw_car_y * cos_yaw;
+    float offset_earth_x = dataC.camera_offset_x * cos_offset_yaw -
+                           dataC.camera_offset_y * sin_offset_yaw;
+    float offset_earth_y = dataC.camera_offset_x * sin_offset_yaw +
+                           dataC.camera_offset_y * cos_offset_yaw;
+    float hover_earth_x = raw_earth_x - offset_earth_x;
+    float hover_earth_y = raw_earth_y - offset_earth_y;
+
+    if (!hover_car_filter_initialized) {
+        Kalman_Init(&hover_car_earth_x_filter, IMAGE_POS_KALMAN_Q, IMAGE_POS_KALMAN_R, hover_earth_x);
+        Kalman_Init(&hover_car_earth_y_filter, IMAGE_POS_KALMAN_Q, IMAGE_POS_KALMAN_R, hover_earth_y);
+        hover_car_filter_initialized = 1;
+    } else {
+        hover_earth_x = Kalman_Update(&hover_car_earth_x_filter, hover_earth_x);
+        hover_earth_y = Kalman_Update(&hover_car_earth_y_filter, hover_earth_y);
+    }
+
+    *filtered_car_x = hover_earth_x * cos_yaw + hover_earth_y * sin_yaw;
+    *filtered_car_y = -hover_earth_x * sin_yaw + hover_earth_y * cos_yaw;
+}
 
 /**
  * @brief 位置环解耦控制
  */
 static void Flight_Hover_Position_Control(float car_pos_x, float car_pos_y, float *out_roll, float *out_pitch) {
     float snapshot_yaw = share_data_from_1[S1_SNAPSHOT_YAW];
-    float yaw_rad = snapshot_yaw * 3.14159265f / 180.0f;
+    float yaw_rad = VISION_EARTH_YAW_DEG(snapshot_yaw) * 3.14159265f / 180.0f;
     float cos_yaw = cosf(yaw_rad);
     float sin_yaw = sinf(yaw_rad);
 
@@ -106,7 +144,7 @@ static void Flight_Hover_Position_Control(float car_pos_x, float car_pos_y, floa
     float target_earth_accel_y = Nonline_PID_Calculate(&pid_image_y, earth_err_y, dt_sec);
 
     // 将地球系算出的推力转回当前机体去执行时，必须使用此时此刻的即时偏航角
-    float cur_yaw_rad = imu_data.yaw * 3.14159265f / 180.0f;
+    float cur_yaw_rad = VISION_EARTH_YAW_DEG(imu_data.yaw) * 3.14159265f / 180.0f;
     float cur_cos_yaw = cosf(cur_yaw_rad);
     float cur_sin_yaw = sinf(cur_yaw_rad);
 
@@ -210,14 +248,13 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
 
 void Flight_Hover_Control_Task(void) {
     // 1. 获取目标中心坐标与锁定状态
-    float car_pos_x = share_data_from_1[S1_K_CAR_X];
-    float car_pos_y = share_data_from_1[S1_K_CAR_Y];
+    float car_pos_x = share_data_from_1[S1_CAR_RAW_X];
+    float car_pos_y = share_data_from_1[S1_CAR_RAW_Y];
     uint8_t locked_lights = (uint8_t)share_data_from_1[S1_LOCKED_COUNT];
     float snapshot_yaw = share_data_from_1[S1_SNAPSHOT_YAW];
     
     if (locked_lights == 1 || locked_lights == 3 || locked_lights == 4) {
-        car_pos_x = car_pos_x - dataC.camera_offset_x;
-        car_pos_y = car_pos_y - dataC.camera_offset_y;
+        Hover_Car_Position_Filter(car_pos_x, car_pos_y, snapshot_yaw, &car_pos_x, &car_pos_y);
     } 
 
     // 2. 视觉位置前馈预测 (当同时看到小车和信标时)
@@ -225,6 +262,11 @@ void Flight_Hover_Control_Task(void) {
         float target_pos_x = share_data_from_1[S1_TARGET_X] - dataC.camera_offset_x;
         float target_pos_y = share_data_from_1[S1_TARGET_Y] - dataC.camera_offset_y;
         Car_Position_Predict_Feedforward(&car_pos_x, &car_pos_y, target_pos_x, target_pos_y);
+    }
+
+    if (locked_lights == 1 || locked_lights == 3 || locked_lights == 4) {
+        dataC.debug_body_track_x = car_pos_x;
+        dataC.debug_body_track_y = car_pos_y;
     }
 
     // 3. 计算真实时间差 dt (防除零)
@@ -255,6 +297,7 @@ void Flight_Hover_Control_Task(void) {
         if (lost_frames >= LOST_TOLERANCE_FRAMES) {
             Nonline_PID_Reset(&pid_image_x);
             Nonline_PID_Reset(&pid_image_y);
+            hover_car_filter_initialized = 0;
 
             Set_Target_Attitude(0.0f, 0.0f, flight_target.target_yaw);
 

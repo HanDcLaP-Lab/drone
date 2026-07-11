@@ -14,6 +14,7 @@ void wireless_uart_output_imu(void);
 void wireless_uart_output_pid(void);
 void wireless_uart_output_yaw(void);
 void wireless_uart_output_motor(void);
+void wireless_uart_output_motor_average(float lf, float rf, float lb, float rb);
 void wireless_uart_output_groud(void);
 void wireless_uart_output_imu_sample_rate(void);
 void wireless_uart_output_height(void);
