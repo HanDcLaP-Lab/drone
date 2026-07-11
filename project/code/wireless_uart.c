@@ -136,14 +136,87 @@ void wireless_uart_output_motor(void){
     wireless_uart_send_string("\n");
 }
 
-void wireless_uart_output_motor_average(float lf, float rf, float lb, float rb){
-    wireless_uart_send_float(lf);
+// ================== 四电机500ms平均值调试 ==================
+#define MOTOR_AVG_WINDOW_MS 500U
+
+static uint32_t motor_avg_sum_lf = 0;
+static uint32_t motor_avg_sum_rf = 0;
+static uint32_t motor_avg_sum_lb = 0;
+static uint32_t motor_avg_sum_rb = 0;
+static uint16_t motor_avg_sample_count = 0;
+static uint32_t motor_avg_window_start_ms = 0;
+static uint8_t motor_avg_window_initialized = 0;
+
+static volatile uint32_t motor_avg_snapshot_lf = 0;
+static volatile uint32_t motor_avg_snapshot_rf = 0;
+static volatile uint32_t motor_avg_snapshot_lb = 0;
+static volatile uint32_t motor_avg_snapshot_rb = 0;
+static volatile uint16_t motor_avg_snapshot_count = 0;
+static volatile uint8_t motor_avg_print_pending = 0;
+
+void wireless_uart_motor_average_sample(void){
+    uint32_t now_ms = dataC.pit0_cnt;
+
+    if (!motor_avg_window_initialized) {
+        motor_avg_window_start_ms = now_ms;
+        motor_avg_window_initialized = 1;
+    } else if ((uint32_t)(now_ms - motor_avg_window_start_ms) >= MOTOR_AVG_WINDOW_MS) {
+        if (motor_avg_sample_count > 0) {
+            motor_avg_snapshot_lf = motor_avg_sum_lf;
+            motor_avg_snapshot_rf = motor_avg_sum_rf;
+            motor_avg_snapshot_lb = motor_avg_sum_lb;
+            motor_avg_snapshot_rb = motor_avg_sum_rb;
+            motor_avg_snapshot_count = motor_avg_sample_count;
+            motor_avg_print_pending = 1;
+        }
+        motor_avg_sum_lf = 0;
+        motor_avg_sum_rf = 0;
+        motor_avg_sum_lb = 0;
+        motor_avg_sum_rb = 0;
+        motor_avg_sample_count = 0;
+        motor_avg_window_start_ms = now_ms;
+    }
+
+    // DEBUG模式实际下发为0；其余状态采集限幅后的最终电机输出。
+    if (current_drone_state != DRONE_STATE_DEBUG) {
+        motor_avg_sum_lf += (uint32_t)motor_out.lf;
+        motor_avg_sum_rf += (uint32_t)motor_out.rf;
+        motor_avg_sum_lb += (uint32_t)motor_out.lb;
+        motor_avg_sum_rb += (uint32_t)motor_out.rb;
+    }
+    motor_avg_sample_count++;
+}
+
+void wireless_uart_output_motor_average(void){
+    uint32_t sum_lf;
+    uint32_t sum_rf;
+    uint32_t sum_lb;
+    uint32_t sum_rb;
+    uint16_t sample_count;
+    uint32_t primask;
+    float divisor;
+
+    if (!motor_avg_print_pending) return;
+
+    primask = interrupt_global_disable();
+    sum_lf = motor_avg_snapshot_lf;
+    sum_rf = motor_avg_snapshot_rf;
+    sum_lb = motor_avg_snapshot_lb;
+    sum_rb = motor_avg_snapshot_rb;
+    sample_count = motor_avg_snapshot_count;
+    motor_avg_print_pending = 0;
+    interrupt_global_enable(primask);
+
+    if (sample_count == 0) return;
+
+    divisor = (float)sample_count;
+    wireless_uart_send_float((float)sum_lf / divisor);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(rf);
+    wireless_uart_send_float((float)sum_rf / divisor);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(lb);
+    wireless_uart_send_float((float)sum_lb / divisor);
     wireless_uart_send_string(",");
-    wireless_uart_send_float(rb);
+    wireless_uart_send_float((float)sum_rb / divisor);
     wireless_uart_send_string("\r\n");
 }
 

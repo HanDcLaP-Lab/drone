@@ -209,6 +209,13 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
     }
 #else
     flight_target.target_yaw = TARGET_ALIGN_DISABLE_YAW; // 当前为特殊值禁用对准
+
+    // float target_yaw_set[12]={0,30,60,90,60,30,0,-30,-60,-90,-60,-30};
+    // if (dataC.pit0_cnt > 20000U) {
+    //     uint32_t target_yaw_idx = ((dataC.pit0_cnt - 20000U) / 5000U) % 12U;
+    //     flight_target.target_yaw = target_yaw_set[target_yaw_idx];
+    // }
+
 #endif
 
     // 逻辑B：仅看到单目标（小车），执行定时定角停留 + 定向跳变扫描

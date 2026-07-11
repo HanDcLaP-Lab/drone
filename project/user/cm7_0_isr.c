@@ -43,18 +43,6 @@
 uint16_t target = 0;
 uint16_t has_stopped = 0;
 
-/* ISR只累计/发布快照，主循环负责实际无线发送。 */
-volatile uint8_t motor_avg_print_pending = 0;
-volatile uint32_t motor_avg_sum_lf = 0;
-volatile uint32_t motor_avg_sum_rf = 0;
-volatile uint32_t motor_avg_sum_lb = 0;
-volatile uint32_t motor_avg_sum_rb = 0;
-volatile uint16_t motor_avg_window_samples = 0;
-static uint32_t motor_sum_lf = 0;
-static uint32_t motor_sum_rf = 0;
-static uint32_t motor_sum_lb = 0;
-static uint32_t motor_sum_rb = 0;
-static uint16_t motor_avg_sample_count = 0;
 volatile uint8_t emergency_stop_print_pending = 0; /* 倾斜急停提示 */
 
 // **************************** PIT中断函数 ****************************
@@ -88,37 +76,13 @@ void pit0_ch1_isr()
     }
 
     motor_pwm_set();
-
-    // DEBUG模式实际下发为0；其余状态使用限幅后的最终电机输出。
-    if (current_drone_state != DRONE_STATE_DEBUG) {
-        motor_sum_lf += (uint32_t)motor_out.lf;
-        motor_sum_rf += (uint32_t)motor_out.rf;
-        motor_sum_lb += (uint32_t)motor_out.lb;
-        motor_sum_rb += (uint32_t)motor_out.rb;
-    }
-    motor_avg_sample_count++;
-
+    wireless_uart_motor_average_sample();
     debug_data_get();
 }
 
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
-
-    if (motor_avg_sample_count > 0) {
-        motor_avg_sum_lf = motor_sum_lf;
-        motor_avg_sum_rf = motor_sum_rf;
-        motor_avg_sum_lb = motor_sum_lb;
-        motor_avg_sum_rb = motor_sum_rb;
-        motor_avg_window_samples = motor_avg_sample_count;
-        motor_avg_print_pending = 1;
-    }
-
-    motor_sum_lf = 0;
-    motor_sum_rf = 0;
-    motor_sum_lb = 0;
-    motor_sum_rb = 0;
-    motor_avg_sample_count = 0;
 }
 
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数

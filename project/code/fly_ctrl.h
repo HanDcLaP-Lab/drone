@@ -23,8 +23,8 @@
 #define TARGET_ACC_DISTANCE 100.0f    //为了防止无人机与信标很近时yaw变化大，角度跟踪的最小距离
 #define YAW_MIN_ERROR  5.0f    //角度跟踪设置的小死区
 
-#define ROLL_OFFSET 413.8f//424.0f      //补偿重心偏移
-#define PITCH_OFFSET 3.2f//0.0f      //补偿重心偏移
+#define ROLL_OFFSET 338.0f       //补偿重心偏移
+#define PITCH_OFFSET -240.0f     //补偿重心偏移
 // ================= 小车固定悬停点视觉补偿 =================
 // X前Y右，单位cm；数值是在无人机IMU yaw等于CAM_OFFSET_MEASURE_YAW_DEG时测得的机体系坐标。
 #define CAM_OFFSET_X                  -2.5f
