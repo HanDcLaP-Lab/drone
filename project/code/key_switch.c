@@ -1,5 +1,6 @@
 #include "key_switch.h"
 #include "zf_common_headfile.h"
+#include "image.h"
 
 // 实际分配内存空间
 Key_Switch_t dev_key1;
@@ -9,7 +10,7 @@ Key_Switch_t dev_key4;
 Key_Switch_t dev_switch1;
 Key_Switch_t dev_switch2;
 
-float debug_params[PARAM_COUNT] = {(float)THRESHOLD};
+float debug_params[PARAM_COUNT] = {(float)THRESHOLD_MAX};
 uint8_t current_param_idx = 0;             // 当前选中的参数索引
 uint8_t display_page_idx = 0;              // [新增] 屏幕显示页面索引
 
@@ -158,27 +159,27 @@ void Key_Switch_Param_Edit(void) {
         // 按下增加参数
         debug_params[current_param_idx] += delta;
 
-        // 3. 安全限制循环范围 (阈值在 0~255 之间)
+        // 3. 安全限制：threshold_max 范围 THRESHOLD_MIN~255，实际生效由主循环同步
         if (current_param_idx == 0) {
             if (debug_params[0] > 255.0f) {
-                debug_params[0] = 255.0f; 
+                debug_params[0] = 255.0f;
             }
         }
     }
 
     if (dev_key3.event == KEY_EVT_SHORT) {
-        
-        // 按 5% 的变化量，并确保最小变化 1.0 
+
+        // 按 5% 的变化量，并确保最小变化 1.0
         float delta = debug_params[current_param_idx] * 0.05f;
         if (delta < 1.0f) delta = 1.0f;
 
         // 按下减小参数
         debug_params[current_param_idx] -= delta;
 
-        // 3. 安全限制循环范围 (阈值在 0~255 之间)
+        // 3. 安全限制：threshold_max 范围 THRESHOLD_MIN~255，实际生效由主循环同步
         if (current_param_idx == 0) {
-            if (debug_params[0] < 0.0f) {
-                debug_params[0] = 0.0f; 
+            if (debug_params[0] < (float)THRESHOLD_MIN) {
+                debug_params[0] = (float)THRESHOLD_MIN;
             }
         }
     }

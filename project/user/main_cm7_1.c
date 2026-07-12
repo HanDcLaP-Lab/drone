@@ -83,7 +83,12 @@ int main(void)
             img_imu_snap.height = share_data_from_0[S0_IMU_HEIGHT];
 
             int drone_mode = (int)share_data_from_0[S0_DRONE_STATE];
-            cam_down.threshold = (uint8_t)debug_params[0];
+            // 将 ISR 修改的 debug_params 同步到 cam_down 并重算 LUT，
+            // 放在主循环而非 ISR 中以避免 thresh_by_rho2[] 的读写竞态。
+            if ((uint8_t)debug_params[0] != cam_down.threshold_max) {
+                threshold_max_update((uint8_t)debug_params[0]);
+                cam_down.threshold_max = debug_params[0];
+            }
 
             image_processing_loop();               // 执行核心视觉算法
 

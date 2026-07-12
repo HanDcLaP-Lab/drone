@@ -67,7 +67,7 @@
 #define K_Y 1.11f
 
 // ================= 形态学参数 =================
-#define ERODE_MIN_NEIGHBORS     7       // 腐蚀: 8邻域至少保留此数亮像素
+#define ERODE_MIN_NEIGHBORS     8       // 腐蚀: 8邻域至少保留此数亮像素
 
 // ================= 边缘泛光清除 =================
 #define EDGE_BLOB_THRESHOLD      8    // 二值化前清除边缘泛光的灰度阈值 (0~255)
@@ -106,7 +106,7 @@ typedef struct {
     uint8_t *binarized_image;   
 
     // --- 算法参数 ---
-    uint8_t threshold;          
+    uint8_t threshold_max;      // 动态阈值上限 (中心值)，按键可调
 
     // --- 处理结果 (纯净的原始数据，绝不覆写) ---
     uint8_t light_number;            
@@ -159,4 +159,5 @@ extern Image_IMU_Snapshot_t img_imu_snap;
 // 函数声明
 void camera_init(void);           // 初始化
 void image_processing_loop(void); // 图像处理主循环
+void threshold_max_update(uint8_t new_max); // 更新动态阈值上限并重算 LUT
 #endif 

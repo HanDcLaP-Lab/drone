@@ -208,7 +208,7 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
     if(display_page_idx == 0)
     {
         ips200_show_string(0, 16*10, "Thresh:");
-        ips200_show_int(80, 16*10, cam_down.threshold, 3);
+        ips200_show_int(80, 16*10, cam_down.threshold_max, 3);
 
         ips200_show_string(0, 16*11, "Car A:");
         ips200_show_int(50, 16*11, cam_down.car_dot_num, 4);

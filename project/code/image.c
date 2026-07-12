@@ -74,17 +74,12 @@ void camera_init(void) {
     cam_down.binarized_image = (uint8_t *)buffer_bin_down;
     
     // 参数配置
-    cam_down.threshold = THRESHOLD;   // 二值化阈值 (需根据实际场地光照调整)
+    cam_down.threshold_max = THRESHOLD_MAX; // 动态阈值上限，按键可调
     cam_down.debug.max_ratio = 0.0f;
     cam_down.debug.min_ratio = 999.0f;
 
     // 预计算逐像素阈值查找表: rho² → threshold, 中心高阈值边缘低阈值
-    int span = THRESHOLD_MAX - THRESHOLD_MIN;
-    for (int i = 0; i <= (int)FOV_RADIUS_SQ; i++) {
-        int thr = THRESHOLD_MAX - (i * span) / (int)FOV_RADIUS_SQ;
-        if (thr < THRESHOLD_MIN) thr = THRESHOLD_MIN;
-        thresh_by_rho2[i] = (uint8_t)thr;
-    }
+    threshold_max_update(cam_down.threshold_max);
 
     // 初始化阶段预计算每一行的圆形视野起始和结束列
     for (int r = 0; r < MT9V03X_H; r++) {
@@ -165,6 +160,19 @@ void camera_init(void) {
                 border_indices[border_pixel_count++] = r * MT9V03X_W + c;
             }
         }
+    }
+}
+
+// 更新动态阈值上限并重算 rho² → threshold 查找表
+void threshold_max_update(uint8_t new_max) {
+    if (new_max < THRESHOLD_MIN) new_max = THRESHOLD_MIN;
+
+    cam_down.threshold_max = new_max;
+    int span = new_max - THRESHOLD_MIN;
+    for (int i = 0; i <= (int)FOV_RADIUS_SQ; i++) {
+        int thr = new_max - (i * span) / (int)FOV_RADIUS_SQ;
+        if (thr < THRESHOLD_MIN) thr = THRESHOLD_MIN;
+        thresh_by_rho2[i] = (uint8_t)thr;
     }
 }
 

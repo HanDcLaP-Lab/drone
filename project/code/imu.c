@@ -32,17 +32,20 @@ IMU_Data_t imu_data = {0};
 volatile uint16_t imu_gyro_new_sample_count = 0;
 volatile uint16_t imu_acc_new_sample_count = 0;
 
-#define IMU_CALIB_SAMPLES 2000u
+#define IMU_CALIB_VALID_SAMPLES 1000u   // 有效静止样本目标数 (~1.25s @ 800Hz)
+#define IMU_CALIB_GYRO_TOLERANCE 5.0f   // 静止角速度上限 (°/s)
+#define IMU_CALIB_MAX_ATTEMPTS 4000u    // 超时保底 (5s @ 800Hz)
 
 // 内部算法变量
 static float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f; // 四元数
 static float exInt = 0.0f, eyInt = 0.0f, ezInt = 0.0f;   // 积分误差
 // 陀螺仪校准相关
 static double offset_gx = 0, offset_gy = 0, offset_gz = 0;
-static float  offset_az = 0.0f; // [新增] 加速度计Z轴零偏 (map_az基准偏差, 单位m/s^2)
+static float  offset_ax = 0.0f, offset_ay = 0.0f, offset_az = 0.0f; // 加速度计三轴零偏 (m/s^2)
 static double sum_gx = 0, sum_gy = 0, sum_gz = 0;
 static double sum_ax = 0, sum_ay = 0, sum_az = 0;
 static uint16_t calib_cnt = 0;
+static uint16_t calib_valid_cnt = 0; // 通过静止检测的有效样本数
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
 // ================= 陷波滤波器 (电机振动抑制, IMU 特化) =================
 #if NOTCH_ENABLE
@@ -265,9 +268,8 @@ static void Navigation_Update(float ax, float ay, float az) {
     float w_ay = 2*(q1q2 + q0q3)*ax + (1 - 2*(q1q1 + q3q3))*ay + 2*(q2q3 - q0q1)*az;
     float w_az = 2*(q1q3 - q0q2)*ax + 2*(q2q3 + q0q1)*ay + (1 - 2*(q1q1 + q2q2))*az;
 
-    // 3. 去除重力 + 加速度计Z轴零偏补偿
-    // [修复] 减去校准阶段测量的加速度计零偏，消除静止时vz积分漂移
-    w_az = w_az - GRAVITY_MSS - offset_az;
+    // 3. 去除重力 (加速度计零偏已在上游 IMU_Update_Loop 中扣除)
+    w_az = w_az - GRAVITY_MSS;
 
     // 4. 滤波与死区 (Z轴死区稍大，防止静态积分漂移)
     if(fabsf(w_ax) < 0.01f) w_ax = 0; 
@@ -355,77 +357,90 @@ void IMU_Update_Loop(void) {
     raw_gy = Kalman_Update(&K_gpitch, raw_gy);
     raw_gz = Kalman_Update(&K_gyaw, raw_gz);
 
-    // ================= 校准逻辑 (包含加速度计) =================
+    // ================= 校准逻辑 =================
     if (imu_data.is_calibrated == 0) {
         calib_cnt++;
-        
-        sum_gx += raw_gx;
-        sum_gy += raw_gy;
-        sum_gz += raw_gz;
-        sum_ax += raw_ax;
-        sum_ay += raw_ay;
-        sum_az += raw_az;
-        
-        if (calib_cnt >= IMU_CALIB_SAMPLES) {
-            // 计算平均值
-            offset_gx = (float)(sum_gx / (double)IMU_CALIB_SAMPLES);
-            offset_gy = (float)(sum_gy / (double)IMU_CALIB_SAMPLES);
-            offset_gz = (float)(sum_gz / (double)IMU_CALIB_SAMPLES);
 
-            // [新增] 核心改进：基于平均加速度计算初始姿态四元数
-            // 解决"任意静止姿态启动"的问题
-            float avg_ax = (float)(sum_ax / (double)IMU_CALIB_SAMPLES);
-            float avg_ay = (float)(sum_ay / (double)IMU_CALIB_SAMPLES);
-            float avg_az = (float)(sum_az / (double)IMU_CALIB_SAMPLES);
+        // 静止检测仅看角速度（加速度计可能有偏置，其模长本来就不等于重力，不可用于静止判断）
+        float gyro_mag = sqrtf(raw_gx * raw_gx + raw_gy * raw_gy + raw_gz * raw_gz);
+        if (gyro_mag < IMU_CALIB_GYRO_TOLERANCE) {
+            sum_gx += raw_gx;
+            sum_gy += raw_gy;
+            sum_gz += raw_gz;
+            sum_ax += raw_ax;
+            sum_ay += raw_ay;
+            sum_az += raw_az;
+            calib_valid_cnt++;
+        }
 
-            // 映射到机体坐标系 (使用宏定义保持一致)
-            float init_ax = IMU_MAP_AX(avg_ax, avg_ay, avg_az);
-            float init_ay = IMU_MAP_AY(avg_ax, avg_ay, avg_az);
-            float init_az = IMU_MAP_AZ(avg_ax, avg_ay, avg_az);
+        uint8_t enough_valid = (calib_valid_cnt >= IMU_CALIB_VALID_SAMPLES);
+        uint8_t timed_out    = (calib_cnt >= IMU_CALIB_MAX_ATTEMPTS && calib_valid_cnt >= 100);
+        if (enough_valid || timed_out) {
+            uint16_t n = calib_valid_cnt;
 
-            // [新增] 计算加速度计Z轴零偏
-            // 静止时 init_az 应该精确等于 GRAVITY_MSS，差值即为传感器零偏
-            // 注意：这里假设校准时无人机水平静止，roll≈0, pitch≈0
-            // 若roll/pitch较大，该补偿有误差，但实际校准场景均为水平放置，可接受
-            offset_az = init_az - GRAVITY_MSS;
+            // 陀螺零偏
+            offset_gx = (float)(sum_gx / (double)n);
+            offset_gy = (float)(sum_gy / (double)n);
+            offset_gz = (float)(sum_gz / (double)n);
 
-            // 计算初始欧拉角 (假设初始Yaw为0)
-            float init_roll = atan2f(init_ay, init_az);
-            float init_pitch = atan2f(-init_ax, sqrtf(init_ay*init_ay + init_az*init_az));
-            float init_yaw = 0.0f;
+            // 加速度计均值 → 映射到机体
+            float avg_ax = (float)(sum_ax / (double)n);
+            float avg_ay = (float)(sum_ay / (double)n);
+            float avg_az = (float)(sum_az / (double)n);
+            float rax = IMU_MAP_AX(avg_ax, avg_ay, avg_az);
+            float ray = IMU_MAP_AY(avg_ax, avg_ay, avg_az);
+            float raz = IMU_MAP_AZ(avg_ax, avg_ay, avg_az);
 
-            // 欧拉角转四元数
-            float c1 = cosf(init_yaw / 2); float s1 = sinf(init_yaw / 2);
+            // 统一矢量分解：方向取加速度计矢量归一化 → 大小取重力标量 → 差值即三轴偏置
+            //   静止时: avg = true_gravity + bias
+            //   方向正确（偏置不显著改变矢量方向），模长已知 = GRAVITY_MSS
+            float ra_mag  = sqrtf(rax * rax + ray * ray + raz * raz);
+            float ra_inv  = (ra_mag > 0.01f) ? (1.0f / ra_mag) : 1.0f;
+            float grav_x  = rax * ra_inv * GRAVITY_MSS; // 真重力在机体三轴的分量
+            float grav_y  = ray * ra_inv * GRAVITY_MSS;
+            float grav_z  = raz * ra_inv * GRAVITY_MSS;
+            offset_ax     = rax - grav_x;
+            offset_ay     = ray - grav_y;
+            offset_az     = raz - grav_z;
+
+            // 初始姿态（从重力方向分量反算 roll/pitch，yaw 恒为 0）
+            float init_roll  = atan2f(grav_y, grav_z);
+            float init_pitch = atan2f(-grav_x, sqrtf(grav_y * grav_y + grav_z * grav_z));
+
+            float c1 = cosf(0.0f);          float s1 = sinf(0.0f);
             float c2 = cosf(init_pitch / 2); float s2 = sinf(init_pitch / 2);
-            float c3 = cosf(init_roll / 2); float s3 = sinf(init_roll / 2);
+            float c3 = cosf(init_roll / 2);  float s3 = sinf(init_roll / 2);
 
             q0 = c1*c2*c3 + s1*s2*s3;
             q1 = c1*c2*s3 - s1*s2*c3;
             q2 = c1*s2*c3 + s1*c2*s3;
             q3 = s1*c2*c3 - c1*s2*s3;
-            
-            // 归一化
-            float norm = sqrtf(q0*q0 + q1*q1 + q2*q2 + q3*q3);
-            q0 /= norm; q1 /= norm; q2 /= norm; q3 /= norm;
+
+            float qn = sqrtf(q0*q0 + q1*q1 + q2*q2 + q3*q3);
+            q0 /= qn; q1 /= qn; q2 /= qn; q3 /= qn;
 
             imu_data.is_calibrated = 1;
             imu_data.z = 0.0f;
-            imu_data.vz = 0.0f; // 校准完成，速度清零
+            imu_data.vz = 0.0f;
             imu_data.yaw = 0.0f;
         }
-        return; 
+        return;
     }
 
-    // ================= 1. 去除零偏 =================
+    // ================= 1. 去除陀螺零偏 =================
     raw_gx -= offset_gx;
     raw_gy -= offset_gy;
     raw_gz -= offset_gz;
-    // 注意：垂直轴(raw_ax)不要减，它的基准(gravity_ref)在 Navigation_Update 里用
 
-    // ================= 2. 轴向映射 (这里补全了缺失的代码) =================
+    // ================= 2. 轴向映射 =================
     float map_ax = IMU_MAP_AX(raw_ax, raw_ay, raw_az);
     float map_ay = IMU_MAP_AY(raw_ax, raw_ay, raw_az);
     float map_az = IMU_MAP_AZ(raw_ax, raw_ay, raw_az);
+
+    // 去除加速度计三轴零偏（校准阶段测得，统一在此处扣除）
+    map_ax -= offset_ax;
+    map_ay -= offset_ay;
+    map_az -= offset_az;
 
     float map_gx = IMU_MAP_GX(raw_gx, raw_gy, raw_gz);
     float map_gy = IMU_MAP_GY(raw_gx, raw_gy, raw_gz);
