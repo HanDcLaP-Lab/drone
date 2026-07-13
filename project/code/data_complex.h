@@ -48,16 +48,8 @@
 // 10-11 reserved
 #define S1_K_CAR_Y         12  // pos.k_car.y                卡尔曼滤波后小车Y (cm)
 #define S1_CAR_TARGET_DIST 13  // dataC.car_target_dist      小车-信标距离
-#define S1_LOCKED_COUNT    14  // locked_state               0=全丢, 1=仅小车, 2=仅信标, 3=都有, 4=近距离融合盲冲
+#define S1_LOCKED_COUNT    14  // locked_state               0=全丢, 1=仅小车, 2=仅信标, 3=都有
 #define S1_PROCESS_DONE    15  // 图像处理完成标志 (1.0=完成, 0.0=未完成)
-
-// ================= locked_state 融合/低高度保护参数 =================
-#define FUSION_DIRECT_DIST_CM 60.0f
-#define FUSION_DIST_MEDIAN_FRAMES 3U
-#define FUSION_STATE4_HOLD_FRAMES 3U
-#define FUSION_STATE4_COOLDOWN_MS 1000U
-#define LOCKED_STATE_MIN_HEIGHT_CM 90.0f
-#define LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES 5U // 图像约50Hz，5帧约100ms
 
 typedef struct {
     float debug_earth_err_x,debug_earth_err_y;

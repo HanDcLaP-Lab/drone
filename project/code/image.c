@@ -514,86 +514,21 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
     cam->light_number = valid_idx;
 }
 
-// 处理信标丢失后的保持逻辑
-static void apply_target_hold_logic(CameraObject *cam) {
-    static uint8_t target_consecutive_frames = 0;
-    static uint8_t target_hold_frames = 0;
-
-    if (cam->target_valid) {
-        // 本帧有效锁定到了信标
-        if (target_consecutive_frames < 255) {
-            target_consecutive_frames++;
-        }
-        target_hold_frames = 0;
-    } else {
-        // 本帧没有锁定到信标
-        if (target_consecutive_frames >= TARGET_MIN_CONSECUTIVE_FRAMES && target_hold_frames < TARGET_HOLD_FRAMES) {
-            // 满足保持条件，强行锁定并沿用上一次的值
-            cam->target_valid = 1;
-            target_hold_frames++;
-        } else {
-            // 保持时间结束或未达到保持条件，彻底清除数据
-            target_consecutive_frames = 0;
-            cam->target_dot_num = 0;
-            cam->target_ratio = 0.0f;
-            cam->target_center_x = 0.0f;
-            cam->target_center_y = 0.0f;
-        }
-    }
-}
-
-// 处理小车丢失后的保持逻辑 (防 locked_lights 单帧从3骤降至0)
-static void apply_car_hold_logic(CameraObject *cam) {
-    static uint8_t car_consecutive_frames = 0;
-    static uint8_t car_hold_frames = 0;
-
-    if (cam->car_valid) {
-        // 本帧有效锁定到了小车
-        if (car_consecutive_frames < 255) {
-            car_consecutive_frames++;
-        }
-        car_hold_frames = 0;
-    } else {
-        // 本帧没有锁定到小车
-        if (car_consecutive_frames >= CAR_MIN_CONSECUTIVE_FRAMES && car_hold_frames < CAR_HOLD_FRAMES) {
-            // 满足保持条件，强行锁定并沿用上一次的值
-            cam->car_valid = 1;
-            car_hold_frames++;
-        } else {
-            // 保持时间结束或未达到保持条件，彻底清除数据
-            car_consecutive_frames = 0;
-            cam->car_dot_num = 0;
-            cam->car_ratio = 0.0f;
-            cam->car_center_x = 0.0f;
-            cam->car_center_y = 0.0f;
-        }
-    }
-}
-
 static void sort_lights(CameraObject *cam) {
     // 默认清除上一帧的锁定状态
     cam->car_valid = 0;
-    cam->car_raw_valid = 0;
     cam->car_dot_num = 0;
     cam->car_ratio = 0.0f;
     cam->car_center_x = 0.0f;
     cam->car_center_y = 0.0f;
 
     cam->target_valid = 0;
-    cam->target_raw_valid = 0;
-    // 不在此处清除信标坐标等信息，以支持保持最后一次信标位置
 
-    // 信标身份记忆：同一目标获得线性距离优惠，避免双信标场景下频繁翻转。
-    static float last_target_ground_x = 0.0f;
-    static float last_target_ground_y = 0.0f;
-    static uint8_t has_last_target = 0;
+    cam->debug.pass_area = 0;
+    cam->debug.pass_car = 0;
+    cam->debug.pass_target = 0;
 
     if (cam->light_number == 0) {
-        cam->debug.pass_area = 0;
-        cam->debug.pass_car = 0;
-        cam->debug.pass_target = 0;
-        apply_target_hold_logic(cam);
-        apply_car_hold_logic(cam);
         return;
     }
 
@@ -755,59 +690,30 @@ static void sort_lights(CameraObject *cam) {
             }
             float sort_dist = sqrtf(sort_dist_sq);
 
-            // [修复] 迟滞：若候选与上一帧选中信标地面位置接近（同一信标），
-            // 给予线性距离优惠，防止远距离时固定平方优惠衰减过快。
-            float hysteresis_bonus = 0.0f;
-            if (has_last_target && car_idx != -1) {
-                float dx_last = ground_x[i] - last_target_ground_x;
-                float dy_last = ground_y[i] - last_target_ground_y;
-                float dist_to_last_sq = dx_last * dx_last + dy_last * dy_last;
-                if (dist_to_last_sq < HYSTERESIS_MATCH_RADIUS_SQ) {
-                    hysteresis_bonus = -HYSTERESIS_DIST_BIAS_CM;
-                }
-            }
-            float effective_dist = sort_dist + hysteresis_bonus;
-
-            if (effective_dist < min_sort_dist) {
-                min_sort_dist = effective_dist;
+            if (sort_dist < min_sort_dist) {
+                min_sort_dist = sort_dist;
                 target_idx = i;
             }
             cam->debug.pass_target++;
         }
     }
 
-    // 更新迟滞记忆：记录本帧最终输出的信标地面坐标
-    if (target_idx != -1) {
-        last_target_ground_x = ground_x[target_idx];
-        last_target_ground_y = ground_y[target_idx];
-        has_last_target = 1;
-    }
-    // 注意：target_idx == -1 时不清除 has_last_target，
-    // 短暂丢失后恢复时仍能匹配到之前的信标。
-
-    // 3. 将结果输出到专属的安全变量中 (不破坏原始 centers 数组)
+    // 将结果输出到专属的安全变量中 (不破坏原始 centers 数组)
     if (car_idx != -1) {
         cam->car_valid = 1;
-        cam->car_raw_valid = 1;
         cam->car_center_y = cam->centers[car_idx][0];
         cam->car_center_x = cam->centers[car_idx][1];
         cam->car_dot_num = cam->dot_num[car_idx];
         cam->car_ratio = cam->aspect_ratio[car_idx];
     }
-    
+
     if (target_idx != -1) {
         cam->target_valid = 1;
-        cam->target_raw_valid = 1;
         cam->target_center_y = cam->centers[target_idx][0];
         cam->target_center_x = cam->centers[target_idx][1];
         cam->target_dot_num = cam->dot_num[target_idx];
         cam->target_ratio = cam->aspect_ratio[target_idx];
     }
-    
-    // 应用信标丢失保持逻辑
-    apply_target_hold_logic(cam);
-    // 应用小车丢失保持逻辑 (防 locked_lights 单帧骤降)
-    apply_car_hold_logic(cam);
 }
 
 // --- 4. 外部调用的处理入口 ---
