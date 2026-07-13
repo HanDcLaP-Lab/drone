@@ -47,6 +47,15 @@ typedef struct { double x, y, z; } Vector3D;
 
 // 全局变量定义
 GroundPos pos = {0};
+static uint8_t car_position_filter_initialized = 0;
+static uint8_t target_position_filter_initialized = 0;
+
+void ground_position_history_reset(void) {
+    car_position_filter_initialized = 0;
+    target_position_filter_initialized = 0;
+    memset(&pos, 0, sizeof(pos));
+    dataC.car_target_dist = 0.0f;
+}
 
 // ==========================================
 // 2. 核心算法：像素坐标 -> 3D 空间射线 (指向地面)
@@ -194,8 +203,16 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         //     Kalman_Reset_State(&K_car_y, raw_earth_y);
         // }
 
-        double k_earth_x = Kalman_Update(&K_car_x, raw_earth_x);
-        double k_earth_y = Kalman_Update(&K_car_y, raw_earth_y);
+        double k_earth_x = raw_earth_x;
+        double k_earth_y = raw_earth_y;
+        if (!car_position_filter_initialized) {
+            Kalman_Init(&K_car_x, IMAGE_POS_KALMAN_Q, IMAGE_POS_KALMAN_R, (float)raw_earth_x);
+            Kalman_Init(&K_car_y, IMAGE_POS_KALMAN_Q, IMAGE_POS_KALMAN_R, (float)raw_earth_y);
+            car_position_filter_initialized = 1;
+        } else {
+            k_earth_x = Kalman_Update(&K_car_x, raw_earth_x);
+            k_earth_y = Kalman_Update(&K_car_y, raw_earth_y);
+        }
         
         // 滤波结束后再转回相对于机头的坐标，保持与飞控代码的接口兼容
         pos.k_car.x = k_earth_x * cosy + k_earth_y * siny;
@@ -212,15 +229,24 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
 
         double raw_earth_x = pos.raw_target.x * cosy - pos.raw_target.y * siny;
         double raw_earth_y = pos.raw_target.x * siny + pos.raw_target.y * cosy;
-        double k_earth_x = Kalman_Update(&K_target_x, raw_earth_x);
-        double k_earth_y = Kalman_Update(&K_target_y, raw_earth_y);
+        double k_earth_x = raw_earth_x;
+        double k_earth_y = raw_earth_y;
+        if (!target_position_filter_initialized) {
+            Kalman_Init(&K_target_x, IMAGE_POS_KALMAN_Q, IMAGE_POS_KALMAN_R, (float)raw_earth_x);
+            Kalman_Init(&K_target_y, IMAGE_POS_KALMAN_Q, IMAGE_POS_KALMAN_R, (float)raw_earth_y);
+            target_position_filter_initialized = 1;
+        } else {
+            k_earth_x = Kalman_Update(&K_target_x, raw_earth_x);
+            k_earth_y = Kalman_Update(&K_target_y, raw_earth_y);
+        }
 
         pos.k_target.x = k_earth_x * cosy + k_earth_y * siny;
         pos.k_target.y = -k_earth_x * siny + k_earth_y * cosy;
     }
 
     // 车和信标使用相同参数的Kalman结果，避免不同滤波相位污染相对距离。
-    if (cam_down.car_valid && cam_down.target_valid) {
+    if (cam_down.car_valid && cam_down.target_valid &&
+        car_position_filter_initialized && target_position_filter_initialized) {
         double dx = pos.k_car.x - pos.k_target.x;
         double dy = pos.k_car.y - pos.k_target.y;
         dataC.car_target_dist = (float)sqrt(dx * dx + dy * dy);

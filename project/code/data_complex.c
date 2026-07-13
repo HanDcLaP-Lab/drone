@@ -120,6 +120,8 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
 
 #elif defined(CY_CORE_CM7_1)
 void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_data_from_1
+    static uint8_t low_height_frame_cnt = 0;
+
     data_out[S1_CAR_CENTER_Y] = cam_down.car_center_y;
     data_out[S1_CAR_CENTER_X] = cam_down.car_center_x;
     data_out[S1_CAR_DOT_NUM]  = (float)cam_down.car_dot_num;
@@ -138,6 +140,19 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     if (cam_down.car_valid) locked_count++;
     if (cam_down.target_valid) locked_count += 2;
     // locked_count: 0=全丢, 1=仅小车, 2=仅信标, 3=都有
+
+    if (img_imu_snap.height < LOCKED_STATE_MIN_HEIGHT_CM) {
+        if (low_height_frame_cnt < LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES) {
+            low_height_frame_cnt++;
+        }
+        if (low_height_frame_cnt >= LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES) {
+            ground_position_history_reset();
+            locked_count = 0;
+            data_out[S1_CAR_DOT_NUM] = 0;
+        }
+    } else {
+        low_height_frame_cnt = 0;
+    }
 
     data_out[S1_LOCKED_COUNT] = (float)locked_count;
 

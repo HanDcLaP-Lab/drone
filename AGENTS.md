@@ -49,6 +49,9 @@ Two `volatile float` arrays at fixed addresses:
 - **CRITICAL**: `SCB_CleanDCache_by_Addr()` after write, `SCB_InvalidateDCache_by_Addr()` before read
 
 ## CONVENTIONS
+- **实现复用与可读性**: 在能达到同样效果时，优先使用逐飞（ZF）库函数和项目已有实现，避免重复封装或手写替代；同时保持调用意图、命名和控制流清晰易读。
+- **最小且清晰的实现**: 实现代码时应尽可能简洁、优雅，在正确满足需求的前提下尽量缩小改动范围，避免不必要的抽象、重构和附带修改，同时保持良好的可读性。
+- **贴合现有代码风格**: 修改前先阅读相邻代码和同类实现；新增代码应遵循当前模块已有的代码组织、职责边界、初始化与调用顺序、命名习惯、注释风格、缩进和控制流表达。除非现有模式会导致明确问题，否则不要引入与仓库不一致的新风格；确需偏离时应说明原因。
 - **Naming**: PascalCase for high-level funcs (`Flight_Control_Init`), snake_case for init/low-level (`imu_init`, `motor_pwm_set`). Structs: `_t` suffix. Enums: `_e` suffix. Macros: `ALL_CAPS`.
 - **Comments**: Chinese `//` style. `/**` doxygen on minority of functions. Tagged with `[新增]`/`[修改]`/`注意：`.
 - **Float everywhere**: All flight control uses `float` (Cortex-M7 FPU). `double` only in `image_process.c` for ray-cast geometry and `imu.c` calibration accumulators.

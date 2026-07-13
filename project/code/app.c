@@ -5,6 +5,8 @@
 #include "filters.h"
 #include "debug_data.h"
 
+extern volatile uint8_t emergency_stop_print_pending;
+
 void app_flight_start(void) {
     
 }
@@ -93,9 +95,9 @@ void Fly_Param_Update(uint8_t ch, float val) {
                 flight_target.cur_state = pre_landing; 
                 car_en = 0;
             }else if(val > 1.5 && val < 2.5){
-                wireless_uart_send_string("emergency stop\r\n");
                 car_en = 0;
                 Flight_Lock();
+                emergency_stop_print_pending = 1;
             }else if(val == 0){
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
@@ -143,9 +145,9 @@ void Fly_Param_Update_Debug(uint8_t ch, float val) {
             }else if(val > 3.5f && val < 4.5f){
                 debug_data_request_send();
             }else if(val > 1.5f && val < 2.5f){
-                wireless_uart_send_string("emergency stop\r\n");
                 car_en = 0;
                 Flight_Lock();
+                emergency_stop_print_pending = 1;
             }else if(0.5f <= val && val < 1.5f){
                 wireless_uart_send_string("land\r\n");
                 flight_target.cur_state = pre_landing;
@@ -202,9 +204,9 @@ void Fly_Param_Update_Visual(uint8_t ch, float val) {
                 flight_target.cur_state = pre_landing; 
                 car_en = 0;
             }else if(val >=1.5 && val <=2.5){
-                wireless_uart_send_string("emergency stop\r\n");
-                Flight_Lock();
                 car_en = 0;
+                Flight_Lock();
+                emergency_stop_print_pending = 1;
             }else if(val <= 0.5 && val >= -0.5){
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
@@ -252,9 +254,9 @@ void Fly_Param_Update_yaw(uint8_t ch, float val) {
                 flight_target.cur_state = pre_landing; 
                 car_en = 0;
             }else if(val >=1.5 && val <=2.5){
-                wireless_uart_send_string("emergency stop\r\n");
-                Flight_Lock();
                 car_en = 0;
+                Flight_Lock();
+                emergency_stop_print_pending = 1;
             }else if(val <= 0.5 && val >= -0.5){
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
@@ -303,9 +305,9 @@ void Fly_Param_Update_height(uint8_t ch, float val) {
                 flight_target.cur_state = pre_landing; 
                 car_en = 0;
             }else if(val > 1.5 && val < 2.5){
-                wireless_uart_send_string("emergency stop\r\n");
                 car_en = 0;
                 Flight_Lock();
+                emergency_stop_print_pending = 1;
             }else if(val == 0){
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();

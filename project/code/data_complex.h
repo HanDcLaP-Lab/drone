@@ -52,6 +52,10 @@
 #define S1_LOCKED_COUNT    14  // locked_state               0=全丢, 1=仅小车, 2=仅信标, 3=都有
 #define S1_PROCESS_DONE    15  // 图像处理完成标志 (1.0=完成, 0.0=未完成)
 
+// ================= locked_state 低高度保护参数 =================
+#define LOCKED_STATE_MIN_HEIGHT_CM 90.0f
+#define LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES 5U // 图像约50Hz，5帧约100ms
+
 typedef struct {
     float debug_earth_err_x,debug_earth_err_y;
     float debug_body_track_x,debug_body_track_y;
