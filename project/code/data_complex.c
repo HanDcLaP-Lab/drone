@@ -97,21 +97,21 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 
 // **************************** 下传协议映射 (无人机→小车) ****************************
 // buffer[8] 索引映射，与小车端 uart_data[8] 一一对应 (协议帧: 0xAA 0x55 + 8×float + 校验和 + 0x7F):
-//   [0] car_body_pos.x      — 卡尔曼滤波后小车机体系X (cm)   ← S1_K_CAR_X (pos.k_car.x)
-//   [1] car_body_pos.y      — 卡尔曼滤波后小车机体系Y (cm)   ← S1_K_CAR_Y (pos.k_car.y)
-//   [2] target_body_pos.x   — 目标(信标)Kalman机体系X (cm)   ← S1_TARGET_X (pos.k_target.x)
-//   [3] target_body_pos.y   — 目标(信标)Kalman机体系Y (cm)   ← S1_TARGET_Y (pos.k_target.y)
+//   [0] car_raw_x           — 小车机体系X (cm, 未滤波)       ← S1_CAR_RAW_X (pos.raw_car.x)
+//   [1] car_raw_y           — 小车机体系Y (cm, 未滤波)       ← S1_CAR_RAW_Y (pos.raw_car.y)
+//   [2] target_raw_x        — 目标(信标)机体系X (cm, 未滤波) ← S1_RAW_TARGET_X (pos.raw_target.x)
+//   [3] target_raw_y        — 目标(信标)机体系Y (cm, 未滤波) ← S1_RAW_TARGET_Y (pos.raw_target.y)
 //   [4] drone_yaw           — 无人机地面系偏航角 (deg, 顺时针正) ← VISION_EARTH_YAW_DEG(S1_SNAPSHOT_YAW)
-//   [5] locked_state        — 锁定状态 (0=全丢/1=仅小车/2=仅信标/3=都有/4=近距离融合盲冲) ← S1_LOCKED_COUNT
+//   [5] locked_state        — 锁定状态 (0=全丢/1=仅小车/2=仅信标/3=都有) ← S1_LOCKED_COUNT
 //   [6] car_en              — 急停使能标志 (0=急停, 1=正常)   ← car_en
-//   [7] car_target_dist     — 车-信标地面距离 (cm)                           ← S1_CAR_TARGET_DIST
+//   [7] car_target_dist     — 车-信标地面距离 (cm)           ← S1_CAR_TARGET_DIST
 // ******************************************************************************
 void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share_data一般传入share_data_from_1
 {
-    buffer[0] = share_data[S1_K_CAR_X];
-    buffer[1] = share_data[S1_K_CAR_Y];
-    buffer[2] = share_data[S1_TARGET_X];
-    buffer[3] = share_data[S1_TARGET_Y];
+    buffer[0] = share_data[S1_CAR_RAW_X];
+    buffer[1] = share_data[S1_CAR_RAW_Y];
+    buffer[2] = share_data[S1_RAW_TARGET_X];
+    buffer[3] = share_data[S1_RAW_TARGET_Y];
     buffer[4] = VISION_EARTH_YAW_DEG(share_data[S1_SNAPSHOT_YAW]);
     buffer[5] = share_data[S1_LOCKED_COUNT];
     buffer[6] = car_en;
@@ -128,7 +128,8 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_TARGET_X]     = pos.k_target.x;
     data_out[S1_TARGET_Y]     = pos.k_target.y;
     data_out[S1_SNAPSHOT_YAW] = img_imu_snap.yaw; // 传回 Core0 的是该帧对应的快照 Yaw
-    data_out[S1_RAW_CAR_X]    = pos.raw_car.x;
+    data_out[S1_RAW_TARGET_X] = pos.raw_target.x;
+    data_out[S1_RAW_TARGET_Y] = pos.raw_target.y;
     data_out[S1_K_CAR_X]      = pos.k_car.x;
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
     data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;

@@ -93,15 +93,15 @@ void display_image_display(void){
     ips200_show_string(120,16*4,"ty:");
     ips200_show_float(160,16*4, share_data_from_1[S1_TARGET_Y], 4, 2);
 
-    ips200_show_string(0,16*5,"x:");
-    ips200_show_float(40,16*5, share_data_from_1[S1_RAW_CAR_X], 4, 2);
-    ips200_show_string(120,16*5,"y:");
-    ips200_show_float(160,16*5, share_data_from_1[S1_SNAPSHOT_YAW], 4, 2);
+    ips200_show_string(0,16*5,"rx:");
+    ips200_show_float(40,16*5, share_data_from_1[S1_RAW_TARGET_X], 4, 2);
+    ips200_show_string(120,16*5,"ry:");
+    ips200_show_float(160,16*5, share_data_from_1[S1_RAW_TARGET_Y], 4, 2);
     ips200_show_string(0,16*6,"z:");
     ips200_show_float(40,16*6, share_data_from_1[S1_K_CAR_X], 4, 2);
 
-    ips200_show_string(0,16*7,"x:");
-    ips200_show_float(40,16*7, share_data_from_1[10], 4, 2); // reserved
+    ips200_show_string(0,16*7,"d:");
+    ips200_show_float(40,16*7, share_data_from_1[S1_CAR_TARGET_DIST], 4, 2);
     ips200_show_string(120,16*7,"y:");
     ips200_show_float(160,16*7, share_data_from_1[11], 4, 2); // reserved
     ips200_show_string(0,16*8,"z:");

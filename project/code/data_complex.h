@@ -42,10 +42,11 @@
 #define S1_CAR_RAW_Y       4   // pos.raw_car.y              小车未滤波位置Y (cm)
 #define S1_TARGET_X        5   // pos.k_target.x             目标(信标)Kalman位置X (cm)
 #define S1_TARGET_Y        6   // pos.k_target.y             目标(信标)Kalman位置Y (cm)
-#define S1_RAW_CAR_X       7   // pos.raw_car.x              小车未滤波X (cm)
+#define S1_RAW_TARGET_X    7   // pos.raw_target.x           目标(信标)未滤波位置X (cm)
 #define S1_SNAPSHOT_YAW    8   // img_imu_snap.yaw           快照偏航角 (deg)
 #define S1_K_CAR_X         9   // pos.k_car.x                卡尔曼滤波后小车X (cm)
-// 10-11 reserved
+#define S1_RAW_TARGET_Y    10  // pos.raw_target.y           目标(信标)未滤波位置Y (cm)
+// 11 reserved
 #define S1_K_CAR_Y         12  // pos.k_car.y                卡尔曼滤波后小车Y (cm)
 #define S1_CAR_TARGET_DIST 13  // dataC.car_target_dist      小车-信标距离
 #define S1_LOCKED_COUNT    14  // locked_state               0=全丢, 1=仅小车, 2=仅信标, 3=都有
