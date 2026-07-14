@@ -92,7 +92,7 @@ void Fly_Param_Update(uint8_t ch, float val) {
         case 8:
             if(0.5 <= val && val < 1.5){
                 wireless_uart_send_string("land\r\n");
-                flight_target.cur_state = pre_landing; 
+                //flight_target.cur_state = pre_landing; 
                 car_en = 0;
             }else if(val > 1.5 && val < 2.5){
                 car_en = 0;
