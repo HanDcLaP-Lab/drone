@@ -82,8 +82,8 @@ void Fly_Param_Update(uint8_t ch, float val) {
             break;
         
         case 6:
-            pid_image_x.kp2 = val;
-            pid_image_y.kp2 = val;
+            pid_image_x.kd = val;
+            pid_image_y.kd = val;
             break;
         case 7:
             pid_g_roll.kd = val;
