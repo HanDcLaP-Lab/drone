@@ -78,7 +78,7 @@
 #define DIST_COMP_SCALE         100.0f  // 距离补偿基准距离 (cm)
 
 // ================= 小车识别 =================
-#define CAR_MIN_AREA            20U     // 小车最小连通域面积
+#define CAR_MIN_AREA            15U     // 小车最小连通域面积
 #define CAR_MAX_CENTER_DIST_SQ  3600.0f // 小车距画面中心最大距离平方 (60²)
 
 // ================= 信标识别 =================
