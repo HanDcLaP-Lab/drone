@@ -216,9 +216,9 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
         ips200_show_float(120, 16*11, cam_down.car_ratio, 2, 2);
 
         ips200_show_string(0, 16*12, "Tgt A:");
-        ips200_show_int(50, 16*12, cam_down.target_dot_num, 4);
+        ips200_show_int(50, 16*12, target_valid ? cam_down.target_dot_num : 0, 4);
         ips200_show_string(100, 16*12, "R:"); 
-        ips200_show_float(120, 16*12, cam_down.target_ratio, 2, 2);
+        ips200_show_float(120, 16*12, target_valid ? cam_down.target_ratio : 0.0f, 2, 2);
 
         ips200_show_string(0, 16*13, "MaxR:");
         ips200_show_float(40, 16*13, cam_down.debug.max_ratio, 3, 2);

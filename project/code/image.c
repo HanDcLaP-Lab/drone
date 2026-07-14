@@ -480,7 +480,7 @@ static void extract_components(CameraObject *cam, uint8_t *visited) {
                 float dynamic_min_area = BASE_MIN_AREA;
 
                 // 立即判断该连通域并解算 (使用动态面积门槛)
-                if (stats.dot_num > dynamic_min_area) {
+                if (stats.dot_num >= dynamic_min_area) {
                     if (valid_idx < MAX_LIGHTS) {
                         cam->centers[valid_idx][0] = cy;
                         cam->centers[valid_idx][1] = cx; 
@@ -608,6 +608,7 @@ static void sort_lights(CameraObject *cam) {
     
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (!is_valid_blob[i]) continue;
+        if (cam->dot_num[i] < CAR_MIN_AREA) continue;
         
         // 限制：找小车距离在2m以内 (200cm)
         if (phys_dist_sq[i] > 150.0f * 150.0f) continue;
