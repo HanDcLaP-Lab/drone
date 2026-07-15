@@ -14,7 +14,7 @@
 //   │ 4. 上电航向固定系旋转 + 卡尔曼滤波 + 转回机体系       │
 //   └──────────────────────────────────────────────────┘
 //
-// 输出: pos.raw_car/raw_target (原始位置), pos.k_car/k_target (Kalman滤波后)
+// 输出: pos.raw_car/raw_target[] (原始位置), pos.k_car/k_target (主目标Kalman滤波后)
 // 单位: cm (取决于传入的 height 参数单位)
 // 关键: 在无人机上电航向固定系下做卡尔曼滤波，避免机体旋转引起的滞后
 // ******************************************************************************
@@ -172,7 +172,9 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
         // pixelTo3DRay 参数顺序为 (u, v) 即 (Col, Row)
         Vector3D ray_car = pixelTo3DRay((double)cam_down.car_center_x, (double)cam_down.car_center_y);
         Vector3D body_car = cameraToBody(&ray_car, sinp, cosp, sinr, cosr);
-        pos.raw_car = projectToGround(body_car, height);
+        double car_plane_height = height - CAR_LIGHT_HEIGHT_CM;
+        if (car_plane_height < 0.0) car_plane_height = 0.0;
+        pos.raw_car = projectToGround(body_car, car_plane_height);
 
         // 将相对于机头的XY旋转到无人机上电航向固定系后再滤波（不是绝对North/East）
         // 防止机体旋转时相对坐标波动导致卡尔曼滤波产生巨大滞后
@@ -203,13 +205,22 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
     // 注意：若未识别到，保持上一帧位置
 
     // ================== 信标 ==================
-    if (cam_down.target_valid) { 
-        Vector3D ray_target = pixelTo3DRay((double)cam_down.target_center_x, (double)cam_down.target_center_y);
-        Vector3D body_target = cameraToBody(&ray_target, sinp, cosp, sinr, cosr);
-        pos.raw_target = projectToGround(body_target, height);
+    if (cam_down.target_valid && cam_down.target_count > 0U) {
+        uint8_t target_count = cam_down.target_count;
+        if (target_count > TARGET_CANDIDATE_COUNT) target_count = TARGET_CANDIDATE_COUNT;
 
-        double raw_earth_x = pos.raw_target.x * cosy - pos.raw_target.y * siny;
-        double raw_earth_y = pos.raw_target.x * siny + pos.raw_target.y * cosy;
+        for (uint8_t i = 0; i < target_count; i++) {
+            Vector3D ray_target = pixelTo3DRay((double)cam_down.target_centers[i][1],
+                                              (double)cam_down.target_centers[i][0]);
+            Vector3D body_target = cameraToBody(&ray_target, sinp, cosp, sinr, cosr);
+            pos.raw_target[i] = projectToGround(body_target, height);
+        }
+        for (uint8_t i = target_count; i < TARGET_CANDIDATE_COUNT; i++) {
+            pos.raw_target[i] = pos.raw_target[target_count - 1U];
+        }
+
+        double raw_earth_x = pos.raw_target[0].x * cosy - pos.raw_target[0].y * siny;
+        double raw_earth_y = pos.raw_target[0].x * siny + pos.raw_target[0].y * cosy;
         double k_earth_x = raw_earth_x;
         double k_earth_y = raw_earth_y;
         if (!target_position_filter_initialized) {
@@ -223,6 +234,8 @@ void calculate_ground_positions(double height, double pitch_deg, double roll_deg
 
         pos.k_target.x = k_earth_x * cosy + k_earth_y * siny;
         pos.k_target.y = -k_earth_x * siny + k_earth_y * cosy;
+    } else {
+        memset(pos.raw_target, 0, sizeof(pos.raw_target));
     }
 
     // 车和信标使用相同参数的Kalman结果，避免不同滤波相位污染相对距离。

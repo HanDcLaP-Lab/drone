@@ -66,6 +66,8 @@ int main(void)
     display_init();
     key_switch_init();
     pit_ms_init(PIT_NUM3 , 10);
+    Image_IMU_Snapshot_t frame_start_snap = {0};
+    uint8_t frame_start_snap_valid = 0;
     while(true)
     {          
         // 等待摄像头采集完成 (同步物理帧率，50Hz)
@@ -75,12 +77,18 @@ int main(void)
             
             // 1. 拉取 Core 0 写入的最新数据
             SCB_InvalidateDCache_by_Addr(&share_data_from_0, sizeof(share_data_from_0));
-            
-            // 立即快照当前姿态，确保在整个 image_processing_loop 中不被下一次通讯污染
-            img_imu_snap.roll   = share_data_from_0[S0_IMU_ROLL];
-            img_imu_snap.pitch  = share_data_from_0[S0_IMU_PITCH];
-            img_imu_snap.yaw    = share_data_from_0[S0_IMU_YAW];
-            img_imu_snap.height = share_data_from_0[S0_IMU_HEIGHT];
+
+            Image_IMU_Snapshot_t frame_boundary_snap;
+            frame_boundary_snap.roll   = share_data_from_0[S0_IMU_ROLL];
+            frame_boundary_snap.pitch  = share_data_from_0[S0_IMU_PITCH];
+            frame_boundary_snap.yaw    = share_data_from_0[S0_IMU_YAW];
+            frame_boundary_snap.height = share_data_from_0[S0_IMU_HEIGHT];
+
+            // 连续采集时，本帧完成边界也是下一帧的起始边界。
+            // 用上一个边界的姿态处理刚完成的图像，避免使用帧尾姿态投影整帧像素。
+            img_imu_snap = frame_start_snap_valid ? frame_start_snap : frame_boundary_snap;
+            frame_start_snap = frame_boundary_snap;
+            frame_start_snap_valid = 1;
 
             int drone_mode = (int)share_data_from_0[S0_DRONE_STATE];
             // 将 ISR 修改的 debug_params 同步到 cam_down 并重算 LUT，

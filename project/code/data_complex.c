@@ -8,7 +8,8 @@ uint8_t car_en = 1;
 #if defined(CY_CORE_CM7_0)
     //Core 0
     
-    #pragma location = 0x28001040
+    // 两个20-float共享区按32字节缓存行隔开，整区Clean不会触及另一生产者的数据。
+    #pragma location = 0x28001060
     volatile float share_data_from_0[M7_x_DATA_LENGTH] = {0}; // Core 0 定义并负责清零
     
     #pragma location = 0x28001000
@@ -20,7 +21,7 @@ uint8_t car_en = 1;
     #pragma location = 0x28001000
     volatile float share_data_from_1[M7_x_DATA_LENGTH] = {0}; // Core 1 定义并负责清零
     
-    #pragma location = 0x28001040
+    #pragma location = 0x28001060
     __root __no_init volatile float share_data_from_0[M7_x_DATA_LENGTH]; // 对 Core 0 的数据只读，不初始化
 
 #else
@@ -30,11 +31,18 @@ uint8_t car_en = 1;
 #if defined(CY_CORE_CM7_0)
 
 
-static uint8_t send_buffer[36]; // 发送缓冲区：2字节帧头 + 32字节(8个float) + 1字节校验和 + 1字节帧尾 = 36字节
 // ================= 板间通讯协议配置 =================
 #define FRAME_HEADER1 0xAA
 #define FRAME_HEADER2 0x55
 #define FRAME_TAIL    0x7F
+#define UART_FLOAT_BYTES     4U
+#define UART_PAYLOAD_BYTES   (UART_DATA_LENGTH * UART_FLOAT_BYTES)
+#define UART_DATA_OFFSET     2U
+#define UART_CHECKSUM_INDEX  (UART_DATA_OFFSET + UART_PAYLOAD_BYTES)
+#define UART_TAIL_INDEX      (UART_CHECKSUM_INDEX + 1U)
+#define UART_FRAME_LENGTH    (UART_TAIL_INDEX + 1U)
+
+static uint8_t send_buffer[UART_FRAME_LENGTH];
 // ================= 通讯初始化 =================
 void Board_Comm_Init(void)
 {
@@ -43,7 +51,7 @@ void Board_Comm_Init(void)
 }
 
 // ================= 打包并发送函数 =================
-// 只要传入长度为 8 的 float 数组首地址即可
+// 只要传入长度为 UART_DATA_LENGTH 的 float 数组首地址即可
 void Board_Comm_Send_Data(volatile float *data_array)
 {
     // 1. 填入帧头
@@ -52,23 +60,23 @@ void Board_Comm_Send_Data(volatile float *data_array)
     
     // 2. 将传入的 float 数组拷贝到发送缓冲区
     // 先读入局部变量以保留 volatile 读取语义，再用 memcpy 处理对齐
-    float local_data[8];
-    for (int i = 0; i < 8; i++) {
+    float local_data[UART_DATA_LENGTH];
+    for (int i = 0; i < UART_DATA_LENGTH; i++) {
         local_data[i] = data_array[i];
     }
-    memcpy(&send_buffer[2], local_data, sizeof(local_data));
+    memcpy(&send_buffer[UART_DATA_OFFSET], local_data, sizeof(local_data));
     
-    // 3. 计算简单的累加校验和 (只校验数据区的32字节)
+    // 3. 计算简单的累加校验和 (只校验float数据区)
     uint8_t checksum = 0;
-    for (int i = 2; i < 34; i++) {
+    for (int i = UART_DATA_OFFSET; i < UART_CHECKSUM_INDEX; i++) {
         checksum += send_buffer[i];
     }
     
     // 4. 填入校验和与帧尾
-    send_buffer[34] = checksum;
-    send_buffer[35] = FRAME_TAIL;
+    send_buffer[UART_CHECKSUM_INDEX] = checksum;
+    send_buffer[UART_TAIL_INDEX] = FRAME_TAIL;
     
-    // 5. 物理发送整包数据 (36字节)
+    // 5. 物理发送整包数据
     uart_write_buffer(BOARD_UART, send_buffer, sizeof(send_buffer));
 }
 
@@ -96,15 +104,19 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 }
 
 // **************************** 下传协议映射 (无人机→小车) ****************************
-// buffer[8] 索引映射，与小车端 uart_data[8] 一一对应 (协议帧: 0xAA 0x55 + 8×float + 校验和 + 0x7F):
+// buffer[12] 索引映射，与小车端 uart_data[12] 一一对应:
 //   [0] car_raw_x           — 小车机体系X (cm, 未滤波)       ← S1_CAR_RAW_X (pos.raw_car.x)
 //   [1] car_raw_y           — 小车机体系Y (cm, 未滤波)       ← S1_CAR_RAW_Y (pos.raw_car.y)
-//   [2] target_raw_x        — 目标(信标)机体系X (cm, 未滤波) ← S1_RAW_TARGET_X (pos.raw_target.x)
-//   [3] target_raw_y        — 目标(信标)机体系Y (cm, 未滤波) ← S1_RAW_TARGET_Y (pos.raw_target.y)
+//   [2] target_raw_x        — 主信标机体系X (cm, 未滤波)     ← S1_RAW_TARGET_X
+//   [3] target_raw_y        — 主信标机体系Y (cm, 未滤波)     ← S1_RAW_TARGET_Y
 //   [4] drone_yaw           — 无人机地面系偏航角 (deg, 顺时针正) ← VISION_EARTH_YAW_DEG(S1_SNAPSHOT_YAW)
 //   [5] locked_state        — 锁定状态 (0=全丢/1=仅小车/2=仅信标/3=都有) ← S1_LOCKED_COUNT
 //   [6] car_en              — 急停使能标志 (0=急停, 1=正常)   ← car_en
 //   [7] car_target_dist     — 车-信标地面距离 (cm)           ← S1_CAR_TARGET_DIST
+//   [8] target2_raw_x       — 第二信标机体系X (cm, 未滤波)    ← S1_RAW_TARGET2_X
+//   [9] target2_raw_y       — 第二信标机体系Y (cm, 未滤波)    ← S1_RAW_TARGET2_Y
+//   [10] target3_raw_x      — 第三信标机体系X (cm, 未滤波)    ← S1_RAW_TARGET3_X
+//   [11] target3_raw_y      — 第三信标机体系Y (cm, 未滤波)    ← S1_RAW_TARGET3_Y
 // ******************************************************************************
 void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share_data一般传入share_data_from_1
 {
@@ -116,6 +128,10 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
     buffer[5] = share_data[S1_LOCKED_COUNT];
     buffer[6] = car_en;
     buffer[7] = share_data[S1_CAR_TARGET_DIST];
+    buffer[8] = share_data[S1_RAW_TARGET2_X];
+    buffer[9] = share_data[S1_RAW_TARGET2_Y];
+    buffer[10] = share_data[S1_RAW_TARGET3_X];
+    buffer[11] = share_data[S1_RAW_TARGET3_Y];
 }
 
 #elif defined(CY_CORE_CM7_1)
@@ -130,8 +146,12 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_TARGET_X]     = pos.k_target.x;
     data_out[S1_TARGET_Y]     = pos.k_target.y;
     data_out[S1_SNAPSHOT_YAW] = img_imu_snap.yaw; // 传回 Core0 的是该帧对应的快照 Yaw
-    data_out[S1_RAW_TARGET_X] = pos.raw_target.x;
-    data_out[S1_RAW_TARGET_Y] = pos.raw_target.y;
+    data_out[S1_RAW_TARGET_X] = pos.raw_target[0].x;
+    data_out[S1_RAW_TARGET_Y] = pos.raw_target[0].y;
+    data_out[S1_RAW_TARGET2_X] = pos.raw_target[1].x;
+    data_out[S1_RAW_TARGET2_Y] = pos.raw_target[1].y;
+    data_out[S1_RAW_TARGET3_X] = pos.raw_target[2].x;
+    data_out[S1_RAW_TARGET3_Y] = pos.raw_target[2].y;
     data_out[S1_K_CAR_X]      = pos.k_car.x;
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
     data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;

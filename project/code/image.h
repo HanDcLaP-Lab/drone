@@ -1,6 +1,8 @@
 #ifndef CODE_IMAGE_H_
 #define CODE_IMAGE_H_
 
+#define TARGET_CANDIDATE_COUNT  3U      // 按评分保留的信标候选数量
+
 #include "zf_common_headfile.h"
 
 #define IMG_CENTER_X (MT9V03X_W / 2.0f)
@@ -122,6 +124,8 @@ typedef struct {
     float target_center_x;       // 信标 Col (X)
     uint32_t target_dot_num;        // 信标面积
     float target_ratio;
+    uint8_t target_count;        // 本帧真实信标候选数量 (0~3)
+    float target_centers[TARGET_CANDIDATE_COUNT][2]; // 按评分排序，[rank][0]=Row，[rank][1]=Col
 
     // --- 调试字段 (ImageDebug_t, 不参与控制逻辑) ---
     struct {

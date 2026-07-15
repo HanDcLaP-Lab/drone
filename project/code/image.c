@@ -523,6 +523,8 @@ static void sort_lights(CameraObject *cam) {
     cam->car_center_y = 0.0f;
 
     cam->target_valid = 0;
+    cam->target_count = 0;
+    memset(cam->target_centers, 0, sizeof(cam->target_centers));
 
     cam->debug.pass_area = 0;
     cam->debug.pass_car = 0;
@@ -542,6 +544,8 @@ static void sort_lights(CameraObject *cam) {
     float ground_x[MAX_LIGHTS] = {0};
     float ground_y[MAX_LIGHTS] = {0};
     uint8_t is_valid_blob[MAX_LIGHTS] = {0};
+    float car_plane_scale = (current_height - CAR_LIGHT_HEIGHT_CM) / current_height;
+    float car_plane_scale_sq = car_plane_scale * car_plane_scale;
 
     // =======================================================
     // 2. 计算精确物理距离，并做【面积动态过滤】
@@ -600,7 +604,8 @@ static void sort_lights(CameraObject *cam) {
     // =======================================================
 
     int car_idx = -1;
-    int target_idx = -1;
+    int target_indices[TARGET_CANDIDATE_COUNT] = {-1, -1, -1};
+    float target_sort_dist[TARGET_CANDIDATE_COUNT] = {999999.0f, 999999.0f, 999999.0f};
     // =========================================================
     // 1. 寻找小车 (加入动态阈值，边缘门槛自动抬高防信标混淆)
     // =========================================================
@@ -611,7 +616,7 @@ static void sort_lights(CameraObject *cam) {
         if (cam->dot_num[i] < CAR_MIN_AREA) continue;
         
         // 限制：找小车距离在2m以内 (200cm)
-        if (phys_dist_sq[i] > 150.0f * 150.0f) continue;
+        if (phys_dist_sq[i] * car_plane_scale_sq > 150.0f * 150.0f) continue;
         
         // 计算目标质心到画面中心的像素距离平方
         float dx = cam->centers[i][1] - CAM_CX;
@@ -643,12 +648,16 @@ static void sort_lights(CameraObject *cam) {
             cam->debug.pass_car++;
         }
     }
+
+    float car_plane_x = 0.0f;
+    float car_plane_y = 0.0f;
+    if (car_idx != -1) {
+        car_plane_x = ground_x[car_idx] * car_plane_scale;
+        car_plane_y = ground_y[car_idx] * car_plane_scale;
+    }
     
     // 2. 寻找信标 (排除小车后，选距离小车最近的作为信标)
     // [修复] 线性迟滞，防止远距离时固定平方优惠衰减过快。
-
-    float min_sort_dist = 999999.0f;
-    target_idx = -1; // 确保重置
 
     for (int i = 0; i < cam->light_number && i < MAX_LIGHTS; i++) {
         if (i == car_idx) continue;
@@ -683,17 +692,24 @@ static void sort_lights(CameraObject *cam) {
             // 【核心：按地面实际距小车距离打擂台，小车不可见时回退到距无人机地面投影距离】
             float sort_dist_sq;
             if (car_idx != -1) {
-                float dx_car = ground_x[i] - ground_x[car_idx];
-                float dy_car = ground_y[i] - ground_y[car_idx];
+                float dx_car = ground_x[i] - car_plane_x;
+                float dy_car = ground_y[i] - car_plane_y;
                 sort_dist_sq = dx_car * dx_car + dy_car * dy_car;
             } else {
                 sort_dist_sq = phys_dist_sq[i];
             }
             float sort_dist = sqrtf(sort_dist_sq);
 
-            if (sort_dist < min_sort_dist) {
-                min_sort_dist = sort_dist;
-                target_idx = i;
+            for (int rank = 0; rank < TARGET_CANDIDATE_COUNT; rank++) {
+                if (sort_dist < target_sort_dist[rank]) {
+                    for (int shift = TARGET_CANDIDATE_COUNT - 1; shift > rank; shift--) {
+                        target_sort_dist[shift] = target_sort_dist[shift - 1];
+                        target_indices[shift] = target_indices[shift - 1];
+                    }
+                    target_sort_dist[rank] = sort_dist;
+                    target_indices[rank] = i;
+                    break;
+                }
             }
             cam->debug.pass_target++;
         }
@@ -708,12 +724,26 @@ static void sort_lights(CameraObject *cam) {
         cam->car_ratio = cam->aspect_ratio[car_idx];
     }
 
-    if (target_idx != -1) {
+    if (target_indices[0] != -1) {
+        int target_idx = target_indices[0];
         cam->target_valid = 1;
         cam->target_center_y = cam->centers[target_idx][0];
         cam->target_center_x = cam->centers[target_idx][1];
         cam->target_dot_num = cam->dot_num[target_idx];
         cam->target_ratio = cam->aspect_ratio[target_idx];
+
+        for (int rank = 0; rank < TARGET_CANDIDATE_COUNT; rank++) {
+            if (target_indices[rank] == -1) break;
+            cam->target_centers[rank][0] = cam->centers[target_indices[rank]][0];
+            cam->target_centers[rank][1] = cam->centers[target_indices[rank]][1];
+            cam->target_count++;
+        }
+
+        // 协议不额外传候选数量；缺位复制最后一个有效候选，小车每帧只会命中一次。
+        for (int rank = cam->target_count; rank < TARGET_CANDIDATE_COUNT; rank++) {
+            cam->target_centers[rank][0] = cam->target_centers[cam->target_count - 1][0];
+            cam->target_centers[rank][1] = cam->target_centers[cam->target_count - 1][1];
+        }
     }
 }
 

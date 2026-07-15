@@ -9,13 +9,13 @@
 #define BOARD_BAUDRATE   1000000
 #define BOARD_TX_PIN     UART4_TX_P14_1  
 #define BOARD_RX_PIN     UART4_RX_P14_0  
-#define UART_DATA_LENGTH 8  // 下传数组长度 (8个float)
-// 协议帧格式: 0xAA 0x55 + 32字节(8×float) + 1字节累加校验和 + 0x7F
+#define UART_DATA_LENGTH 12 // 下传数组长度 (12个float)
+// 协议帧格式: 0xAA 0x55 + 48字节(12×float) + 1字节累加校验和 + 0x7F
 // 数组索引映射详见 data_complex.c 中 Float_Buffer_write()，小车端对应 car_board_comm.h
 //============================================================
-#define M7_x_DATA_LENGTH 16
+#define M7_x_DATA_LENGTH 20
 
-// ================= share_data_from_0[16] 索引定义 (Core 0 → Core 1) =================
+// ================= share_data_from_0[20] 索引定义 (Core 0 → Core 1) =================
 // 由 M7_0_data_send() 写入，Core 1 只读
 #define S0_IMU_ROLL       0   // imu_data.roll              横滚角 (deg)
 #define S0_IMU_PITCH      1   // imu_data.pitch             俯仰角 (deg)
@@ -31,9 +31,9 @@
 #define S0_TARGET_YAW     11  // flight_target.target_yaw   目标偏航角 (deg)
 #define S0_DEBUG_ERR_X    12  // dataC.debug_earth_err_x    调试: 地面误差X
 #define S0_DEBUG_ERR_Y    13  // dataC.debug_earth_err_y    调试: 地面误差Y
-// 14-15 reserved
+// 14-19 reserved
 
-// ================= share_data_from_1[16] 索引定义 (Core 1 → Core 0) =================
+// ================= share_data_from_1[20] 索引定义 (Core 1 → Core 0) =================
 // 由 M7_1_data_send() 写入，Core 0 只读
 #define S1_CAR_CENTER_Y    0   // cam_down.car_center_y      小车中心Y坐标 (像素)
 #define S1_CAR_CENTER_X    1   // cam_down.car_center_x      小车中心X坐标 (像素)
@@ -42,15 +42,19 @@
 #define S1_CAR_RAW_Y       4   // pos.raw_car.y              小车未滤波位置Y (cm)
 #define S1_TARGET_X        5   // pos.k_target.x             目标(信标)Kalman位置X (cm)
 #define S1_TARGET_Y        6   // pos.k_target.y             目标(信标)Kalman位置Y (cm)
-#define S1_RAW_TARGET_X    7   // pos.raw_target.x           目标(信标)未滤波位置X (cm)
+#define S1_RAW_TARGET_X    7   // pos.raw_target[0].x        主信标未滤波位置X (cm)
 #define S1_SNAPSHOT_YAW    8   // img_imu_snap.yaw           快照偏航角 (deg)
 #define S1_K_CAR_X         9   // pos.k_car.x                卡尔曼滤波后小车X (cm)
-#define S1_RAW_TARGET_Y    10  // pos.raw_target.y           目标(信标)未滤波位置Y (cm)
+#define S1_RAW_TARGET_Y    10  // pos.raw_target[0].y        主信标未滤波位置Y (cm)
 // 11 reserved
 #define S1_K_CAR_Y         12  // pos.k_car.y                卡尔曼滤波后小车Y (cm)
 #define S1_CAR_TARGET_DIST 13  // dataC.car_target_dist      小车-信标距离
 #define S1_LOCKED_COUNT    14  // locked_state               0=全丢, 1=仅小车, 2=仅信标, 3=都有
 #define S1_PROCESS_DONE    15  // 图像处理完成标志 (1.0=完成, 0.0=未完成)
+#define S1_RAW_TARGET2_X   16  // pos.raw_target[1].x        第二信标未滤波位置X (cm)
+#define S1_RAW_TARGET2_Y   17  // pos.raw_target[1].y        第二信标未滤波位置Y (cm)
+#define S1_RAW_TARGET3_X   18  // pos.raw_target[2].x        第三信标未滤波位置X (cm)
+#define S1_RAW_TARGET3_Y   19  // pos.raw_target[2].y        第三信标未滤波位置Y (cm)
 
 // ================= locked_state 低高度保护参数 =================
 #define LOCKED_STATE_MIN_HEIGHT_CM 90.0f
