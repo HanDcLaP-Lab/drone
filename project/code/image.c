@@ -655,7 +655,7 @@ static void sort_lights(CameraObject *cam) {
         if (!is_valid_blob[i]) continue;
 
         // 限制：找信标距离在10m以内 (1000cm)
-        if (phys_dist_sq[i] > 1000.0f * 1000.0f) continue;
+        if (phys_dist_sq[i] > 1200.0f * 1200.0f) continue;
 
         // 计算目标质心到画面中心的像素距离平方 (用于边缘畸变补偿)
         float dx_c = cam->centers[i][1] - CAM_CX;
