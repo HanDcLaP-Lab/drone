@@ -23,25 +23,6 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// ==========================================
-// 1. 常量参数
-// ==========================================
-// 畸变中心 (Distortion Center)
-const double CX = 95.7727039954;
-const double CY = 60.4063207741;
-
-// 逆拉伸矩阵 (Inverse Stretch Matrix)
-const double INV_S11 = 1.0000000000;
-const double INV_S12 = 0.0000000000;
-const double INV_S21 = 0.0000000000;
-const double INV_S22 = 1.0000000000;
-
-// 映射多项式系数 (Mapping Coefficients)
-const double A0 = 55.2438766932;
-const double A2 = -0.0121333670;
-const double A3 = 0.0001089566;
-const double A4 = -0.0000023005;
-
 // 定义 3D 空间向量
 typedef struct { double x, y, z; } Vector3D;
 
@@ -67,8 +48,8 @@ void ground_position_history_reset(void) {
 static Vector3D pixelTo3DRay(double u, double v) {
     Vector3D ray;
     
-    double u_prime = u - CX;
-    double v_prime = v - CY;
+    double u_prime = u - CAM_CX;
+    double v_prime = v - CAM_CY;
 
     // 转换为相机物理坐标 (X向右, Y向前)
     double x = INV_S11 * u_prime + INV_S12 * v_prime;
@@ -76,9 +57,9 @@ static Vector3D pixelTo3DRay(double u, double v) {
 
     double rho = sqrt(x * x + y * y);
     double rho2 = rho * rho;
-    double z_poly = A0 + A2 * rho2 + A3 * rho2*rho + A4 * rho2*rho2;
+    double z_poly = CAM_A0 + CAM_A2 * rho2 + CAM_A3 * rho2*rho + CAM_A4 * rho2*rho2;
 
-    // 构建射线：X为右，Y为前。由于 A0 是正的，z_poly 指向相机内部(上)。
+    // 构建射线：X为右，Y为前。由于 CAM_A0 是正的，z_poly 指向相机内部(上)。
     // 物理世界的光线从地面射向相机，所以我们要找的“指向地面的射线”是向下(Z为负)
     ray.x = x;
     ray.y = y;

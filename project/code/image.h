@@ -5,12 +5,21 @@
 
 #define IMG_CENTER_X (MT9V03X_W / 2.0f)
 #define IMG_CENTER_Y (MT9V03X_H / 2.0f)
-#define CAM_CX 95.7727039954f
-#define CAM_CY 60.4063207741f
-#define CAM_A0 55.2438766932f
-#define CAM_A2 -0.0121333670f
-#define CAM_A3 0.0001089566f
-#define CAM_A4 -0.0000023005f
+// 畸变中心 (Distortion Center)
+#define CAM_CX 111.4575192149
+#define CAM_CY  62.8987540474
+
+// 逆拉伸矩阵 (Inverse Stretch Matrix)
+#define INV_S11  1.0000000000
+#define INV_S12  0.0000000000
+#define INV_S21  0.0000000000
+#define INV_S22  1.0000000000
+
+// 映射多项式系数 (Mapping Coefficients)
+#define CAM_A0  49.3314081722
+#define CAM_A2  0.0069232179
+#define CAM_A3  -0.0008570029
+#define CAM_A4  0.0000113466
 // 宏定义
 #define STACK_SIZE 4096     // DFS 栈大小
 #define MAX_LIGHTS 20       // 最大识别灯光数量
