@@ -4,6 +4,7 @@
 
 Data_Complex_t dataC = {0};
 uint8_t car_en = 1;
+uint8_t car_en_height = 0;
 //核间通信初始化
 #if defined(CY_CORE_CM7_0)
     //Core 0
@@ -111,7 +112,7 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 //   [3] target_raw_y        — 主信标机体系Y (cm, 未滤波)     ← S1_RAW_TARGET_Y
 //   [4] drone_yaw           — 无人机地面系偏航角 (deg, 顺时针正) ← VISION_EARTH_YAW_DEG(S1_SNAPSHOT_YAW)
 //   [5] locked_state        — 锁定状态 (0=全丢/1=仅小车/2=仅信标/3=都有) ← S1_LOCKED_COUNT
-//   [6] car_en              — 急停使能标志 (0=急停, 1=正常)   ← car_en
+//   [6] car_en              — 小车使能标志 (0=停止, 1=正常)   ← car_en && car_en_height
 //   [7] car_target_dist     — 车-信标地面距离 (cm)           ← S1_CAR_TARGET_DIST
 //   [8] target2_raw_x       — 第二信标机体系X (cm, 未滤波)    ← S1_RAW_TARGET2_X
 //   [9] target2_raw_y       — 第二信标机体系Y (cm, 未滤波)    ← S1_RAW_TARGET2_Y
@@ -120,13 +121,15 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 // ******************************************************************************
 void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share_data一般传入share_data_from_1
 {
+    car_en_height = (imu_data.z >= CAR_ENABLE_MIN_HEIGHT_CM);
+
     buffer[0] = share_data[S1_CAR_RAW_X];
     buffer[1] = share_data[S1_CAR_RAW_Y];
     buffer[2] = share_data[S1_RAW_TARGET_X];
     buffer[3] = share_data[S1_RAW_TARGET_Y];
     buffer[4] = VISION_EARTH_YAW_DEG(share_data[S1_SNAPSHOT_YAW]);
     buffer[5] = share_data[S1_LOCKED_COUNT];
-    buffer[6] = car_en;
+    buffer[6] = (float)(car_en && car_en_height);
     buffer[7] = share_data[S1_CAR_TARGET_DIST];
     buffer[8] = share_data[S1_RAW_TARGET2_X];
     buffer[9] = share_data[S1_RAW_TARGET2_Y];
@@ -136,7 +139,7 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
 
 #elif defined(CY_CORE_CM7_1)
 void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_data_from_1
-    static uint8_t low_height_frame_cnt = 0;
+    static uint8_t vision_low_height_frame_cnt = 0;
 
     data_out[S1_CAR_CENTER_Y] = cam_down.car_center_y;
     data_out[S1_CAR_CENTER_X] = cam_down.car_center_x;
@@ -161,17 +164,17 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     if (cam_down.target_valid) locked_count += 2;
     // locked_count: 0=全丢, 1=仅小车, 2=仅信标, 3=都有
 
-    if (img_imu_snap.height < LOCKED_STATE_MIN_HEIGHT_CM) {
-        if (low_height_frame_cnt < LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES) {
-            low_height_frame_cnt++;
+    if (img_imu_snap.height < VISION_POSITION_MIN_HEIGHT_CM) {
+        if (vision_low_height_frame_cnt < VISION_LOW_HEIGHT_HOLD_FRAMES) {
+            vision_low_height_frame_cnt++;
         }
-        if (low_height_frame_cnt >= LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES) {
+        if (vision_low_height_frame_cnt >= VISION_LOW_HEIGHT_HOLD_FRAMES) {
             ground_position_history_reset();
             locked_count = 0;
             data_out[S1_CAR_DOT_NUM] = 0;
         }
     } else {
-        low_height_frame_cnt = 0;
+        vision_low_height_frame_cnt = 0;
     }
 
     data_out[S1_LOCKED_COUNT] = (float)locked_count;

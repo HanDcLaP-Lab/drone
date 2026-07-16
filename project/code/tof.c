@@ -12,6 +12,7 @@ float    tof_actual_dt    = 0.02f;          // 实测 TOF 帧间隔 (秒), 调�
 int16_t  tof_base_throttle = HOVER_THROTTLE; // 高度 PID 计算的基础油门 (不含倾角补偿)
 float    z_rate           = 0;               // 调试: 高度位置环输出 (目标爬升率 cm/s)
 float    z_acc            = 0;               // 调试: 高度速度环输出 (油门增量)
+volatile uint32_t tof_update_seq = 0;
 
 uint16_t tof_cnt = 0;
 // ================== TOF 帧间差分状态 (双传感器共用) ==================
@@ -115,6 +116,7 @@ static void tof_process_z(float raw_mm, float dt) {
     float throttle_adj = PID_Calculate(&pid_height_vel, climb_rate_error, dt);
     z_acc = throttle_adj;
     tof_base_throttle = HOVER_THROTTLE + (int16_t)throttle_adj;
+    tof_update_seq++;
 }
 
 // ================== tof_init ==================

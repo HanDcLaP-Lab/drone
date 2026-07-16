@@ -33,6 +33,7 @@ extern float    tof_actual_dt;       // 实测 TOF 帧间隔 (秒), 调试用
 extern int16_t  tof_base_throttle;   // 高度 PID 计算的基础油门 (不含倾角补偿)
 extern float    z_rate;              // 调试: 高度位置环输出 (目标爬升率 cm/s)
 extern float    z_acc;               // 调试: 高度速度环输出 (油门增量)
+extern volatile uint32_t tof_update_seq; // 有效高度数据更新序号
 
 void tof_init(void);
 void tof_update(void);               // 每 1ms 调用，读取传感器并更新高度/高度PID

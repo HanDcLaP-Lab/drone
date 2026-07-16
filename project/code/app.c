@@ -92,8 +92,7 @@ void Fly_Param_Update(uint8_t ch, float val) {
         case 8:
             if(0.5 <= val && val < 1.5){
                 wireless_uart_send_string("land\r\n");
-                //flight_target.cur_state = pre_landing; 
-                car_en = 0;
+                Flight_Request_Landing();
             }else if(val > 1.5 && val < 2.5){
                 car_en = 0;
                 Flight_Lock();
@@ -150,8 +149,7 @@ void Fly_Param_Update_Debug(uint8_t ch, float val) {
                 emergency_stop_print_pending = 1;
             }else if(0.5f <= val && val < 1.5f){
                 wireless_uart_send_string("land\r\n");
-                flight_target.cur_state = pre_landing;
-                car_en = 0;
+                Flight_Request_Landing();
             }else if(val == 0){
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
@@ -201,8 +199,7 @@ void Fly_Param_Update_Visual(uint8_t ch, float val) {
         case 8:
             if(0.5 <= val && val < 1.5){
                 wireless_uart_send_string("land\r\n");
-                flight_target.cur_state = pre_landing; 
-                car_en = 0;
+                Flight_Request_Landing();
             }else if(val >=1.5 && val <=2.5){
                 car_en = 0;
                 Flight_Lock();
@@ -251,8 +248,7 @@ void Fly_Param_Update_yaw(uint8_t ch, float val) {
         case 8:
             if(0.5 <= val && val < 1.5){
                 wireless_uart_send_string("land\r\n");
-                flight_target.cur_state = pre_landing; 
-                car_en = 0;
+                Flight_Request_Landing();
             }else if(val >=1.5 && val <=2.5){
                 car_en = 0;
                 Flight_Lock();
@@ -302,8 +298,7 @@ void Fly_Param_Update_height(uint8_t ch, float val) {
         case 8:
             if(0.5 <= val && val < 1.5){
                 wireless_uart_send_string("land\r\n");
-                flight_target.cur_state = pre_landing; 
-                car_en = 0;
+                Flight_Request_Landing();
             }else if(val > 1.5 && val < 2.5){
                 car_en = 0;
                 Flight_Lock();

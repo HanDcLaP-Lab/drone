@@ -197,6 +197,30 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
             }
         }
     }
+
+    // 标记第2、3候选信标；target_centers按[Row, Col]存储。
+    for (uint8_t rank = 1; rank < cam_down.target_count && rank < TARGET_CANDIDATE_COUNT; rank++) {
+        int16_t tx = (int16_t)cam_down.target_centers[rank][1];
+        int16_t ty = (int16_t)cam_down.target_centers[rank][0];
+        uint16_t color = rank == 1U ? RGB565_BLUE : RGB565_YELLOW;
+        int16_t radius = 4;
+
+        for (int16_t offset = 0; offset <= 1; offset++) {
+            int16_t y = ty + offset;
+            if (y >= 0 && y < MT9V03X_H) {
+                int16_t x1 = tx - radius < 0 ? 0 : tx - radius;
+                int16_t x2 = tx + radius >= MT9V03X_W ? MT9V03X_W - 1 : tx + radius;
+                if (x1 <= x2) ips200_draw_line(x1, y, x2, y, color);
+            }
+
+            int16_t x = tx + offset;
+            if (x >= 0 && x < MT9V03X_W) {
+                int16_t y1 = ty - radius < 0 ? 0 : ty - radius;
+                int16_t y2 = ty + radius >= MT9V03X_H ? MT9V03X_H - 1 : ty + radius;
+                if (y1 <= y2) ips200_draw_line(x, y1, x, y2, color);
+            }
+        }
+    }
     
     // 显示页面号
     ips200_show_string(160, 16*10, "P:");
@@ -228,10 +252,10 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
         ips200_show_string(0, 16*14, "H:");
         ips200_show_int(40, 16*14, (int)share_data_from_0[S0_IMU_HEIGHT], 4);
         
-        ips200_show_string(0, 16*15, "kX:");
-        ips200_show_float(40, 16*15, pos.k_car.x, 4, 2);
-        ips200_show_string(100, 16*15,"kY:");
-        ips200_show_float(140, 16*15, pos.k_car.y, 4, 2);
+        ips200_show_string(0, 16*15, "CX:");
+        ips200_show_float(40, 16*15, pos.raw_car.x, 4, 2);
+        ips200_show_string(100, 16*15,"CY:");
+        ips200_show_float(140, 16*15, pos.raw_car.y, 4, 2);
 
         ips200_show_string(0, 16*16, "TR:");
         ips200_show_float(40, 16*16, share_data_from_0[S0_TARGET_ROLL], 4, 2);

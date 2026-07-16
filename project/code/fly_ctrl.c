@@ -34,6 +34,9 @@ Nonline_PID_t pid_image_y;
 PID_t pid_g_roll;
 PID_t pid_g_pitch;
 PID_t pid_g_yaw;
+static volatile uint32_t landing_start_ms = 0;
+static volatile uint32_t landing_tof_seq = 0;
+static volatile float landing_start_height = 0.0f;
 // =================== 内部辅助函数 ===================
 static float Constrain_Float(float val, float min, float max) {
     if (val > max) return max;
@@ -72,8 +75,10 @@ void Flight_Control_Init(void) {
 
 void Flight_Unlock(void) {
     flight_target.is_armed = 1;
+    flight_target.cur_state = normal;
     car_en = 1;
     flight_target.start_up_scale = 0.0f;
+    dataC.camera_offset_y = CAM_OFFSET_Y;
 
     // 解锁瞬间重置积分，防止暴冲
     PID_Reset(&pid_height_vel);
@@ -90,6 +95,17 @@ void Flight_Unlock(void) {
     // 锁定当前航向为目标航向，防止解锁即转圈
     flight_target.target_yaw = imu_data.yaw;
     flight_target.height = imu_data.z;
+}
+
+void Flight_Request_Landing(void) {
+    if (flight_target.is_armed != 1 || flight_target.cur_state != normal) return;
+
+    car_en = 0;
+    dataC.camera_offset_y = CAM_OFFSET_Y + LANDING_CAM_OFFSET_Y_DELTA;
+    landing_start_height = flight_target.height;
+    landing_start_ms = dataC.pit0_cnt;
+    landing_tof_seq = tof_update_seq;
+    flight_target.cur_state = pre_landing;
 }
 
 void Flight_Lock(void) {
@@ -122,9 +138,12 @@ static void Flight_State_Update(void) {
         // 若未校准，保持 is_armed=2，电机输出为0
     }
 
-    // 2. 降落检测逻辑
-    if (flight_target.cur_state == pre_landing && imu_data.z < LAND_HEIGHT + 2) {
-        flight_target.cur_state = landing;
+    // 2. 仅用降落请求之后的新ToF数据判断触地关停
+    if (flight_target.cur_state == pre_landing && tof_update_seq != landing_tof_seq) {
+        landing_tof_seq = tof_update_seq;
+        if (imu_data.z < LANDING_CUTOFF_HEIGHT_CM) {
+            flight_target.cur_state = landing;
+        }
     }
 
     // 3. 根据状态设定目标高度及特殊行为
@@ -141,24 +160,33 @@ static void Flight_State_Update(void) {
             }
             break;
         case pre_landing:
-            flight_target.target_height = LAND_HEIGHT;
-            break;
-        case landing:
-            // 降落阶段逐渐减小油门比例
-            if (flight_target.start_up_scale > 0) {
-                flight_target.start_up_scale -= CTRL_DT_CTLOOP * 2.0f;
-                if (flight_target.start_up_scale < 0.0f) {
-                    flight_target.start_up_scale = 0.0f;
-                }
+        {
+            uint32_t elapsed_ms = dataC.pit0_cnt - landing_start_ms;
+            flight_target.target_height = 0.0f;
+            if (elapsed_ms < LANDING_DESCENT_TIME_MS) {
+                flight_target.height = landing_start_height *
+                    (1.0f - (float)elapsed_ms / (float)LANDING_DESCENT_TIME_MS);
+            } else {
+                flight_target.height = 0.0f;
             }
+            break;
+        }
+        case landing:
+            flight_target.target_height = 0.0f;
+            flight_target.height = 0.0f;
+            flight_target.start_up_scale = 0.0f;
+            car_en = 0;
+            Flight_Lock();
             break;
         default:
             break;
     }
 
     // 高度目标平滑 (时间常数约 1s, 独立于 TOF 数据速率)
-    const float height_alpha = CTRL_DT_CTLOOP;
-    flight_target.height = flight_target.height * (1.0f - height_alpha) + flight_target.target_height * height_alpha;
+    if (flight_target.cur_state == normal) {
+        const float height_alpha = CTRL_DT_CTLOOP;
+        flight_target.height = flight_target.height * (1.0f - height_alpha) + flight_target.target_height * height_alpha;
+    }
 }
 
 /**

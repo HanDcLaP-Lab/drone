@@ -56,9 +56,10 @@
 #define S1_RAW_TARGET3_X   18  // pos.raw_target[2].x        第三信标未滤波位置X (cm)
 #define S1_RAW_TARGET3_Y   19  // pos.raw_target[2].y        第三信标未滤波位置Y (cm)
 
-// ================= locked_state 低高度保护参数 =================
-#define LOCKED_STATE_MIN_HEIGHT_CM 90.0f
-#define LOCKED_STATE_LOW_HEIGHT_HOLD_FRAMES 5U // 图像约50Hz，5帧约100ms
+// ================= 高度保护参数 =================
+#define VISION_POSITION_MIN_HEIGHT_CM       35.0f // 低于此高度才让视觉坐标失效
+#define VISION_LOW_HEIGHT_HOLD_FRAMES       5U    // 图像约50Hz，5帧约100ms
+#define CAR_ENABLE_MIN_HEIGHT_CM            90.0f // 低于此高度下传car_en=0
 
 typedef struct {
     float debug_earth_err_x,debug_earth_err_y;
@@ -72,6 +73,7 @@ extern Data_Complex_t dataC;
 extern volatile float share_data_from_0[M7_x_DATA_LENGTH];
 extern volatile float share_data_from_1[M7_x_DATA_LENGTH];
 extern uint8_t car_en;
+extern uint8_t car_en_height;
 
 // ================= 函数声明 =================
 void M7_0_data_send(volatile float* data_out);

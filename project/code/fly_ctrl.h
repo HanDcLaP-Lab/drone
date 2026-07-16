@@ -6,7 +6,8 @@
 
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 120.0f  // 目标高度
-#define LAND_HEIGHT 10.0f       // 着陆高度
+#define LANDING_DESCENT_TIME_MS 7000U // 目标高度从当前值线性降至0的时间
+#define LANDING_CUTOFF_HEIGHT_CM 25.0f  // 新ToF帧低于此高度时关停
 #define HOVER_THROTTLE 5150    // 基础悬停油门 
 #define MAX_PWM 8000
 #define MIN_PWM 0
@@ -27,8 +28,9 @@
 #define PITCH_OFFSET -240.0f     //补偿重心偏移
 // ================= 小车固定悬停点视觉补偿 =================
 // X前Y右，单位cm；数值是在无人机IMU yaw等于CAM_OFFSET_MEASURE_YAW_DEG时测得的机体系坐标。
-#define CAM_OFFSET_X                  -2.5f
-#define CAM_OFFSET_Y                  -9.5f
+#define CAM_OFFSET_X                  -4.0f
+#define CAM_OFFSET_Y                  -9.0f
+#define LANDING_CAM_OFFSET_Y_DELTA   (-15.0f)
 // 该yaw以无人机上电朝向为0；使用时会与视觉坐标一同转换到小车固定地面系。
 #define CAM_OFFSET_MEASURE_YAW_DEG     0.0f
 
@@ -90,6 +92,7 @@ void Flight_Control_Angle(void);
 void Flight_Control_Loop(void);
 // 新的控制接口：直接设定目标姿态
 void Set_Target_Attitude(float roll, float pitch, float yaw);
+void Flight_Request_Landing(void);
 void Flight_Unlock(void);
 void Flight_Lock(void);
 void motor_pwm_set(void);
