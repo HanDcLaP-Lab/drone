@@ -219,36 +219,57 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
 #endif
 
     // 逻辑B：仅看到单目标（小车），执行定时定角停留 + 定向跳变扫描
-    if (locked_lights == 1 && has_seen_beacon == 1) {
 #if SEARCH_YAW_ENABLE
-        if (!is_turning) {
-            // 状态1：已到达目标航向，正在原地停留计时
-            search_wait_timer += real_dt_ang;
-            
-            if (search_wait_timer >= SEARCH_WAIT_TIME) { 
-                flight_target.target_yaw = search_yaw_seq[search_seq_idx];
-                
-                search_seq_idx++;
-                if (search_seq_idx >= SEARCH_YAW_SEQ_NUM) {
-                    search_seq_idx = 0;
-                }
-                is_turning = 1; 
-            }
-        } else {
-            // 状态2：正在向新的 target_yaw 旋转
-            float yaw_diff = flight_target.target_yaw - imu_data.yaw;
-            
-            if (fabsf(yaw_diff) < 3.0f) {
-                is_turning = 0;          
+    static uint8_t search_beacon_ready = 0;
+    static uint8_t search_loss_active = 0;
+    static uint32_t search_loss_start_ms = 0;
+    static float search_target_yaw = 0.0f;
+
+    if (locked_lights == 3) {
+        if (imu_data.z > 100.0f) search_beacon_ready = 1;
+        search_loss_active = 0;
+        search_loss_start_ms = 0;
+        search_seq_idx = 0;
+        search_wait_timer = 0;
+        is_turning = 0;
+    } else if (locked_lights == 1) {
+        if (last_locked_lights == 3 && search_beacon_ready == 1) {
+            search_loss_active = 1;
+            search_loss_start_ms = dataC.pit0_cnt;
+            search_seq_idx = 0;
+            search_target_yaw = search_yaw_seq[search_seq_idx++];
+            search_wait_timer = 0;
+            is_turning = 1;
+        }
+
+        if (search_loss_active) {
+            uint32_t search_elapsed_ms = dataC.pit0_cnt - search_loss_start_ms;
+            if (search_elapsed_ms >= SEARCH_TIMEOUT) {
+                search_loss_active = 0;
                 search_wait_timer = 0;
+                is_turning = 0;
+                // Flight_Request_Landing();
+            } else if (search_elapsed_ms >= SEARCH_START_DELAY) {
+                // 对准关闭分支会每帧写入0度，因此搜索期间必须持续恢复当前搜索目标。
+                flight_target.target_yaw = search_target_yaw;
+
+                if (!is_turning) {
+                    search_wait_timer += real_dt_ang;
+                    if (search_wait_timer >= SEARCH_WAIT_TIME) {
+                        search_target_yaw = search_yaw_seq[search_seq_idx++];
+                        flight_target.target_yaw = search_target_yaw;
+                        if (search_seq_idx >= SEARCH_YAW_SEQ_NUM) search_seq_idx = 0;
+                        search_wait_timer = 0;
+                        is_turning = 1;
+                    }
+                } else if (fabsf(search_target_yaw - imu_data.yaw) < 3.0f) {
+                    search_wait_timer = 0;
+                    is_turning = 0;
+                }
             }
         }
-#else
-        // 若宏开关彻底关闭，清空转动状态，避免干扰
-        // search_wait_timer = 0;
-        // is_turning = 0;
-#endif
     }
+#endif
 }
 
 // =================== 对外公共任务接口 ===================

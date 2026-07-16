@@ -22,10 +22,12 @@
 #define TARGET_ALIGN_ENABLE      0       // 开启/关闭信标对准机制 (1:开启, 0:关闭)
 #define TARGET_ALIGN_DISABLE_YAW 0.0f    // 对准关闭时的固定偏航角 (保留的特殊值)
 
-#define SEARCH_YAW_ENABLE        0       // 开启/关闭无信标时旋转搜索机制 (1:开启, 0:关闭)
-#define SEARCH_WAIT_TIME         5000    // 搜索跳变停留时间(ms) - 故意置为特殊值5000以伪禁用
-#define SEARCH_YAW_SEQ_NUM       8       // 搜索序列长度
-#define SEARCH_YAW_SEQ_ARRAY     {0.0f}  // 搜索序列 - 故意置为全0以伪禁用，正常建议如: {35.0f, 70.0f, 35.0f, 0.0f, -35.0f, -70.0f, -35.0f, 0.0f}
+#define SEARCH_YAW_ENABLE        1       // 开启/关闭无信标时旋转搜索机制 (1:开启, 0:关闭)
+#define SEARCH_START_DELAY       1000     // 信标丢失后启动搜索的延时 (ms)
+#define SEARCH_WAIT_TIME         1000    // 搜索角度到位后的停留时间 (ms)
+#define SEARCH_TIMEOUT           5000    // 信标丢失后的搜索总超时 (ms)
+#define SEARCH_YAW_SEQ_NUM       2       // 搜索序列长度
+#define SEARCH_YAW_SEQ_ARRAY     {0.0f, 10.0f} // 搜索序列 (绝对偏航角)
 
 /**
  * @brief 自动悬停控制逻辑封装
