@@ -22,6 +22,21 @@
 #define CAM_A2  -0.0050493933
 #define CAM_A3  -0.0002105636
 #define CAM_A4  0.0000005377
+
+// #define CAM_CX 95.4766785462
+// #define CAM_CY 47.4355457766
+
+
+// #define INV_S11 1.0000000000
+// #define INV_S12 0.0000000000
+// #define INV_S21 0.0000000000
+// #define INV_S22 1.0000000000
+
+
+// #define CAM_A0 48.8530755252
+// #define CAM_A2 -0.0086558507
+// #define CAM_A3 0.0000383442
+// #define CAM_A4 -0.0000012656
 // 宏定义
 #define STACK_SIZE 4096     // DFS 栈大小
 #define MAX_LIGHTS 20       // 最大识别灯光数量

@@ -37,6 +37,7 @@ PID_t pid_g_yaw;
 static volatile uint32_t landing_start_ms = 0;
 static volatile uint32_t landing_tof_seq = 0;
 static volatile float landing_start_height = 0.0f;
+static uint32_t flight_start_ms = 0; // [新增] 解锁时刻 (pit0_cnt)，用于全局飞行超时
 // =================== 内部辅助函数 ===================
 static float Constrain_Float(float val, float min, float max) {
     if (val > max) return max;
@@ -95,6 +96,7 @@ void Flight_Unlock(void) {
     // 锁定当前航向为目标航向，防止解锁即转圈
     flight_target.target_yaw = imu_data.yaw;
     flight_target.height = imu_data.z;
+    flight_start_ms = dataC.pit0_cnt; // [新增] 记录解锁时刻，用于全局飞行超时
 }
 
 void Flight_Request_Landing(void) {
@@ -156,6 +158,10 @@ static void Flight_State_Update(void) {
                     if (flight_target.start_up_scale > 1.0f) {
                         flight_target.start_up_scale = 1.0f;
                     }
+                }
+                // [新增] 全局飞行超时检查
+                if (flight_start_ms > 0 && dataC.pit0_cnt - flight_start_ms >= FLIGHT_TIMEOUT_MS) {
+                    Flight_Request_Landing();
                 }
             }
             break;
