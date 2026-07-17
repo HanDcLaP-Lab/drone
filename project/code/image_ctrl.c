@@ -233,18 +233,22 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
         search_wait_timer = 0;
         is_turning = 0;
     } else if (locked_lights == 1) {
-        if (last_locked_lights == 3 && search_beacon_ready == 1) {
-            search_loss_active = 1;
-            search_loss_start_ms = dataC.pit0_cnt;
-            search_seq_idx = 0;
-            search_target_yaw = search_yaw_seq[search_seq_idx++];
-            search_wait_timer = 0;
-            is_turning = 1;
+        // 激活搜索：从未见过信标则无条件启动（无超时）；见过信标则仅在state3→state1跳变时启动（有超时）
+        if (!search_loss_active) {
+            if (!search_beacon_ready || last_locked_lights == 3) {
+                search_loss_active = 1;
+                search_loss_start_ms = dataC.pit0_cnt;
+                search_seq_idx = 0;
+                search_target_yaw = search_yaw_seq[search_seq_idx++];
+                search_wait_timer = 0;
+                is_turning = 1;
+            }
         }
 
         if (search_loss_active) {
             uint32_t search_elapsed_ms = dataC.pit0_cnt - search_loss_start_ms;
-            if (search_elapsed_ms >= SEARCH_TIMEOUT) {
+            // 仅当曾经见过信标时才启用搜索超时
+            if (search_beacon_ready && search_elapsed_ms >= SEARCH_TIMEOUT) {
                 search_loss_active = 0;
                 search_wait_timer = 0;
                 is_turning = 0;
