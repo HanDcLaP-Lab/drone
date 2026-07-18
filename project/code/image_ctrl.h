@@ -25,7 +25,7 @@
 #define SEARCH_YAW_ENABLE        1       // 开启/关闭无信标时旋转搜索机制 (1:开启, 0:关闭)
 #define SEARCH_START_DELAY       100     // 信标丢失后启动搜索的延时 (ms)
 #define SEARCH_WAIT_TIME         1000    // 搜索角度到位后的停留时间 (ms)
-#define SEARCH_TIMEOUT           5000    // 信标丢失后的搜索总超时 (ms)
+#define SEARCH_TIMEOUT           10000    // 信标丢失后的搜索总超时 (ms)
 #define SEARCH_YAW_SEQ_NUM       2       // 搜索序列长度
 #define SEARCH_YAW_SEQ_ARRAY     {0.0f, 10.0f} // 搜索序列 (绝对偏航角)
 
