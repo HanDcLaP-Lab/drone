@@ -161,7 +161,7 @@ static void Flight_State_Update(void) {
                 }
                 // [新增] 全局飞行超时检查
                 if (flight_start_ms > 0 && dataC.pit0_cnt - flight_start_ms >= FLIGHT_TIMEOUT_MS) {
-                    Flight_Request_Landing();
+                    // Flight_Request_Landing(); // 暂时关闭70秒自动降落
                 }
             }
             break;
