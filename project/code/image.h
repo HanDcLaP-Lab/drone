@@ -51,7 +51,7 @@
 #define FOV_RADIUS (FOV_DIAMETER / 2.0f)
 #define FOV_RADIUS_SQ (FOV_RADIUS * FOV_RADIUS)
 
-#define MORPH_MASK_DIAMETER 100.0f  // [新增] 形态学有效区域圆直径(限制边缘噪声膨胀)
+#define MORPH_MASK_DIAMETER 115.0f  // [新增] 形态学有效区域圆直径(限制边缘噪声膨胀)
 #define MORPH_MASK_RADIUS (MORPH_MASK_DIAMETER / 2.0f)
 #define MORPH_MASK_RADIUS_SQ (MORPH_MASK_RADIUS * MORPH_MASK_RADIUS)
 

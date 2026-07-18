@@ -74,7 +74,13 @@ int main(void)
         if (mt9v03x_finish_flag)
         {
             mt9v03x_finish_flag = 0;
-            
+
+            // 原子快照: 短暂关中断, 防止相机ISR的memcpy写入mt9v03x_image
+            // 与本帧处理竞态造成图像撕裂 (约50~110us @250MHz)
+            __disable_irq();
+            memcpy(cam_down.raw_image, mt9v03x_image, MT9V03X_IMAGE_SIZE);
+            __enable_irq();
+
             // 1. 拉取 Core 0 写入的最新数据
             SCB_InvalidateDCache_by_Addr(&share_data_from_0, sizeof(share_data_from_0));
 

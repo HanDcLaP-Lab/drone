@@ -32,6 +32,8 @@ uint8_t buffer_bin_down[MT9V03X_H][MT9V03X_W];
 // 定义 DFS 访问标记数组 (静态分配以防栈溢出)
 uint8_t visited_buffer[MT9V03X_H * MT9V03X_W];
 uint8 image_copy[MT9V03X_H][MT9V03X_W];
+// 工作快照缓冲: 主循环每帧原子拷贝至此, 相机ISR的memcpy不再触碰处理中的图像 (防撕裂)
+static uint8_t image_use[MT9V03X_H][MT9V03X_W];
 uint8_t thresh_by_rho2[(int)FOV_RADIUS_SQ + 1]; // 逐像素阈值查找表: rho² → 二值化阈值
 // 定义全局实例
 CameraObject cam_down;
@@ -69,8 +71,8 @@ void camera_init(void) {
     cam_down.width = MT9V03X_W;
     cam_down.height = MT9V03X_H;
     
-    // 指向库文件的图像数组 (直接使用逐飞库的 DMA 缓冲区)
-    cam_down.raw_image = (uint8_t *)mt9v03x_image;      
+    // 指向工作快照缓冲 (每帧由主循环从 mt9v03x_image 原子拷贝, 见 main_cm7_1.c)
+    cam_down.raw_image = (uint8_t *)image_use;
     cam_down.binarized_image = (uint8_t *)buffer_bin_down;
     
     // 参数配置
