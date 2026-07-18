@@ -60,7 +60,7 @@
 #define EDGE_CLEAN_RADIUS_SQ (EDGE_CLEAN_RADIUS * EDGE_CLEAN_RADIUS)
 
 #define CAR_MAX_DISTANCE  220.0f  //小车最大距离，超过不认为是小车
-#define TARGET_MAX_DISTANCE  700.0f  //信标最大距离，超过不认为是小车
+#define TARGET_MAX_DISTANCE  400.0f  //信标最大距离，超过不认为是小车
 // =========================================================
 // [新增] 面积动态补偿参数 (解决边缘灯光变小的问题)
 // =========================================================

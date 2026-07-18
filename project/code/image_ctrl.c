@@ -235,7 +235,7 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
     } else if (locked_lights == 1) {
         // 激活搜索：从未见过信标则无条件启动（无超时）；见过信标则仅在state3→state1跳变时启动（有超时）
         if (!search_loss_active) {
-            if (!search_beacon_ready || last_locked_lights == 3) {
+            if (!search_beacon_ready) {
                 search_loss_active = 1;
                 search_loss_start_ms = dataC.pit0_cnt;
                 search_seq_idx = 0;
