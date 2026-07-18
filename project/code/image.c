@@ -618,7 +618,7 @@ static void sort_lights(CameraObject *cam) {
         if (cam->dot_num[i] < CAR_MIN_AREA) continue;
         
         // 限制：找小车距离在2m以内 (200cm)
-        if (phys_dist_sq[i] * car_plane_scale_sq > 150.0f * 150.0f) continue;
+        if (phys_dist_sq[i] * car_plane_scale_sq > CAR_MAX_DISTANCE * CAR_MAX_DISTANCE) continue;
         
         // 计算目标质心到画面中心的像素距离平方
         float dx = cam->centers[i][1] - CAM_CX;
@@ -666,7 +666,7 @@ static void sort_lights(CameraObject *cam) {
         if (!is_valid_blob[i]) continue;
 
         // 限制：找信标距离在10m以内 (1000cm)
-        if (phys_dist_sq[i] > 1000.0f * 1000.0f) continue;
+        if (phys_dist_sq[i] > TARGET_MAX_DISTANCE * TARGET_MAX_DISTANCE) continue;
 
         // 计算目标质心到画面中心的像素距离平方 (用于边缘畸变补偿)
         float dx_c = cam->centers[i][1] - CAM_CX;
