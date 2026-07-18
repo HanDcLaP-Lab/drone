@@ -252,7 +252,7 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
                 search_loss_active = 0;
                 search_wait_timer = 0;
                 is_turning = 0;
-                Flight_Request_Landing();
+                // Flight_Request_Landing(); // 暂时关闭搜索超时自动降落
             } else if (search_elapsed_ms >= SEARCH_START_DELAY) {
                 // 对准关闭分支会每帧写入0度，因此搜索期间必须持续恢复当前搜索目标。
                 flight_target.target_yaw = search_target_yaw;
