@@ -9,8 +9,13 @@ typedef enum {
     DRONE_STATE_NORMAL_FLIGHT   // 正常飞行模式 (传感器融合，位置环/姿态环全开)
 } Drone_State_e;
 
-// 启动模式：DEBUG 电机不转；NORMAL_FLIGHT 在 IMU 校准完成后自动解锁
-#define DRONE_START_MODE DRONE_STATE_NORMAL_FLIGHT
+typedef enum {
+    DRONE_MODE_USE_SWITCH = 0,  // 按拨码选择，运行期间允许从调试切换到飞行
+    DRONE_MODE_FORCE_DEBUG,     // 忽略拨码，强制调试
+    DRONE_MODE_FORCE_NORMAL     // 忽略拨码，强制正常飞行
+} Drone_Mode_Select_e;
+
+#define DRONE_MODE_SELECT DRONE_MODE_FORCE_NORMAL
 
 // 声明全局变量，供其他文件读取当前状态
 extern Drone_State_e current_drone_state;

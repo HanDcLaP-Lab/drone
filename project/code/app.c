@@ -11,9 +11,24 @@ void app_flight_start(void) {
     
 }
 
-Drone_State_e current_drone_state = DRONE_START_MODE;
+Drone_State_e current_drone_state = DRONE_STATE_DEBUG;
 
 void app_init(void) {
+    switch (DRONE_MODE_SELECT) {
+        case DRONE_MODE_USE_SWITCH:
+            gpio_init(SWITCH1, GPI, GPIO_HIGH, GPI_PULL_UP);
+            current_drone_state = gpio_get_level(SWITCH1) == 0 ?
+                DRONE_STATE_NORMAL_FLIGHT : DRONE_STATE_DEBUG;
+            break;
+        case DRONE_MODE_FORCE_NORMAL:
+            current_drone_state = DRONE_STATE_NORMAL_FLIGHT;
+            break;
+        case DRONE_MODE_FORCE_DEBUG:
+        default:
+            current_drone_state = DRONE_STATE_DEBUG;
+            break;
+    }
+
     if (current_drone_state == DRONE_STATE_NORMAL_FLIGHT) {
         printf("[APP] Boot Mode: NORMAL FLIGHT MODE \r\n");
         //app_flight_start();
@@ -23,7 +38,14 @@ void app_init(void) {
 }
 
 void app_state_machine_update(void) {
-    // 启动模式由 DRONE_START_MODE 固定，运行期间不再读取拨码开关
+    if (DRONE_MODE_SELECT != DRONE_MODE_USE_SWITCH ||
+        current_drone_state != DRONE_STATE_DEBUG ||
+        gpio_get_level(SWITCH1) != 0) return;
+
+    printf("[APP] Switching to NORMAL FLIGHT MODE...\r\n");
+    system_delay_ms(2000);
+    current_drone_state = DRONE_STATE_NORMAL_FLIGHT;
+    Flight_Unlock();
 }
 
 // 无线调参映射函数

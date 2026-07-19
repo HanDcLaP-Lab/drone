@@ -104,8 +104,8 @@ New frame (post 5.12a):
   - `project/user/main_cm7_1.c`: CM7_1 entry point with 20ms interrupt
 
 ### Testing and Debugging
-- **Debug mode**: Set `DRONE_START_MODE` to `DRONE_STATE_DEBUG`; motors remain disabled
-- **Flight mode**: Set `DRONE_START_MODE` to `DRONE_STATE_NORMAL_FLIGHT`; full control is enabled after IMU calibration
+- **Mode selection**: Set `DRONE_MODE_SELECT` to switch-controlled, forced debug, or forced normal mode
+- **Forced normal mode**: Full control is enabled after IMU calibration; forced debug keeps motors disabled
 - **Parameter tuning**: Connected debug UART for parameter updates
 - **Screen display**: IPS200 screen for debugging info via `ips200_show_xxx()`
 
