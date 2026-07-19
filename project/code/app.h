@@ -15,7 +15,7 @@ typedef enum {
     DRONE_MODE_FORCE_NORMAL     // 忽略拨码，强制正常飞行
 } Drone_Mode_Select_e;
 
-#define DRONE_MODE_SELECT DRONE_MODE_FORCE_NORMAL
+#define DRONE_MODE_SELECT DRONE_MODE_USE_SWITCH
 
 // 声明全局变量，供其他文件读取当前状态
 extern Drone_State_e current_drone_state;
