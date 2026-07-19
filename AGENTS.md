@@ -96,5 +96,5 @@ iarbuild.exe "project/iar/project_config/cyt4bb7_cm_7_1.ewp" -build Debug
 - **Two PIT timers can't be shared** between cores (v3.9a changelog).
 - **TOF over-range** returns 8192 — clamp to 1400.
 - **Motor mapping changed at 5.12a**: motor1↔LF, motor2↔RF, motor3↔RB, motor4↔LB. LF/RB CW, RF/LB CCW.
-- **Debug mode**: Switch 1 OFF → motors disabled but all logic runs (debug output visible on screen).
-- **Flight mode**: Switch 1 ON → full control with motors active.
+- **Debug mode**: Set `DRONE_START_MODE` to `DRONE_STATE_DEBUG`; motors remain disabled while logic runs.
+- **Flight mode**: Set `DRONE_START_MODE` to `DRONE_STATE_NORMAL_FLIGHT`; IMU calibration then automatic unlock remain active.

@@ -102,7 +102,7 @@ int main(void) {
     while (true) {
         gpio_high(DEBUG_PROBE);
 
-        app_state_machine_update(); // 状态机轮询，检测模式切换
+        app_state_machine_update(); // 应用层状态机（启动模式由宏固定）
         debug_data_notify_handler();
         debug_data_send_handler();
 
