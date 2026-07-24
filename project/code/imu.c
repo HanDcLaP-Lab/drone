@@ -46,6 +46,15 @@ static double sum_gx = 0, sum_gy = 0, sum_gz = 0;
 static double sum_ax = 0, sum_ay = 0, sum_az = 0;
 static uint16_t calib_cnt = 0;
 static uint16_t calib_valid_cnt = 0; // 通过静止检测的有效样本数
+
+typedef struct {
+    float ax, ay, az;
+    float acc_norm;
+    float acc_weight;
+} IMU_Motion_Debug_t;
+
+static volatile IMU_Motion_Debug_t imu_motion_debug;
+
 #define LIMIT(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
 // ================= 陷波滤波器 (电机振动抑制, IMU 特化) =================
 #if NOTCH_ENABLE
@@ -179,23 +188,19 @@ static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, floa
     // 假设传入的 ax,ay,az 单位是 m/s^2 (根据您代码中的 GRAVITY_MSS 宏)
     // 如果传入的是归一化值(1.0g)，请将 9.8f 改为 1.0f
     float acc_norm = sqrtf(ax * ax + ay * ay + az * az);
+    imu_motion_debug.acc_norm = acc_norm;
 
     // 2. 角度转弧度
     gx *= (PI / 180.0f);
     gy *= (PI / 180.0f);
     gz *= (PI / 180.0f);
 
-    // ==============================================================================
-    // 【核心逻辑：连续误差补偿】 (Adaptive Gain)
-    // 我们无法算出干扰向量的方向，但能算出干扰的"烈度"。
-    // 利用这个烈度，动态调整修正力度。
-    // ==============================================================================
+    // 先按模长偏差降低加速度可信度，再叠加下方的方向创新门控。
     float acc_weight = 1.0f;
     float error_magnitude = fabsf(acc_norm - GRAVITY_MSS); // 计算与重力(9.8)的偏差绝对值
 
     // 补偿曲线设计：
-    // 偏差 < 0.5 (约0.05g): 认为是噪声，权重 1.0 (完全信任)
-    // 偏差 > 2.5 (约0.25g): 认为是显著运动干扰，权重 0.0 (完全屏蔽)
+    // 偏差 <= 0.4m/s^2: 权重 1.0；偏差 >= 0.8m/s^2: 权重 0.0
     // 中间区域 : 使用线性插值进行平滑补偿，绝非简单的死区跳变
     if (error_magnitude > 0.8f) {
         acc_weight = 0.0f; 
@@ -220,7 +225,19 @@ static void Mahony_Update(float gx, float gy, float gz, float ax, float ay, floa
     // 5. 误差计算 (叉积: 测量向量 x 估计向量)
     ex = (ay * vz - az * vy);
     ey = (az * vx - ax * vz);
-    //ez = (ax * vy - ay * vx);
+    ez = (ax * vy - ay * vx);
+
+    // 运动加速度的模长可能仍接近重力；方向创新用于阻止其污染 roll/pitch。
+    float direction_error = sqrtf(ex * ex + ey * ey + ez * ez);
+    float direction_weight = 1.0f;
+    if (direction_error >= IMU_ACC_DIR_REJECT_ERROR) {
+        direction_weight = 0.0f;
+    } else if (direction_error > IMU_ACC_DIR_FULL_TRUST_ERROR) {
+        direction_weight = (IMU_ACC_DIR_REJECT_ERROR - direction_error)
+                         / (IMU_ACC_DIR_REJECT_ERROR - IMU_ACC_DIR_FULL_TRUST_ERROR);
+    }
+    if (direction_weight < acc_weight) acc_weight = direction_weight;
+    imu_motion_debug.acc_weight = acc_weight;
 
     // 6. 积分误差 (Integral Feedback)
     // 【关键补偿】：当运动剧烈(权重低)时，必须停止积分！
@@ -442,6 +459,10 @@ void IMU_Update_Loop(void) {
     map_ay -= offset_ay;
     map_az -= offset_az;
 
+    imu_motion_debug.ax = map_ax;
+    imu_motion_debug.ay = map_ay;
+    imu_motion_debug.az = map_az;
+
     float map_gx = IMU_MAP_GX(raw_gx, raw_gy, raw_gz);
     float map_gy = IMU_MAP_GY(raw_gx, raw_gy, raw_gz);
     float map_gz = IMU_MAP_GZ(raw_gx, raw_gy, raw_gz);
@@ -481,4 +502,29 @@ void IMU_Update_Loop(void) {
     imu_data.yaw += yaw_rate * DT;
 
     Navigation_Update(map_ax, map_ay, map_az);
+}
+
+void IMU_Check_Data_Print(void) {
+#if IMU_MOTION_DEBUG_ENABLE
+    static uint32_t last_print_ms = 0;
+    uint32_t now_ms = dataC.pit0_cnt;
+
+    if (!imu_data.is_calibrated ||
+        (uint32_t)(now_ms - last_print_ms) < IMU_MOTION_DEBUG_PERIOD_MS) return;
+    last_print_ms = now_ms;
+
+    float ax = imu_motion_debug.ax;
+    float ay = imu_motion_debug.ay;
+    float az = imu_motion_debug.az;
+    float acc_roll = atan2f(ay, az) * 180.0f / PI;
+    float acc_pitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * 180.0f / PI;
+
+    printf("%lu,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
+           (unsigned long)now_ms,
+           imu_data.roll, imu_data.pitch,
+           imu_data.groll, imu_data.gpitch,
+           ax, ay, az,
+           imu_motion_debug.acc_norm, imu_motion_debug.acc_weight,
+           acc_roll, acc_pitch);
+#endif
 }

@@ -12,6 +12,10 @@
 #define DT 0.00125f      // 运行周期 1.25ms (800Hz)
 #define GRAVITY_MSS 9.789f // 标准重力加速度
 #define VALID_G_MIN 0.2f
+#define IMU_ACC_DIR_FULL_TRUST_ERROR 0.052336f // sin(3deg): 重力方向误差小于此值时完全信任
+#define IMU_ACC_DIR_REJECT_ERROR     0.139173f // sin(8deg): 重力方向误差大于此值时拒绝修正
+#define IMU_MOTION_DEBUG_ENABLE    1
+#define IMU_MOTION_DEBUG_PERIOD_MS 50U
 
 // ================= 坐标系映射宏定义 =================
 // 目标: NED坐标系 (X前, Y右, Z下)
@@ -102,7 +106,6 @@ extern volatile uint16_t imu_acc_new_sample_count;
 // ================= 函数声明 =================
 void IMU_Update_Loop(void);
 void imu_init(void);
-// [新增] 专门用于确认 IMU 方向和数据的打印函数
-//void IMU_Check_Data_Print(void);
+// CM7_0 主循环调用，用于观察平移加速度对姿态融合的影响
 void IMU_Check_Data_Print(void);
 #endif
