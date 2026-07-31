@@ -59,18 +59,18 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_height_pos, 0.7f, 0.2f, 0.0f, 30, 35, 40.0f);
     PID_Init(&pid_height_vel, 16.031f, 0.0f, 0.429f, 80, 1200, 40.0f);
     // 角度环a
-    Nonline_PID_Init(&pid_roll, 9.328f, 0.239f, 0.0f, 0.05f, 20, 300, 40.0f);
-    Nonline_PID_Init(&pid_pitch, 9.328f, 0.239f, 0.0f, 0.05f, 20, 300, 40.0f);
+    Nonline_PID_Init(&pid_roll, 9.328f, 0.0f, 0.0f, 0.05f, 20, 300, 40.0f);
+    Nonline_PID_Init(&pid_pitch, 9.328f, 0.0f, 0.0f, 0.05f, 20, 300, 40.0f);
     Nonline_PID_Init(&pid_yaw, 1.5f, 0.33f, 0.0f, 0.0228f, 6, 45, 40.0f);
 
     //Nonline_PID_Init(&pid_image_yaw, 1.0f, 0.00f, 0.0f, 0.0f, 0, 60.0f, 4.0f);
     // 角速度环g
-    PID_Init(&pid_g_roll, 2.764f, 3.327f, 0.115f, 120, 3500, 40.0f);
-    PID_Init(&pid_g_pitch, 2.764f, 3.327f, 0.115f, 120, 3500, 40.0f);
-    PID_Init(&pid_g_yaw, 6.1f, 1.32f, 0.00f, 150, 3500, 40.0f);
+    PID_Init(&pid_g_roll, 2.764f, 3.327f, 0.115f, 120, 3500, 60.0f);
+    PID_Init(&pid_g_pitch, 2.764f, 3.327f, 0.115f, 120, 3500, 60.0f);
+    PID_Init(&pid_g_yaw, 6.1f, 1.32f, 0.00f, 150, 3500, 60.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.094f, 0.012f, 0.12325f, 0.0003f, 50, MAX_TILT_ANGLE , 10.0f);
-    Nonline_PID_Init(&pid_image_y, 0.094f, 0.012f, 0.12325f, 0.0003f, 50, MAX_TILT_ANGLE , 10.0f);
+    Nonline_PID_Init(&pid_image_x, 0.094f, 0.0f, 0.065f, 0.0003f, 50, MAX_TILT_ANGLE , 5.0f);
+    Nonline_PID_Init(&pid_image_y, 0.094f, 0.0f, 0.065f, 0.0003f, 50, MAX_TILT_ANGLE , 5.0f);
 
 }
 
@@ -270,11 +270,25 @@ static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pi
     motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll + out_yaw + motor_offset.rb) * flight_target.start_up_scale * flight_target.output_scale);
 
     // 输出限幅
-    int16_t* motors = (int16_t*)&motor_out.rf;
-    for (int i = 0; i < 4; i++) {
-        if (motors[i] > MAX_PWM) motors[i] = MAX_PWM;
-        if (motors[i] < MIN_PWM) motors[i] = MIN_PWM;
+    // 查找最大值，若超限则四颗电机等比例缩放，保持推力矢量方向不变
+    int16_t max_motor = motor_out.lf;
+    if (motor_out.rf > max_motor) max_motor = motor_out.rf;
+    if (motor_out.lb > max_motor) max_motor = motor_out.lb;
+    if (motor_out.rb > max_motor) max_motor = motor_out.rb;
+
+    if (max_motor > MAX_PWM) {
+        float scale = (float)MAX_PWM / max_motor;
+        motor_out.lf = (int16_t)(motor_out.lf * scale);
+        motor_out.rf = (int16_t)(motor_out.rf * scale);
+        motor_out.lb = (int16_t)(motor_out.lb * scale);
+        motor_out.rb = (int16_t)(motor_out.rb * scale);
     }
+
+    // 下限保护 (电机不能反转)
+    if (motor_out.lf < MIN_PWM) motor_out.lf = MIN_PWM;
+    if (motor_out.rf < MIN_PWM) motor_out.rf = MIN_PWM;
+    if (motor_out.lb < MIN_PWM) motor_out.lb = MIN_PWM;
+    if (motor_out.rb < MIN_PWM) motor_out.rb = MIN_PWM;
 }
 
 // =================== 主控制循环 ===================

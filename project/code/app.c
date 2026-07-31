@@ -63,8 +63,8 @@ void Fly_Param_Update(uint8_t ch, float val) {
         case 2: // 角度环 KI
             // pid_roll.ki = val;
             // pid_pitch.ki = val;
-            pid_image_x.ki = val;
-            pid_image_y.ki = val;
+            pid_image_x.kd = val;
+            pid_image_y.kd = val;
             //pid_yaw.ki = val * 0.5f;
             break;
             
@@ -86,13 +86,13 @@ void Fly_Param_Update(uint8_t ch, float val) {
             break;
             
         case 5: // 角速度环 KD
-            pid_roll.kp2 = val;
-            pid_pitch.kp2 = val;
+            pid_g_roll.kp = val;
+            pid_g_pitch.kp = val;
             break;
         
         case 6:
-            pid_image_x.kd = val;
-            pid_image_y.kd = val;
+            pid_g_roll.ki = val;
+            pid_g_pitch.ki = val;
             break;
         case 7:
             pid_g_roll.kd = val;
