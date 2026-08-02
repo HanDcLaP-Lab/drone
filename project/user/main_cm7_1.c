@@ -50,6 +50,7 @@
 #define PIT_NUM4 (PIT_CH11)
 
 int32_t image_cnt = 0;
+static float frame_seq = 0.0f;  // 共享区帧序号 (S1_FRAME_SEQ 槽位, 仅 CM7_1 写)
 
 
 int main(void)
@@ -107,8 +108,11 @@ int main(void)
             image_processing_loop();               // 执行核心视觉算法
 
             // 2. 刷入 RAM 供 Core 0 读取
+            // 先写全部数据, 最后写递增帧序号并整区写回 (写序保证 Core0 复核序号时数据已完整落 RAM)
             M7_1_data_send(share_data_from_1);
-            share_data_from_1[S1_PROCESS_DONE] = 1.0f; // 图像处理完成标志位，Core 0 可根据此位判断何时读取数据
+            frame_seq += 1.0f;
+            if (frame_seq >= 0x800000UL) frame_seq = 1.0f; // float 精确整数上限 2^24 内回绕
+            share_data_from_1[S1_FRAME_SEQ] = frame_seq;
             SCB_CleanDCache_by_Addr(&share_data_from_1, sizeof(share_data_from_1));
 
             // 3. 屏幕打印

@@ -126,49 +126,57 @@ int main(void) {
 
         // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
-        static uint32_t vision_timeout_cnt = 0; // [新增] 视觉失联看门狗计数器
-        if (share_data_from_1[S1_PROCESS_DONE] != 0.0f)
+        // 帧序号+一致性快照协议: Core1 先写全部数据、最后写递增序号 (S1_FRAME_SEQ) 并整区写回。
+        // 序号变化 → 整帧 80B 拷贝到 vision_snap → 复核序号(防拷贝期间被新帧写穿撕裂) → 消费快照。
+        // Core0 不再写回共享区，消除"清标志吞新帧"竞态与整块 cache clean 覆盖 Core1 新数据的风险。
+        static float last_vision_seq = 0.0f;    // 上一帧已消费序号
+        static uint32_t last_vision_ms = 0;     // 最后一帧消费时刻 (dataC.pit0_cnt, 1ms)
+        float frame_seq = share_data_from_1[S1_FRAME_SEQ];
+        if (frame_seq != last_vision_seq)
         {
-            vision_timeout_cnt = 0; // 成功收到数据，喂狗清零
-
-            uint8_t locked_state = (uint8_t)share_data_from_1[S1_LOCKED_COUNT];
-            if (locked_state == 4 && last_vision_locked_state != 4) {
-                merge_print_pending = 1;
+            for (int i = 0; i < M7_x_DATA_LENGTH; i++) {
+                vision_snap[i] = share_data_from_1[i];
             }
-            last_vision_locked_state = locked_state;
+            // 复核序号: 若拷贝期间 Core1 已写完新帧, 本快照可能新旧混合, 放弃本轮下一轮重试
+            SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1[S1_FRAME_SEQ], sizeof(float));
+            if (share_data_from_1[S1_FRAME_SEQ] == frame_seq)
+            {
+                last_vision_seq = frame_seq;
+                last_vision_ms = dataC.pit0_cnt;    // 喂狗: 以 1ms 物理时钟计
 
-            share_data_from_1[S1_PROCESS_DONE] = 0.0f;
-            Flight_Hover_Control_Task(); 
-            SCB_CleanDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
-            
-            Float_Buffer_write(float_buffer, share_data_from_1);
-            //send_cnt++;
-            //if(send_cnt == 10){
-            Board_Comm_Send_Data(float_buffer);
-            //   send_cnt = 0;
-            //}
-            static uint32_t last_visual_pos_print_ms = 0;
-            if ((uint32_t)(dataC.pit0_cnt - last_visual_pos_print_ms) >= 500U) {
-                last_visual_pos_print_ms = dataC.pit0_cnt;
-                // printf("%.2f,%.2f,%.2f,%.2f\r\n",
-                //        share_data_from_1[S1_CAR_RAW_X],
-                //        share_data_from_1[S1_CAR_RAW_Y],
-                //        dataC.debug_body_track_x,
-                //        dataC.debug_body_track_y);
+                uint8_t locked_state = (uint8_t)vision_snap[S1_LOCKED_COUNT];
+                if (locked_state == 4 && last_vision_locked_state != 4) {
+                    merge_print_pending = 1;
+                }
+                last_vision_locked_state = locked_state;
+
+                Flight_Hover_Control_Task();
+                Float_Buffer_write(float_buffer, vision_snap);
+                //send_cnt++;
+                //if(send_cnt == 10){
+                Board_Comm_Send_Data(float_buffer);
+                //   send_cnt = 0;
+                //}
+                static uint32_t last_visual_pos_print_ms = 0;
+                if ((uint32_t)(dataC.pit0_cnt - last_visual_pos_print_ms) >= 500U) {
+                    last_visual_pos_print_ms = dataC.pit0_cnt;
+                    // printf("%.2f,%.2f,%.2f,%.2f\r\n",
+                    //        vision_snap[S1_CAR_RAW_X],
+                    //        vision_snap[S1_CAR_RAW_Y],
+                    //        dataC.debug_body_track_x,
+                    //        dataC.debug_body_track_y);
+                }
             }
+            // 序号复核不一致: 该帧视为撕裂丢弃, 下一轮循环处理最新帧
         }
-        else 
+        else
         {
-            // 主循环轮询未收到视觉数据时，计数器累加
-            vision_timeout_cnt++;
-            
-            if (vision_timeout_cnt > 400) { // 没收到视觉数据
+            // 未收到新视觉帧: 按 1ms 物理时间判定失联 (与主循环负载解耦)
+            if ((uint32_t)(dataC.pit0_cnt - last_vision_ms) > VISION_LOST_TIMEOUT_MS) {
                 // 触发视觉失联保护：强行回平姿态，清理视觉 PID 积分，原地悬停防止乱飞
                 Nonline_PID_Reset(&pid_image_x);
                 Nonline_PID_Reset(&pid_image_y);
                 Set_Target_Attitude(0, 0, flight_target.target_yaw);
-                
-                vision_timeout_cnt = 400; // 防止计数器溢出
                 last_vision_locked_state = 0;
             }
         }

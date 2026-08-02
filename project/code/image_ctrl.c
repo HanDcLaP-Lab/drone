@@ -123,7 +123,7 @@ static void Hover_Car_Position_Filter(float raw_car_x, float raw_car_y, float sn
  * @brief 位置环解耦控制
  */
 static void Flight_Hover_Position_Control(float car_pos_x, float car_pos_y, float *out_roll, float *out_pitch) {
-    float snapshot_yaw = share_data_from_1[S1_SNAPSHOT_YAW];
+    float snapshot_yaw = vision_snap[S1_SNAPSHOT_YAW];
     float yaw_rad = VISION_EARTH_YAW_DEG(snapshot_yaw) * 3.14159265f / 180.0f;
     float cos_yaw = cosf(yaw_rad);
     float sin_yaw = sinf(yaw_rad);
@@ -163,8 +163,8 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
 #if TARGET_ALIGN_ENABLE
     if (locked_lights == 3) {
         if (imu_data.z > 0.85f * TARGET_HEIGHT_CM) has_seen_beacon = 1;
-        float target_pos_x = share_data_from_1[S1_TARGET_X] - dataC.camera_offset_x;
-        float target_pos_y = share_data_from_1[S1_TARGET_Y] - dataC.camera_offset_y;
+        float target_pos_x = vision_snap[S1_TARGET_X] - dataC.camera_offset_x;
+        float target_pos_y = vision_snap[S1_TARGET_Y] - dataC.camera_offset_y;
         
         float distance = sqrtf(target_pos_x * target_pos_x + target_pos_y * target_pos_y);
         
@@ -277,11 +277,11 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
 // =================== 对外公共任务接口 ===================
 
 void Flight_Hover_Control_Task(void) {
-    // 1. 获取目标中心坐标与锁定状态
-    float car_pos_x = share_data_from_1[S1_CAR_RAW_X];
-    float car_pos_y = share_data_from_1[S1_CAR_RAW_Y];
-    uint8_t locked_lights = (uint8_t)share_data_from_1[S1_LOCKED_COUNT];
-    float snapshot_yaw = share_data_from_1[S1_SNAPSHOT_YAW];
+    // 1. 获取目标中心坐标与锁定状态 (读主循环的一致性快照, 不直读共享区)
+    float car_pos_x = vision_snap[S1_CAR_RAW_X];
+    float car_pos_y = vision_snap[S1_CAR_RAW_Y];
+    uint8_t locked_lights = (uint8_t)vision_snap[S1_LOCKED_COUNT];
+    float snapshot_yaw = vision_snap[S1_SNAPSHOT_YAW];
     
     if (locked_lights == 1 || locked_lights == 3) {
         Hover_Car_Position_Filter(car_pos_x, car_pos_y, snapshot_yaw, &car_pos_x, &car_pos_y);
@@ -289,8 +289,8 @@ void Flight_Hover_Control_Task(void) {
 
     // 2. 视觉位置前馈预测 (当同时看到小车和信标时)
     if (locked_lights == 3) {
-        float target_pos_x = share_data_from_1[S1_TARGET_X] - dataC.camera_offset_x;
-        float target_pos_y = share_data_from_1[S1_TARGET_Y] - dataC.camera_offset_y;
+        float target_pos_x = vision_snap[S1_TARGET_X] - dataC.camera_offset_x;
+        float target_pos_y = vision_snap[S1_TARGET_Y] - dataC.camera_offset_y;
         Car_Position_Predict_Feedforward(&car_pos_x, &car_pos_y, target_pos_x, target_pos_y);
     }
 

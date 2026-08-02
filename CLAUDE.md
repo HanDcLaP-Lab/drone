@@ -82,9 +82,9 @@ The drone uses a triple-cascade PID structure:
 ### Camera Configuration  
 - `MT9V03X_H`: 120, `MT9V03X_W`: 188 (resolution)
 - `CAM_OFFSET_X`: -9.0f, `CAM_OFFSET_Y`: -2.0f, measured in body axes at `CAM_OFFSET_MEASURE_YAW_DEG`: 0.0f; converted once to the car-fixed ground frame
-- `THRESHOLD_MAX`: 130 (image center), `THRESHOLD_MIN`: 40 (image edge) — per-pixel via rho² LUT
-- `BASE_MIN_AREA`: 4.0f — minimum blob area for valid light detection
-- `FOV_DIAMETER`: 126.0f — circular FOV mask diameter (pixels)
+- `THRESHOLD_MAX`: 130 (image center), `THRESHOLD_MIN`: 120 (image edge) — per-pixel via rho² LUT
+- `BASE_MIN_AREA`: 1.0f — minimum blob area for valid light detection (currently so low it acts as a passthrough)
+- `FOV_DIAMETER`: 125.0f — circular FOV mask diameter (pixels)
 
 ### Motor Mapping
 New frame (post 5.12a):

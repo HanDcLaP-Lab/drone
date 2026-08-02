@@ -5,14 +5,21 @@
 Data_Complex_t dataC = {0};
 uint8_t car_en = 1;
 uint8_t car_en_height = 0;
+
+// 视觉帧一致性快照: Core0 主循环整帧拷贝 share_data_from_1 并复核帧序号后消费此数组。
+// 所有消费者 (image_ctrl/wireless_uart/下传协议) 一律读 vision_snap，避免跨多 float 读共享区
+// 时被 Core1 新帧写穿导致新旧帧混合。定义在两个核的构建中 (image_ctrl.c 同时编译进 CM7_1)，
+// CM7_1 侧保持全零且无人消费。
+volatile float vision_snap[M7_x_DATA_LENGTH] = {0};
+
 //核间通信初始化
 #if defined(CY_CORE_CM7_0)
     //Core 0
-    
+
     // 两个20-float共享区按32字节缓存行隔开，整区Clean不会触及另一生产者的数据。
     #pragma location = 0x28001060
     volatile float share_data_from_0[M7_x_DATA_LENGTH] = {0}; // Core 0 定义并负责清零
-    
+
     #pragma location = 0x28001000
     __root __no_init volatile float share_data_from_1[M7_x_DATA_LENGTH]; // 对 Core 1 的数据只读，不初始化
 

@@ -9,9 +9,8 @@
 //   ┌────┴────────────────────────────────────────────────┐
 //   │ 1. binarize_pass()        逐像素动态阈值二值化       │
 //   │    ├─ 3×3块共用一个阈值                              │
-//   │    └─ 中心THRESHOLD_MAX(130) → 边缘THRESHOLD_MIN(40) │
-//   │ 2. 双重闭运算 (桥接线缆造成的连通域断裂)              │
-//   │    dilate → erode → dilate → erode (8邻域)         │
+//   │    └─ 中心THRESHOLD_MAX(130) → 边缘THRESHOLD_MIN(120)│
+//   │ 2. 形态学: 3次膨胀 + 3次腐蚀 (8邻域, 桥接线缆断裂)   │
 //   │ 3. extract_components()   连通域提取+特征计算(单遍)   │
 //   │    ├─ DFS迭代版 (静态栈, 防栈溢出)                   │
 //   │    ├─ 同步计算: 质心 + 协方差矩阵 + 长宽比            │
@@ -30,8 +29,9 @@
 // 定义二值化图像缓冲区 (只定义一个)
 uint8_t buffer_bin_down[MT9V03X_H][MT9V03X_W];
 // 定义 DFS 访问标记数组 (静态分配以防栈溢出)
+// 形态学阶段兼作膨胀/腐蚀 scratch (此时 DFS 尚未开始, extract_components 开头会 memset 清空)
 uint8_t visited_buffer[MT9V03X_H * MT9V03X_W];
-uint8 image_copy[MT9V03X_H][MT9V03X_W];
+uint8 image_copy[MT9V03X_H][MT9V03X_W];   // 显示缓冲: seekfree 上位机/IPS200 显示专用 (不再被形态学借用)
 // 工作快照缓冲: 主循环每帧原子拷贝至此, 相机ISR的memcpy不再触碰处理中的图像 (防撕裂)
 static uint8_t image_use[MT9V03X_H][MT9V03X_W];
 uint8_t thresh_by_rho2[(int)FOV_RADIUS_SQ + 1]; // 逐像素阈值查找表: rho² → 二值化阈值
@@ -179,46 +179,6 @@ void threshold_max_update(uint8_t new_max) {
 }
 
 // --- 3. 内部辅助函数 ---
-/**
- * @brief 简单估计目标在地面上的相对物理坐标（忽略机体倾角）
- * * @param u        目标在图像中的 Col (X像素)
- * @param v        目标在图像中的 Row (Y像素)
- * @param height   当前无人机的飞行高度 (cm)
- * @param out_x    输出: 目标相对于无人机正下方的【前向】距离 (cm)
- * @param out_y    输出: 目标相对于无人机正下方的【右向】距离 (cm)
- * @param out_dist 输出: 目标离机头正下方的直线总距离 (cm)
- */
-void Estimate_Distance_Simple(float u, float v, float height, float *out_x, float *out_y, float *out_dist) {
-    
-    // 1. 计算以画面中心为原点的像素坐标
-    // 图像 Row(v) 往下是正，但在物理世界前方是正，所以 Y 轴取反
-    float px = u - CAM_CX;          // X轴：向右为正
-    float py = -(v - CAM_CY);       // Y轴：向前为正
-
-    // 2. 计算像素距离平方 (rho2) 和像素距离 (rho)
-    float rho2 = px * px + py * py;
-    float rho = sqrtf(rho2);
-
-    // 3. 计算畸变多项式 Z 轴 (相当于该像素点处的“虚拟焦距”)
-    // 公式: z = A0 + A2*rho^2 + A3*rho^3 + A4*rho^4
-    float z_poly = CAM_A0 + CAM_A2 * rho2 + CAM_A3 * rho2 * rho + CAM_A4 * rho2 * rho2;
-
-    // 增加虚拟焦距的安全下限，防除零和异常反向
-    if (z_poly < 0.1f) {
-        z_poly = 0.1f;
-    }
-
-    // 4. 相似三角形投影计算比例系数 scale
-    // 物理距离与像素距离的比例 = 当前高度 / 虚拟焦距
-    float scale = height / z_poly;
-
-    // 5. 算出具体的物理坐标和距离
-    *out_x = py * scale;                     // 前向距离 (cm)
-    *out_y = px * scale;                     // 右向距离 (cm)
-    if (out_dist != NULL) {
-        *out_dist = rho * scale;             // 目标到正下方的直线距离 (cm)
-    }
-}
 // 用于保存单一连通域统计特征的结构体
 typedef struct {
     uint32_t sum_r;
@@ -288,7 +248,7 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
 // 遍历所有FOV边沿内侧像素，发现白色即作为种子点进行泛洪填充，
 // 将整个触碰FOV边缘的连通域染黑，防止其在后续膨胀中向内污染信标区域
 // 清除FOV边缘泛光污染 —— 在二值化前于原始灰度图上运行。
-// EDGE_BLOB_THRESHOLD 远比二值化阈值(130→5)敏感，尽早消除边缘光晕向内扩散的风险。
+// EDGE_BLOB_THRESHOLD 远比二值化阈值(130→120)敏感，尽早消除边缘光晕向内扩散的风险。
 static void clear_edge_blobs(CameraObject *cam) {
     uint16_t w = cam->width;
     uint16_t h = cam->height;
@@ -757,9 +717,11 @@ void image_processing_loop(void) {
     // 1. 逐像素动态阈值二值化 (越靠近图像边缘阈值越低)
     binarize_pass(&cam_down);
 
-    // 2. 双重闭运算: dilate → erode → dilate → erode (桥接线缆造成的断裂)
+    // 2. 形态学: 3次膨胀 + 3次腐蚀 (桥接线缆造成的断裂)
+    //    scratch 复用 visited_buffer (此时 DFS 尚未开始, 不增加整图缓冲开销);
+    //    image_copy 留给 seekfree 上位机/IPS200 显示专用, 不再被形态学借用
     uint8_t *bin = (uint8_t *)cam_down.binarized_image;
-    uint8_t *tmp = (uint8_t *)image_copy;
+    uint8_t *tmp = (uint8_t *)visited_buffer;
     uint16_t w = cam_down.width;
     uint16_t h = cam_down.height;
 

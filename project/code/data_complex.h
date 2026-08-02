@@ -34,7 +34,9 @@
 // 14-19 reserved
 
 // ================= share_data_from_1[20] 索引定义 (Core 1 → Core 0) =================
-// 由 M7_1_data_send() 写入，Core 0 只读
+// 由 M7_1_data_send() 写入，Core 0 只读 (Core 0 不再写回该区域，见 S1_FRAME_SEQ)
+// 握手协议: Core1 先写全部数据, 最后写 S1_FRAME_SEQ 递增序号并 CleanDCache;
+// Core0 读序号→整帧拷贝到 vision_snap→复核序号(防新旧帧撕裂)→消费快照。
 #define S1_CAR_CENTER_Y    0   // cam_down.car_center_y      小车中心Y坐标 (像素)
 #define S1_CAR_CENTER_X    1   // cam_down.car_center_x      小车中心X坐标 (像素)
 #define S1_CAR_DOT_NUM     2   // cam_down.car_dot_num       小车识别点数/面积
@@ -50,7 +52,7 @@
 #define S1_K_CAR_Y         12  // pos.k_car.y                卡尔曼滤波后小车Y (cm)
 #define S1_CAR_TARGET_DIST 13  // dataC.car_target_dist      小车-信标距离
 #define S1_LOCKED_COUNT    14  // locked_state               0=全丢, 1=仅小车, 2=仅信标, 3=都有
-#define S1_PROCESS_DONE    15  // 图像处理完成标志 (1.0=完成, 0.0=未完成)
+#define S1_FRAME_SEQ       15  // 帧序号 (float 单调递增, 数据写完最后写入; 到2^23回绕)
 #define S1_RAW_TARGET2_X   16  // pos.raw_target[1].x        第二信标未滤波位置X (cm)
 #define S1_RAW_TARGET2_Y   17  // pos.raw_target[1].y        第二信标未滤波位置Y (cm)
 #define S1_RAW_TARGET3_X   18  // pos.raw_target[2].x        第三信标未滤波位置X (cm)
@@ -60,6 +62,10 @@
 #define VISION_POSITION_MIN_HEIGHT_CM       35.0f // 低于此高度才让视觉坐标失效
 #define VISION_LOW_HEIGHT_HOLD_FRAMES       5U    // 图像约50Hz，5帧约100ms
 #define CAR_ENABLE_MIN_HEIGHT_CM            90.0f // 低于此高度下传car_en=0
+
+// ================= 视觉失联保护 =================
+// 基于 dataC.pit0_cnt (1ms) 的时间计数，取代依赖主循环负载的循环计数
+#define VISION_LOST_TIMEOUT_MS              500U  // 超过此毫秒未收到新视觉帧 → 回平悬停保护
 
 typedef struct {
     float debug_earth_err_x,debug_earth_err_y;
@@ -72,6 +78,7 @@ typedef struct {
 extern Data_Complex_t dataC;
 extern volatile float share_data_from_0[M7_x_DATA_LENGTH];
 extern volatile float share_data_from_1[M7_x_DATA_LENGTH];
+extern volatile float vision_snap[M7_x_DATA_LENGTH];  // Core0 侧: 视觉帧一致性快照 (仅 CM7_0 构建定义)
 extern uint8_t car_en;
 extern uint8_t car_en_height;
 
