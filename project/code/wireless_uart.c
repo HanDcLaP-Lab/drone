@@ -263,36 +263,77 @@ void wireless_uart_output_height(void){
 void wireless_uart_output_beacon_brightness(void){
     static float peak_sum = 0.0f;
     static float brightest9_sum = 0.0f;
+    static float peak_x_sum = 0.0f;
+    static float peak_y_sum = 0.0f;
+    static float peak_threshold_sum = 0.0f;
     static float raw_area_sum = 0.0f;
     static float distance_sum = 0.0f;
+    static float peak_rho_min = 0.0f;
+    static float peak_rho_max = 0.0f;
     static uint16_t sample_count = 0;
+    static uint16_t raw_pass_count = 0;
+    static uint16_t target_valid_count = 0;
     static uint32_t window_start_ms = 0;
+
+    float peak_x = vision_snap[S1_BRIGHTEST_X];
+    float peak_y = vision_snap[S1_BRIGHTEST_Y];
+    float dx = peak_x - (float)CAM_CX;
+    float dy = peak_y - (float)CAM_CY;
+    float peak_rho = sqrtf(dx * dx + dy * dy);
 
     if (sample_count == 0) {
         window_start_ms = dataC.pit0_cnt;
+        peak_rho_min = peak_rho;
+        peak_rho_max = peak_rho;
+    } else {
+        if (peak_rho < peak_rho_min) peak_rho_min = peak_rho;
+        if (peak_rho > peak_rho_max) peak_rho_max = peak_rho;
     }
 
     peak_sum += vision_snap[S1_BRIGHTEST_GRAY];
     brightest9_sum += vision_snap[S1_BRIGHTEST9_MEAN];
+    peak_x_sum += peak_x;
+    peak_y_sum += peak_y;
+    peak_threshold_sum += vision_snap[S1_BRIGHTEST_THRESH];
     raw_area_sum += vision_snap[S1_RAW_THRESH_AREA];
     distance_sum += vision_snap[S1_BRIGHTEST_DIST];
+    if (vision_snap[S1_RAW_THRESH_AREA] > 0.0f) raw_pass_count++;
+    if (((uint8_t)vision_snap[S1_LOCKED_COUNT] & 2U) != 0U) target_valid_count++;
     sample_count++;
 
     if ((uint32_t)(dataC.pit0_cnt - window_start_ms) < BEACON_BRIGHTNESS_PRINT_MS) return;
 
     float divisor = (float)sample_count;
+    // peak,top9,x,y,rho_span,threshold,raw_area,raw_pass%,target_valid%,distance
     wireless_uart_send_float(peak_sum / divisor);
     wireless_uart_send_string(",");
     wireless_uart_send_float(brightest9_sum / divisor);
     wireless_uart_send_string(",");
+    wireless_uart_send_float(peak_x_sum / divisor);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(peak_y_sum / divisor);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(peak_rho_max - peak_rho_min);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(peak_threshold_sum / divisor);
+    wireless_uart_send_string(",");
     wireless_uart_send_float(raw_area_sum / divisor);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float((float)raw_pass_count * 100.0f / divisor);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float((float)target_valid_count * 100.0f / divisor);
     wireless_uart_send_string(",");
     wireless_uart_send_float(distance_sum / divisor);
     wireless_uart_send_string("\r\n");
 
     peak_sum = 0.0f;
     brightest9_sum = 0.0f;
+    peak_x_sum = 0.0f;
+    peak_y_sum = 0.0f;
+    peak_threshold_sum = 0.0f;
     raw_area_sum = 0.0f;
     distance_sum = 0.0f;
     sample_count = 0;
+    raw_pass_count = 0;
+    target_valid_count = 0;
 }

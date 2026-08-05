@@ -13,9 +13,9 @@
 // 协议帧格式: 0xAA 0x55 + 48字节(12×float) + 1字节累加校验和 + 0x7F
 // 数组索引映射详见 data_complex.c 中 Float_Buffer_write()，小车端对应 car_board_comm.h
 //============================================================
-#define M7_x_DATA_LENGTH 24
+#define M7_x_DATA_LENGTH 28
 
-// ================= share_data_from_0[24] 索引定义 (Core 0 → Core 1) =================
+// ================= share_data_from_0[28] 索引定义 (Core 0 → Core 1) =================
 // 由 M7_0_data_send() 写入，Core 1 只读
 #define S0_IMU_ROLL       0   // imu_data.roll              横滚角 (deg)
 #define S0_IMU_PITCH      1   // imu_data.pitch             俯仰角 (deg)
@@ -31,9 +31,9 @@
 #define S0_TARGET_YAW     11  // flight_target.target_yaw   目标偏航角 (deg)
 #define S0_DEBUG_ERR_X    12  // dataC.debug_earth_err_x    调试: 地面误差X
 #define S0_DEBUG_ERR_Y    13  // dataC.debug_earth_err_y    调试: 地面误差Y
-// 14-23 reserved
+// 14-27 reserved
 
-// ================= share_data_from_1[24] 索引定义 (Core 1 → Core 0) =================
+// ================= share_data_from_1[28] 索引定义 (Core 1 → Core 0) =================
 // 由 M7_1_data_send() 写入，Core 0 只读 (Core 0 不再写回该区域，见 S1_FRAME_SEQ)
 // 握手协议: Core1 先写全部数据, 最后写 S1_FRAME_SEQ 递增序号并 CleanDCache;
 // Core0 读序号→整帧拷贝到 vision_snap→复核序号(防新旧帧撕裂)→消费快照。
@@ -61,6 +61,10 @@
 #define S1_BRIGHTEST9_MEAN 21  // 边缘清理后最亮9像素平均灰度
 #define S1_RAW_THRESH_AREA 22  // 形态学前通过动态阈值的像素数
 #define S1_BRIGHTEST_DIST  23  // 最亮像素投影到地面的水平距离 (cm)
+#define S1_BRIGHTEST_X     24  // 最亮像素列坐标
+#define S1_BRIGHTEST_Y     25  // 最亮像素行坐标
+#define S1_BRIGHTEST_THRESH 26 // 最亮像素所在3x3块的动态阈值
+// 27 reserved
 
 // ================= 高度保护参数 =================
 #define VISION_POSITION_MIN_HEIGHT_CM       35.0f // 低于此高度才让视觉坐标失效

@@ -41,8 +41,12 @@
 #define STACK_SIZE 4096     // DFS 栈大小
 #define MAX_LIGHTS 20       // 最大识别灯光数量
 #define THRESHOLD 130      //二值化阈值设置
-#define THRESHOLD_MAX 130   // 动态阈值上限 (近距离)
-#define THRESHOLD_MIN  120   // 动态阈值下限 (5m水平距离)
+#define THRESHOLD_MAX 130   // 动态阈值上限 (约3m以内)
+#define THRESHOLD_MID 115   // 实测约4.2m处的动态阈值
+#define THRESHOLD_MIN  55   // 实测约6m及更远处的动态阈值下限
+#define THRESHOLD_NEAR_RADIUS_PX 51.0f  // 实测约3m对应的畸变中心半径
+#define THRESHOLD_MID_RADIUS_PX  54.0f  // 实测约4.2m对应的3x3块中心半径
+#define THRESHOLD_FAR_RADIUS_PX  57.0f  // 实测约6m对应的3x3块中心半径
 
 // =========================================================
 // [新增] 广角全景摄像头有效成像圆形区域配置
@@ -154,6 +158,9 @@ typedef struct {
         float   brightest9_mean;    // 边缘清理后最亮9像素平均灰度
         float   raw_threshold_area; // 形态学前通过当前动态阈值的像素数
         float   brightest_dist;     // 最亮像素投影到地面的水平距离 (cm)
+        float   brightest_x;        // 最亮像素列坐标
+        float   brightest_y;        // 最亮像素行坐标
+        float   brightest_threshold;// 最亮像素所在3x3块的实际动态阈值
     } debug;
 
     uint32_t max_area;           // [新增] 本帧最大连通域面积，供调试观察

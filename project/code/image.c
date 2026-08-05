@@ -9,7 +9,7 @@
 //   ┌────┴────────────────────────────────────────────────┐
 //   │ 1. binarize_pass()        逐像素动态阈值二值化       │
 //   │    ├─ 3×3块共用一个阈值                              │
-//   │    └─ 中心THRESHOLD_MAX(130) → 边缘THRESHOLD_MIN(120)│
+//   │    └─ 约3m内130 → 约4.2m 115 → 约6m及以外55       │
 //   │ 2. 形态学: 3次膨胀 + 3次腐蚀 (8邻域, 桥接线缆断裂)   │
 //   │ 3. extract_components()   连通域提取+特征计算(单遍)   │
 //   │    ├─ DFS迭代版 (静态栈, 防栈溢出)                   │
@@ -165,16 +165,30 @@ void camera_init(void) {
     }
 }
 
-// 更新动态阈值上限并重算 rho² → threshold 查找表
+// 更新动态阈值上限并按实测距离标定点重算 rho² → threshold 查找表
 void threshold_max_update(uint8_t new_max) {
     if (new_max < THRESHOLD_MIN) new_max = THRESHOLD_MIN;
 
     cam_down.threshold_max = new_max;
-    int span = new_max - THRESHOLD_MIN;
+    const float near_rho2 = THRESHOLD_NEAR_RADIUS_PX * THRESHOLD_NEAR_RADIUS_PX;
+    const float mid_rho2 = THRESHOLD_MID_RADIUS_PX * THRESHOLD_MID_RADIUS_PX;
+    const float far_rho2 = THRESHOLD_FAR_RADIUS_PX * THRESHOLD_FAR_RADIUS_PX;
+    const float mid_threshold = new_max < THRESHOLD_MID ? (float)new_max : (float)THRESHOLD_MID;
+
     for (int i = 0; i <= (int)FOV_RADIUS_SQ; i++) {
-        int thr = new_max - (i * span) / (int)FOV_RADIUS_SQ;
-        if (thr < THRESHOLD_MIN) thr = THRESHOLD_MIN;
-        thresh_by_rho2[i] = (uint8_t)thr;
+        float thr;
+        if ((float)i <= near_rho2) {
+            thr = (float)new_max;
+        } else if ((float)i <= mid_rho2) {
+            float ratio = ((float)i - near_rho2) / (mid_rho2 - near_rho2);
+            thr = (float)new_max + (mid_threshold - (float)new_max) * ratio;
+        } else if ((float)i <= far_rho2) {
+            float ratio = ((float)i - mid_rho2) / (far_rho2 - mid_rho2);
+            thr = mid_threshold + ((float)THRESHOLD_MIN - mid_threshold) * ratio;
+        } else {
+            thr = (float)THRESHOLD_MIN;
+        }
+        thresh_by_rho2[i] = (uint8_t)(thr + 0.5f);
     }
 }
 
@@ -248,7 +262,7 @@ static void dfs_iterative(CameraObject *cam, uint8_t *visited, uint8_t label, ui
 // 遍历所有FOV边沿内侧像素，发现白色即作为种子点进行泛洪填充，
 // 将整个触碰FOV边缘的连通域染黑，防止其在后续膨胀中向内污染信标区域
 // 清除FOV边缘泛光污染 —— 在二值化前于原始灰度图上运行。
-// EDGE_BLOB_THRESHOLD 远比二值化阈值(130→120)敏感，尽早消除边缘光晕向内扩散的风险。
+// EDGE_BLOB_THRESHOLD 独立于动态二值化阈值(130→55)，尽早消除边缘光晕向内扩散的风险。
 static void clear_edge_blobs(CameraObject *cam) {
     uint16_t w = cam->width;
     uint16_t h = cam->height;
@@ -388,6 +402,18 @@ static void update_beacon_threshold_debug(CameraObject *cam) {
     cam->debug.brightest_gray = (float)peak;
     cam->debug.brightest9_mean = (float)brightest9_sum / 9.0f;
     cam->debug.brightest_dist = (float)distance;
+    cam->debug.brightest_x = (float)peak_c;
+    cam->debug.brightest_y = (float)peak_r;
+
+    int32_t block_c = (peak_c / 3U) * 3U + 1U;
+    int32_t block_r = (peak_r / 3U) * 3U + 1U;
+    if (block_c >= cam->width) block_c = (int32_t)peak_c;
+    if (block_r >= cam->height) block_r = (int32_t)peak_r;
+    int32_t dx = block_c - (int32_t)CAM_CX;
+    int32_t dy = block_r - (int32_t)CAM_CY;
+    int32_t rho2 = dx * dx + dy * dy;
+    cam->debug.brightest_threshold = rho2 > (int32_t)FOV_RADIUS_SQ ?
+                                      THRESHOLD_MIN : thresh_by_rho2[rho2];
 }
 
 // 8邻域膨胀: src → dst

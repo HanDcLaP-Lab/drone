@@ -16,8 +16,8 @@ volatile float vision_snap[M7_x_DATA_LENGTH] = {0};
 #if defined(CY_CORE_CM7_0)
     //Core 0
 
-    // 两个24-float共享区各占3条32字节缓存线，整区Clean不会触及另一生产者的数据。
-    #pragma location = 0x28001060
+    // 两个28-float共享区各占4条32字节缓存线，整区Clean不会触及另一生产者的数据。
+    #pragma location = 0x28001080
     volatile float share_data_from_0[M7_x_DATA_LENGTH] = {0}; // Core 0 定义并负责清零
 
     #pragma location = 0x28001000
@@ -29,7 +29,7 @@ volatile float vision_snap[M7_x_DATA_LENGTH] = {0};
     #pragma location = 0x28001000
     volatile float share_data_from_1[M7_x_DATA_LENGTH] = {0}; // Core 1 定义并负责清零
     
-    #pragma location = 0x28001060
+    #pragma location = 0x28001080
     __root __no_init volatile float share_data_from_0[M7_x_DATA_LENGTH]; // 对 Core 0 的数据只读，不初始化
 
 #else
@@ -166,6 +166,9 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_BRIGHTEST9_MEAN] = cam_down.debug.brightest9_mean;
     data_out[S1_RAW_THRESH_AREA] = cam_down.debug.raw_threshold_area;
     data_out[S1_BRIGHTEST_DIST] = cam_down.debug.brightest_dist;
+    data_out[S1_BRIGHTEST_X] = cam_down.debug.brightest_x;
+    data_out[S1_BRIGHTEST_Y] = cam_down.debug.brightest_y;
+    data_out[S1_BRIGHTEST_THRESH] = cam_down.debug.brightest_threshold;
     data_out[S1_K_CAR_X]      = pos.k_car.x;
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
     data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;
