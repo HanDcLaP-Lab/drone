@@ -150,6 +150,10 @@ typedef struct {
         uint8_t pass_target;        // 满足信标长宽比门槛的候选项数
         float   max_ratio;          // 本帧最大长宽比
         float   min_ratio;          // 本帧最小长宽比 (排除退化标记值)
+        float   brightest_gray;     // 边缘清理后最亮像素灰度
+        float   brightest9_mean;    // 边缘清理后最亮9像素平均灰度
+        float   raw_threshold_area; // 形态学前通过当前动态阈值的像素数
+        float   brightest_dist;     // 最亮像素投影到地面的水平距离 (cm)
     } debug;
 
     uint32_t max_area;           // [新增] 本帧最大连通域面积，供调试观察

@@ -307,6 +307,7 @@ static void clear_edge_blobs(CameraObject *cam) {
 // 逐像素动态阈值二值化: 每3×3像素块共用一个阈值, 离图像中心越远阈值越低
 static void binarize_pass(CameraObject *cam) {
     memset(cam->binarized_image, 0, cam->width * cam->height);
+    cam->debug.raw_threshold_area = 0.0f;
     uint16_t h = cam->height;
     uint16_t w = cam->width;
 
@@ -336,11 +337,57 @@ static void binarize_pass(CameraObject *cam) {
                     uint32_t idx = br * w + bc;
                     if (cam->raw_image[idx] > thr) {
                         cam->binarized_image[idx] = 1;
+                        cam->debug.raw_threshold_area += 1.0f;
                     }
                 }
             }
         }
     }
+}
+
+// 在边缘泛光清理后的有效FOV中统计亮度，并投影最亮像素的水平距离。
+static void update_beacon_threshold_debug(CameraObject *cam) {
+    uint8_t brightest9[9] = {0};
+    uint8_t peak = 0;
+    uint16_t peak_r = 0;
+    uint16_t peak_c = 0;
+
+    for (uint16_t r = 0; r < cam->height; r++) {
+        for (uint16_t c = fov_left_bound[r]; c < fov_right_bound[r]; c++) {
+            uint8_t gray = cam->raw_image[r * cam->width + c];
+
+            if (gray > peak) {
+                peak = gray;
+                peak_r = r;
+                peak_c = c;
+            }
+
+            if (gray > brightest9[0]) {
+                brightest9[0] = gray;
+                for (uint8_t i = 0; i < 8 && brightest9[i] > brightest9[i + 1]; i++) {
+                    uint8_t temp = brightest9[i];
+                    brightest9[i] = brightest9[i + 1];
+                    brightest9[i + 1] = temp;
+                }
+            }
+        }
+    }
+
+    uint16_t brightest9_sum = 0;
+    for (uint8_t i = 0; i < 9; i++) {
+        brightest9_sum += brightest9[i];
+    }
+
+    double distance = 0.0;
+    if (peak > 0) {
+        get_accurate_ground_distance((double)peak_c, (double)peak_r,
+                                     img_imu_snap.height, img_imu_snap.pitch, img_imu_snap.roll,
+                                     NULL, NULL, &distance);
+    }
+
+    cam->debug.brightest_gray = (float)peak;
+    cam->debug.brightest9_mean = (float)brightest9_sum / 9.0f;
+    cam->debug.brightest_dist = (float)distance;
 }
 
 // 8邻域膨胀: src → dst
@@ -713,6 +760,9 @@ static void sort_lights(CameraObject *cam) {
 void image_processing_loop(void) {
     // [新] 预先清除FOV边缘泛光污染 — 在二值化前的原始灰度图上进行
     clear_edge_blobs(&cam_down);
+
+    // 记录实际进入二值化的灰度特征，供阈值标定无线输出。
+    update_beacon_threshold_debug(&cam_down);
 
     // 1. 逐像素动态阈值二值化 (越靠近图像边缘阈值越低)
     binarize_pass(&cam_down);

@@ -257,3 +257,42 @@ void wireless_uart_output_height(void){
     wireless_uart_send_float(z_acc);
     wireless_uart_send_string("\n");
 }
+
+#define BEACON_BRIGHTNESS_PRINT_MS 500U
+
+void wireless_uart_output_beacon_brightness(void){
+    static float peak_sum = 0.0f;
+    static float brightest9_sum = 0.0f;
+    static float raw_area_sum = 0.0f;
+    static float distance_sum = 0.0f;
+    static uint16_t sample_count = 0;
+    static uint32_t window_start_ms = 0;
+
+    if (sample_count == 0) {
+        window_start_ms = dataC.pit0_cnt;
+    }
+
+    peak_sum += vision_snap[S1_BRIGHTEST_GRAY];
+    brightest9_sum += vision_snap[S1_BRIGHTEST9_MEAN];
+    raw_area_sum += vision_snap[S1_RAW_THRESH_AREA];
+    distance_sum += vision_snap[S1_BRIGHTEST_DIST];
+    sample_count++;
+
+    if ((uint32_t)(dataC.pit0_cnt - window_start_ms) < BEACON_BRIGHTNESS_PRINT_MS) return;
+
+    float divisor = (float)sample_count;
+    wireless_uart_send_float(peak_sum / divisor);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(brightest9_sum / divisor);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(raw_area_sum / divisor);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(distance_sum / divisor);
+    wireless_uart_send_string("\r\n");
+
+    peak_sum = 0.0f;
+    brightest9_sum = 0.0f;
+    raw_area_sum = 0.0f;
+    distance_sum = 0.0f;
+    sample_count = 0;
+}

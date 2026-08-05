@@ -127,7 +127,7 @@ int main(void) {
         // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
         SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
         // 帧序号+一致性快照协议: Core1 先写全部数据、最后写递增序号 (S1_FRAME_SEQ) 并整区写回。
-        // 序号变化 → 整帧 80B 拷贝到 vision_snap → 复核序号(防拷贝期间被新帧写穿撕裂) → 消费快照。
+        // 序号变化 → 整帧96B拷贝到 vision_snap → 复核序号(防拷贝期间被新帧写穿撕裂) → 消费快照。
         // Core0 不再写回共享区，消除"清标志吞新帧"竞态与整块 cache clean 覆盖 Core1 新数据的风险。
         static float last_vision_seq = 0.0f;    // 上一帧已消费序号
         static uint32_t last_vision_ms = 0;     // 最后一帧消费时刻 (dataC.pit0_cnt, 1ms)
@@ -155,6 +155,7 @@ int main(void) {
                 //send_cnt++;
                 //if(send_cnt == 10){
                 Board_Comm_Send_Data(float_buffer);
+                wireless_uart_output_beacon_brightness();
                 //   send_cnt = 0;
                 //}
                 static uint32_t last_visual_pos_print_ms = 0;

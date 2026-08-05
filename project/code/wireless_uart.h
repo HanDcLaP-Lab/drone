@@ -19,4 +19,5 @@ void wireless_uart_output_motor_average(void); // CM7_0主循环调用
 void wireless_uart_output_groud(void);
 void wireless_uart_output_imu_sample_rate(void);
 void wireless_uart_output_height(void);
+void wireless_uart_output_beacon_brightness(void);
 #endif

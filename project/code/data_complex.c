@@ -16,7 +16,7 @@ volatile float vision_snap[M7_x_DATA_LENGTH] = {0};
 #if defined(CY_CORE_CM7_0)
     //Core 0
 
-    // 两个20-float共享区按32字节缓存行隔开，整区Clean不会触及另一生产者的数据。
+    // 两个24-float共享区各占3条32字节缓存线，整区Clean不会触及另一生产者的数据。
     #pragma location = 0x28001060
     volatile float share_data_from_0[M7_x_DATA_LENGTH] = {0}; // Core 0 定义并负责清零
 
@@ -162,6 +162,10 @@ void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_da
     data_out[S1_RAW_TARGET2_Y] = pos.raw_target[1].y;
     data_out[S1_RAW_TARGET3_X] = pos.raw_target[2].x;
     data_out[S1_RAW_TARGET3_Y] = pos.raw_target[2].y;
+    data_out[S1_BRIGHTEST_GRAY] = cam_down.debug.brightest_gray;
+    data_out[S1_BRIGHTEST9_MEAN] = cam_down.debug.brightest9_mean;
+    data_out[S1_RAW_THRESH_AREA] = cam_down.debug.raw_threshold_area;
+    data_out[S1_BRIGHTEST_DIST] = cam_down.debug.brightest_dist;
     data_out[S1_K_CAR_X]      = pos.k_car.x;
     data_out[S1_K_CAR_Y]      = pos.k_car.y;
     data_out[S1_CAR_TARGET_DIST] = dataC.car_target_dist;

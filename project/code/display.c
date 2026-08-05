@@ -136,9 +136,13 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
         merge_mark_active = 0;
     }
 
-    // 将底层的 0/1 放大为 0/255 以便屏幕显示
-    for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++) {
-        image_copy[0][i] = cam_down.binarized_image[i] ? 255 : 0;
+    // 页面2显示边缘清理后的原始灰度，其余页面保持二值图。
+    if (display_page_idx == 2) {
+        memcpy(image_copy, cam_down.raw_image, MT9V03X_IMAGE_SIZE);
+    } else {
+        for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++) {
+            image_copy[0][i] = cam_down.binarized_image[i] ? 255 : 0;
+        }
     }
     
     // 将要显示的数组刷入内存供 DMA 搬运
@@ -149,7 +153,7 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
     
     // [新增] 叠加显示小车和信标的十字准星
     // 检查小车是否有效
-    if (car_valid) {
+    if (display_page_idx != 2 && car_valid) {
         int16_t cx = (int16_t)car_x;
         int16_t cy = (int16_t)car_y;
         
@@ -174,7 +178,7 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
     }
 
     // 检查信标是否有效
-    if (target_valid) {
+    if (display_page_idx != 2 && target_valid) {
         int16_t tx = (int16_t)target_x;
         int16_t ty = (int16_t)target_y;
 
@@ -199,7 +203,7 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
     }
 
     // 标记第2、3候选信标；target_centers按[Row, Col]存储。
-    for (uint8_t rank = 1; rank < cam_down.target_count && rank < TARGET_CANDIDATE_COUNT; rank++) {
+    for (uint8_t rank = 1; display_page_idx != 2 && rank < cam_down.target_count && rank < TARGET_CANDIDATE_COUNT; rank++) {
         int16_t tx = (int16_t)cam_down.target_centers[rank][1];
         int16_t ty = (int16_t)cam_down.target_centers[rank][0];
         uint16_t color = rank == 1U ? RGB565_BLUE : RGB565_YELLOW;
@@ -281,5 +285,22 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
         ips200_show_int(40, 16*15, (int)share_data_from_0[S0_MOTOR_LB], 4);
         ips200_show_string(100, 16*15, "RB:");
         ips200_show_int(140, 16*15, (int)share_data_from_0[S0_MOTOR_RB], 4);
+    }
+    // 页面2：边缘清理后的灰度图与阈值标定数据
+    else if(display_page_idx == 2)
+    {
+        ips200_show_string(0, 16*10, "Edge Gray");
+        ips200_show_string(0, 16*11, "Peak:");
+        ips200_show_float(50, 16*11, cam_down.debug.brightest_gray, 3, 1);
+        ips200_show_string(100, 16*11, "Top9:");
+        ips200_show_float(150, 16*11, cam_down.debug.brightest9_mean, 3, 1);
+
+        ips200_show_string(0, 16*12, "RawA:");
+        ips200_show_int(50, 16*12, (int)cam_down.debug.raw_threshold_area, 5);
+        ips200_show_string(110, 16*12, "D:");
+        ips200_show_float(135, 16*12, cam_down.debug.brightest_dist, 4, 1);
+
+        ips200_show_string(0, 16*13, "Thresh:");
+        ips200_show_int(70, 16*13, cam_down.threshold_max, 3);
     }
 }
