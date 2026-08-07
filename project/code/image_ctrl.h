@@ -12,7 +12,7 @@
 #define ROTATE_RECOVER_TIME 1000
 
 // 从无人机上电yaw零点换算到小车固定地面系时减去的初始夹角。
-#define VISION_INITIAL_YAW_OFFSET_DEG 45.0f
+#define VISION_INITIAL_YAW_OFFSET_DEG 0.0f  //无人机相对小车向逆时针角度时为正
 #define VISION_EARTH_YAW_DEG(yaw_deg) ((yaw_deg) - VISION_INITIAL_YAW_OFFSET_DEG)
 
 // =================== 目标丢失容忍宏定义 ===================

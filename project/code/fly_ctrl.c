@@ -57,10 +57,10 @@ void Flight_Control_Init(void) {
     // ----------- 初始化 PID 参数 -----------
     // 高度环
     PID_Init(&pid_height_pos, 0.7f, 0.2f, 0.0f, 30, 35, 40.0f);
-    PID_Init(&pid_height_vel, 16.031f, 0.0f, 0.429f, 80, 1200, 40.0f);
+    PID_Init(&pid_height_vel, 16.031f, 0.0f, 0.429f, 80, 3000, 40.0f);
     // 角度环a
-    Nonline_PID_Init(&pid_roll, 9.328f, 0.0f, 0.0f, 0.05f, 20, 300, 40.0f);
-    Nonline_PID_Init(&pid_pitch, 9.328f, 0.0f, 0.0f, 0.05f, 20, 300, 40.0f);
+    Nonline_PID_Init(&pid_roll, 9.328f, 0.239f, 0.0f, 0.05f, 20, 300, 40.0f);
+    Nonline_PID_Init(&pid_pitch, 9.328f, 0.239f, 0.0f, 0.05f, 20, 300, 40.0f);
     Nonline_PID_Init(&pid_yaw, 1.5f, 0.33f, 0.0f, 0.0228f, 6, 45, 40.0f);
 
     //Nonline_PID_Init(&pid_image_yaw, 1.0f, 0.00f, 0.0f, 0.0f, 0, 60.0f, 4.0f);
@@ -69,8 +69,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_pitch, 2.764f, 3.327f, 0.115f, 120, 3500, 60.0f);
     PID_Init(&pid_g_yaw, 6.1f, 1.32f, 0.00f, 150, 3500, 60.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.094f, 0.0f, 0.065f, 0.0003f, 50, MAX_TILT_ANGLE , 5.0f);
-    Nonline_PID_Init(&pid_image_y, 0.094f, 0.0f, 0.065f, 0.0003f, 50, MAX_TILT_ANGLE , 5.0f);
+    Nonline_PID_Init(&pid_image_x, 0.094f, 0.012f, 0.073f, 0.0003f, 50, MAX_TILT_ANGLE , 7.0f);
+    Nonline_PID_Init(&pid_image_y, 0.094f, 0.012f, 0.073f, 0.0003f, 50, MAX_TILT_ANGLE , 7.0f);
 
 }
 
@@ -154,7 +154,7 @@ static void Flight_State_Update(void) {
             flight_target.target_height = TARGET_HEIGHT_CM;
             if (flight_target.is_armed == 1) {
                 if (flight_target.start_up_scale < 1.0f) {
-                    flight_target.start_up_scale += CTRL_DT_CTLOOP * 0.5f;  // 约2秒加满
+                    flight_target.start_up_scale += CTRL_DT_CTLOOP * 0.2f;  // 约5秒加满
                     if (flight_target.start_up_scale > 1.0f) {
                         flight_target.start_up_scale = 1.0f;
                     }

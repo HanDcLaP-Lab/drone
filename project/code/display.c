@@ -140,12 +140,21 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
     for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++) {
         image_copy[0][i] = cam_down.binarized_image[i] ? 255 : 0;
     }
-    
+
     // 将要显示的数组刷入内存供 DMA 搬运
     SCB_CleanDCache_by_Addr((void*)image_copy, sizeof(image_copy));
-    
-    // 显示二值化图像
-    ips200_displayimage03x((const uint8 *)image_copy , MT9V03X_W, MT9V03X_H);
+
+    // 显示图像: 页面2上下分屏 (上:原始图像, 下:二值化图像)
+    if(display_page_idx == 2)
+    {
+        ips200_show_gray_image(0, 0, cam_down.raw_image, MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V03X_H, 0);
+        ips200_show_gray_image(0, MT9V03X_H + 16, image_copy[0], MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V03X_H, 0);
+    }
+    else
+    {
+        // 显示二值化图像
+        ips200_displayimage03x((const uint8 *)image_copy , MT9V03X_W, MT9V03X_H);
+    }
     
     // [新增] 叠加显示小车和信标的十字准星
     // 检查小车是否有效
@@ -222,11 +231,14 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
         }
     }
     
-    // 显示页面号
-    ips200_show_string(160, 16*10, "P:");
-    ips200_show_int(176, 16*10, display_page_idx, 1);
-    ips200_show_string(160, 16*18, "M:");
-    ips200_show_int(176, 16*18, merge_mark_active, 1);
+    // 显示页面号 (页面2的指示器移到屏幕底部, 避免压住分屏图像)
+    if(display_page_idx != 2)
+    {
+        ips200_show_string(160, 16*10, "P:");
+        ips200_show_int(176, 16*10, display_page_idx, 1);
+        ips200_show_string(160, 16*18, "M:");
+        ips200_show_int(176, 16*18, merge_mark_active, 1);
+    }
 
     // 页面0：核心状态
     if(display_page_idx == 0)
@@ -281,5 +293,22 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
         ips200_show_int(40, 16*15, (int)share_data_from_0[S0_MOTOR_LB], 4);
         ips200_show_string(100, 16*15, "RB:");
         ips200_show_int(140, 16*15, (int)share_data_from_0[S0_MOTOR_RB], 4);
+    }
+    // 页面2：上下分屏显示 原始图像(上) 与 二值化图像(下)
+    else if(display_page_idx == 2)
+    {
+        // 清除旧页面可能残留的文字行 (30个空格 = 240px 整行)
+        ips200_show_string(0, 16*16, "                              ");
+        ips200_show_string(0, 16*17, "                              ");
+        ips200_show_string(0, 16*18, "                              ");
+        ips200_show_string(0, 16*19, "                              ");
+        // 标注两幅图像 (RAW在图像间隙, BIN在底部文字区)
+        ips200_show_string(0, MT9V03X_H, "RAW");
+        ips200_show_string(0, 16*16, "BIN");
+        // 页面号与合并标记
+        ips200_show_string(160, 16*18, "P:");
+        ips200_show_int(176, 16*18, display_page_idx, 1);
+        ips200_show_string(160, 16*19, "M:");
+        ips200_show_int(176, 16*19, merge_mark_active, 1);
     }
 }

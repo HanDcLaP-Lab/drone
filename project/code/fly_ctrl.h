@@ -10,7 +10,7 @@
 #define FLIGHT_TIMEOUT_MS       70000U // [新增] 全局飞行超时 (ms)，超时自动降落
 #define LANDING_CUTOFF_HEIGHT_CM 25.0f  // 新ToF帧低于此高度时关停
 #define HOVER_THROTTLE 5150    // 基础悬停油门 
-#define MAX_PWM 8000
+#define MAX_PWM 8500
 #define MIN_PWM 0
 #define MAX_TILT_ANGLE 9.0f  // 最大计算倾角限制 (度)
 #define MAX_REAL_ANGLE 40.0f // 最大实际倾角限制 (度) 超过停机
@@ -29,8 +29,8 @@
 #define PITCH_OFFSET -240.0f     //补偿重心偏移
 // ================= 小车固定悬停点视觉补偿 =================
 // X前Y右，单位cm；数值是在无人机IMU yaw等于CAM_OFFSET_MEASURE_YAW_DEG时测得的机体系坐标。
-#define CAM_OFFSET_X                  -4.0f
-#define CAM_OFFSET_Y                  -9.0f
+#define CAM_OFFSET_X                  (-4.0f)
+#define CAM_OFFSET_Y                  (-9.0f)
 #define LANDING_CAM_OFFSET_Y_DELTA   (-15.0f)
 // 该yaw以无人机上电朝向为0；使用时会与视觉坐标一同转换到小车固定地面系。
 #define CAM_OFFSET_MEASURE_YAW_DEG     0.0f

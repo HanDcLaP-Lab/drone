@@ -15,7 +15,7 @@
 #define KS_MAX_SHOCK_PERIOD     20    // 消抖时间(ms)
 #define KS_LONG_PRESS_PERIOD    1000  // 长按判定时间(ms)
 #define PARAM_COUNT 1 // 调试参数的数量
-#define DISPLAY_PAGE_COUNT 2 // 屏幕显示页数
+#define DISPLAY_PAGE_COUNT 3 // 屏幕显示页数 (第3页: 原始图像)
 // 定义状态枚举
 typedef enum {
     KEY_EVT_NONE = 0,

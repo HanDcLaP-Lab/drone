@@ -6,7 +6,7 @@
 #define MAX_DIST 1500.0
 #define IMAGE_POS_KALMAN_Q 1.0f
 #define IMAGE_POS_KALMAN_R 0.5f
-#define CAR_LIGHT_HEIGHT_CM 12.0f // 小车灯相对地面高度
+#define CAR_LIGHT_HEIGHT_CM 22.0f // 小车灯相对地面高度
 
 
 // 定义地面点结构体
