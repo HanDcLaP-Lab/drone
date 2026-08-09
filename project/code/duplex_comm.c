@@ -24,30 +24,6 @@ volatile uint32_t duplex_max_rtt_ms         = 0;
 volatile uint8_t  duplex_last_seq           = 0;
 volatile uint8_t  duplex_last_err           = DUPLEX_ERR_NONE;
 
-// 底层诊断埋点 (语义见 duplex_comm.h)
-volatile uint32_t duplex_rx_isr_count       = 0;
-volatile uint32_t duplex_rx_byte_count      = 0;
-volatile uint8_t  duplex_first_bytes[4]     = {0};
-volatile uint8_t  duplex_first_byte_len     = 0;
-volatile uint8_t  duplex_tx_de_high_readback = 0xFF;  // 0xFF = 尚未发送过任何请求
-volatile uint8_t  duplex_tx_de_low_readback  = 0xFF;
-
-// 帧同步诊断埋点 (语义见 duplex_comm.h)
-volatile uint32_t duplex_hdr_drop_count     = 0;
-volatile uint32_t duplex_rx_overflow_count  = 0;
-volatile uint8_t  duplex_junk[DUPLEX_JUNK_CAPTURE_LEN] = {0};
-volatile uint8_t  duplex_junk_len           = 0;
-volatile uint8_t  duplex_junk_lead          = 0;
-volatile uint16_t duplex_junk_run_total     = 0;
-volatile uint16_t duplex_junk_run_max       = 0;
-
-// 本次"连续丢弃"过程的累积状态 (在 HEADER 状态逐字节累积, 找到 0xAA 时结算)
-static uint16_t junk_run_total = 0;   // 本次已丢弃字节总数
-static uint8_t  junk_lead      = 0;   // 开头连续等于前导值的个数
-static uint8_t  junk_cap_len   = 0;   // 已捕获进 junk_cap 的个数
-static uint8_t  junk_cap[DUPLEX_JUNK_CAPTURE_LEN] = {0};
-static uint8_t  junk_lead_done = 0;   // 1 = 前导段已结束, 后续字节进 junk_cap
-
 // ================= 内部状态 =================
 static fifo_struct duplex_rx_fifo;
 static uint8_t     duplex_rx_buffer[DUPLEX_RX_FIFO_SIZE];
@@ -150,30 +126,7 @@ void Duplex_Comm_Set_Now_Ms(uint32_t ms)
 // uart4_isr 接收分支调用: 收一个字节入 FIFO, 解析全部放主循环 Duplex_Comm_Poll。
 void Duplex_Comm_On_Uart_Rx(void)
 {
-    duplex_rx_isr_count++;      // 埋点: 无条件计数, 证明中断确实触发
-
-    // 埋点: 主动查 SCB 硬件 RX FIFO 溢出状态位并清除。
-    // 逐飞库在 uart_init 里把 CY_SCB_UART_RX_OVERFLOW 中断屏蔽掉了, 溢出不会产生中断,
-    // 只能这样主动查。若此值增长, 说明字节是被硬件丢的 —— 本核 UART 中断优先级为 7,
-    // 会被飞控 PIT 中断(优先级 3)抢占, 抢占期间到达的字节可能挤满 8 级硬件 FIFO。
-    // 这与"帧头被浮空总线打坏"是两种完全不同的成因, 必须分开。
-    // 用库提供的 get_scb_module() 取 SCB 基址, 不硬编码 SCB2, 免得改串口号时漏改。
-    volatile stc_SCB_t *scb = get_scb_module(BOARD_UART);
-    if (Cy_SCB_GetRxInterruptStatus(scb) & CY_SCB_RX_INTR_OVERFLOW) {
-        Cy_SCB_ClearRxInterrupt(scb, CY_SCB_RX_INTR_OVERFLOW);
-        duplex_rx_overflow_count++;
-    }
-
     if (uart_query_byte(BOARD_UART, &duplex_rx_byte)) {
-        duplex_rx_byte_count++; // 埋点: 证明确实取到了字节
-
-        // 埋点: 留存最先到达的 4 个字节。若不是 AA 55 20 xx, 说明波特率/极性/接线有问题,
-        // 而不是协议问题 (例如波特率错会收到一片 0x00 或 0xFF)。
-        if (duplex_first_byte_len < 4U) {
-            duplex_first_bytes[duplex_first_byte_len] = duplex_rx_byte;
-            duplex_first_byte_len++;
-        }
-
         if (fifo_write_buffer(&duplex_rx_fifo, &duplex_rx_byte, 1) != FIFO_SUCCESS) {
             duplex_rx_fifo_drop_count++;
             duplex_last_err = DUPLEX_ERR_FIFO;
@@ -202,16 +155,9 @@ void Duplex_Comm_Trigger(const float *downlink)
     // RS485 半双工: 拉高 DE 发送 → 等移位完成 → 拉低回接收态
     gpio_high(DUPLEX_DIR_PIN);
     system_delay_us(DUPLEX_DIR_SETUP_US);
-    // 埋点: 回读 DE 实测电平, 期望 1
-    duplex_tx_de_high_readback = gpio_get_level(DUPLEX_DIR_PIN);
-
     uart_write_buffer(BOARD_UART, duplex_tx_frame, sizeof(duplex_tx_frame));
-
     system_delay_us(DUPLEX_TX_HOLD_US);
     gpio_low(DUPLEX_DIR_PIN);
-    // 埋点: 回读 DE 实测电平, 期望 0。若读回 1 则收发器一直停在发送态,
-    // 物理上无法接收小车应答 —— 这正是 isr=0 的一种可能成因。
-    duplex_tx_de_low_readback = gpio_get_level(DUPLEX_DIR_PIN);
 
     duplex_request_count++;
     duplex_request_ms     = duplex_now_ms;
@@ -303,46 +249,12 @@ void Duplex_Comm_Poll(void)
 
         switch (duplex_rx_step) {
             case DUPLEX_STEP_HEADER1:
+                // 非 0xAA 一律丢弃并停在本状态重新找帧头。
+                // 小车应答帧前置的前导字节 (见 car_board_comm.h 的 BOARD_TX_PREAMBLE_*)
+                // 正是在此被正常吸收。
                 if (read_byte == DUPLEX_HEADER1) {
                     duplex_rx_frame[0] = read_byte;
                     duplex_rx_step = DUPLEX_STEP_HEADER2;
-
-                    // 找到帧头 → 结算本次连续丢弃。只保留"异常"的那一次快照:
-                    // 正常帧的丢弃量恰好等于前导长度, 若被它覆盖就看不到真正的故障形态了。
-                    if (junk_run_total > 0U) {
-                        duplex_junk_run_total = junk_run_total;
-                        if (junk_run_total > duplex_junk_run_max) {
-                            duplex_junk_run_max = junk_run_total;
-                        }
-                        if (junk_run_total > (uint16_t)DUPLEX_PEER_PREAMBLE_LEN) {
-                            duplex_junk_lead = junk_lead;
-                            duplex_junk_len  = junk_cap_len;
-                            for (uint8_t k = 0; k < DUPLEX_JUNK_CAPTURE_LEN; k++) {
-                                duplex_junk[k] = junk_cap[k];
-                            }
-                        }
-                    }
-                    junk_run_total = 0;
-                    junk_lead      = 0;
-                    junk_cap_len   = 0;
-                    junk_lead_done = 0;
-                } else {
-                    // 埋点: 找不到帧头而被丢弃的字节。
-                    duplex_hdr_drop_count++;
-                    junk_run_total++;
-
-                    // 前导段与垃圾段分开记: 开头连续等于前导值的算 lead,
-                    // 第一个不等于前导值的字节起进 junk_cap (前导长度提到 8 后,
-                    // 若混在一起会把 junk_cap 占满, 看不到真正有价值的后续字节)。
-                    if (!junk_lead_done && read_byte == DUPLEX_PEER_PREAMBLE_BYTE) {
-                        if (junk_lead < 255U) junk_lead++;
-                    } else {
-                        junk_lead_done = 1;
-                        if (junk_cap_len < DUPLEX_JUNK_CAPTURE_LEN) {
-                            junk_cap[junk_cap_len] = read_byte;
-                            junk_cap_len++;
-                        }
-                    }
                 }
                 break;
 
@@ -354,13 +266,6 @@ void Duplex_Comm_Poll(void)
                 } else if (read_byte != DUPLEX_HEADER1) {
                     // 连续 0xAA 时停在 HEADER2 等 0x55, 其余字节退回重新找帧头
                     duplex_rx_step = DUPLEX_STEP_HEADER1;
-                    duplex_hdr_drop_count++;      // 埋点: 该字节同样被丢弃
-                    junk_run_total++;
-                    junk_lead_done = 1;           // 已过帧头位置, 后续都算垃圾段
-                    if (junk_cap_len < DUPLEX_JUNK_CAPTURE_LEN) {
-                        junk_cap[junk_cap_len] = read_byte;
-                        junk_cap_len++;
-                    }
                 }
                 break;
 
@@ -416,13 +321,6 @@ void Duplex_Comm_Reset_Stats(void)
     duplex_last_rtt_ms        = 0;
     duplex_max_rtt_ms         = 0;
     duplex_last_err           = DUPLEX_ERR_NONE;
-    // 诊断埋点同步清零, 但 duplex_first_bytes/first_byte_len 刻意保留:
-    // 上电初期收到的头几个字节正是判断波特率/极性的关键证据, 清掉就白采了。
-    duplex_rx_isr_count       = 0;
-    duplex_rx_byte_count      = 0;
-    duplex_hdr_drop_count     = 0;
-    duplex_rx_overflow_count  = 0;
-    duplex_junk_run_max       = 0;
     interrupt_global_enable(primask);
 }
 
@@ -442,24 +340,10 @@ void Duplex_Comm_Reset_Stats(void)
 //   rtt   最近一次往返时延 (ms)
 //   max   往返时延最大值 (ms)
 //   err   最近失败原因码 (0无/1解码/2命令字/3超时/4FIFO/5seq不符)
-//   --- 以下为底层诊断埋点 ---
-//   isr   UART4 接收中断进入次数
-//   raw   取到并入 FIFO 的原始字节数
-//   ovf   SCB 硬件 RX FIFO 溢出次数 (>0 说明字节被硬件丢, 与帧同步无关)
-//   hdrx  = hdr - ok × 前导长度, 即真正因帧头损坏被丢弃的字节数 (已在片上换算)
-//   run   最近一次连续丢弃的总字节数 / 历史最大值
-//   ld    该次连续丢弃开头正确解出的前导字节个数 (期望 = 前导长度)
-//   j     跳过前导后的头 8 字节 (真正的垃圾形态, 判读方法见 duplex_comm.h)
+//   u0/1/2 小车上传载荷 (当前为 IMU roll/pitch/yaw)
 //
-// 已撤出打印但保留变量的字段 (使命已完成, 需要时把它们加回 printf 即可):
-//   duplex_tx_de_high/low_readback — 已确认恒为 1/0, DE 驱动正常
-//   duplex_first_bytes[4]          — 已确认上电期垃圾字节来自总线冲突, 非稳态问题
-// 撤出原因: 本行每多约 10 字节, @115200 就多约 0.9ms 阻塞, 而阻塞会推迟 Poll/Trigger,
-//   反过来污染我们正要观察的 3% 量级丢包统计。
-//   --- 以下为上行载荷 ---
-//   u0    应答回显的 seq        (联调期特征值, 应与本端 req 的低 8 位相近)
-//   u1    小车已接收帧数        (应单调递增)
-//   u2    探针常量              (应为 123.46; 明显不符则字节序/对齐有问题)
+// 注意: printf 为阻塞式 (每字节忙等 TxComplete), 本行约 70 字节 @115200 要占住主循环约 6ms。
+//   默认不调用 (见 main_cm7_0.c 的注释掉的调用处), 仅在需要观察链路质量时临时开启。
 void Duplex_Comm_Print_Stats(void)
 {
     static uint32_t last_print_ms = 0;
@@ -468,14 +352,7 @@ void Duplex_Comm_Print_Stats(void)
     last_print_ms = duplex_now_ms;
 
     // 浮点参数显式转 double: 可变参数会默认提升, 显式写出与 wireless_uart.c 既有风格一致
-    // hdrx 在片上换算好再打印, 省掉手工减法; 用有符号避免启动瞬间出现下溢的巨大值。
-    int32_t hdr_excess = (int32_t)duplex_hdr_drop_count
-                       - (int32_t)duplex_reply_ok_count * (int32_t)DUPLEX_PEER_PREAMBLE_LEN;
-
-    // 十六进制之间不留空格: 这一行每多 8 字节, @115200 就多约 0.7ms 阻塞,
-    // 而阻塞会推迟 Poll/Trigger 反过来污染丢包统计, 所以尽量压缩。
-    printf("dup,%u,%u,%u,%u,%u,%u,sq%u,%u,%u,%u,isr%u,raw%u,ovf%u,hdrx%d,"
-           "run%u/%u,ld%u,j%02X%02X%02X%02X%02X%02X%02X%02X,%.2f,%.2f,%.2f\r\n",
+    printf("dup,%u,%u,%u,%u,%u,%u,sq%u,%u,%u,%u,%.2f,%.2f,%.2f\r\n",
            (unsigned)duplex_request_count,
            (unsigned)duplex_reply_ok_count,
            (unsigned)duplex_timeout_count,
@@ -486,17 +363,6 @@ void Duplex_Comm_Print_Stats(void)
            (unsigned)duplex_last_rtt_ms,
            (unsigned)duplex_max_rtt_ms,
            (unsigned)duplex_last_err,
-           (unsigned)duplex_rx_isr_count,
-           (unsigned)duplex_rx_byte_count,
-           (unsigned)duplex_rx_overflow_count,
-           (int)hdr_excess,
-           (unsigned)duplex_junk_run_total,
-           (unsigned)duplex_junk_run_max,
-           (unsigned)duplex_junk_lead,
-           (unsigned)duplex_junk[0], (unsigned)duplex_junk[1],
-           (unsigned)duplex_junk[2], (unsigned)duplex_junk[3],
-           (unsigned)duplex_junk[4], (unsigned)duplex_junk[5],
-           (unsigned)duplex_junk[6], (unsigned)duplex_junk[7],
            (double)duplex_uplink_data[0],
            (double)duplex_uplink_data[1],
            (double)duplex_uplink_data[2]);

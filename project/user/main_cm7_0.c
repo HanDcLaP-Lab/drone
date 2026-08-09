@@ -208,12 +208,13 @@ int main(void) {
         // 主循环约 0.4ms/轮, 远快于视觉周期(约20ms), 保证应答及时处理。
         Duplex_Comm_Poll();
 
-        // 启动 3 秒后清零一次统计, 避开上电/接线稳定前的瞬态, 便于观察稳态丢包率
-        static uint8_t duplex_stats_reset_done = 0;
-        if (!duplex_stats_reset_done && dataC.pit0_cnt >= 3000U) {
-            Duplex_Comm_Reset_Stats();
-            duplex_stats_reset_done = 1;
-        }
+        // [调试用] 启动 3 秒后清零一次统计, 避开上电瞬态便于观察稳态丢包率。
+        // 正常运行不需要, 保留供联调时取消注释。
+        // static uint8_t duplex_stats_reset_done = 0;
+        // if (!duplex_stats_reset_done && dataC.pit0_cnt >= 3000U) {
+        //     Duplex_Comm_Reset_Stats();
+        //     duplex_stats_reset_done = 1;
+        // }
 #endif
 
 /* 无线串口打印开始 */
@@ -228,11 +229,10 @@ int main(void) {
         }
 /* 无线串口打印结束 */
 
-#if DUPLEX_SWITCH
-        // 板间双向通讯质量观察: 有线 printf (UART_0 @115200), 内部按
+        // [调试用] 板间双向通讯质量观察: 有线 printf (UART_0 @115200), 内部按
         // DUPLEX_PRINT_PERIOD_MS 限频, 见 duplex_comm.c。
-        Duplex_Comm_Print_Stats();
-#endif
+        // printf 阻塞式, 一行约占住主循环 6ms, 正常运行默认不开。
+        //Duplex_Comm_Print_Stats();
 
         gpio_low(DEBUG_PROBE);
         system_delay_us(400); // 

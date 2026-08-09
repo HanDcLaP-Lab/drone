@@ -129,51 +129,11 @@ extern volatile uint32_t duplex_max_rtt_ms;           // 往返时延最大值 (
 extern volatile uint8_t  duplex_last_seq;             // 最近请求 seq
 extern volatile uint8_t  duplex_last_err;             // 最近一次失败原因码
 
-// ================= 底层诊断埋点 =================
-// 用途: 把"收不到应答"的原因切成三段, 一眼定位到硬件层还是软件层。
-//   isr  = 0        → UART4 接收中断从未触发。总线上没有电平变化, 或 RX 引脚/中断配置问题。
-//   isr >0 且 raw=0 → 中断触发了但 uart_query_byte 取不到数据 (异常, 一般是错误中断)。
-//   raw >0 且 ok=0  → 字节能进来, 问题在帧同步/内容, 看 dec/cmd 定位。
-extern volatile uint32_t duplex_rx_isr_count;         // uart4_isr 接收分支进入次数
-extern volatile uint32_t duplex_rx_byte_count;        // 成功取到并入 FIFO 的原始字节数
-extern volatile uint8_t  duplex_first_bytes[4];       // 最先收到的 4 个原始字节 (判帧头/波特率)
-extern volatile uint8_t  duplex_first_byte_len;       // duplex_first_bytes 已记录的个数
-extern volatile uint8_t  duplex_tx_de_high_readback;  // 拉高 DE 后回读电平 (期望 1)
-extern volatile uint8_t  duplex_tx_de_low_readback;   // 拉低 DE 后回读电平 (期望 0)
 
-// ================= 帧同步诊断埋点 =================
-// 用途: 定位"应答帧到了但帧头被打坏"的具体形态。
-//   hdr  = 在 HEADER1/HEADER2 状态被丢弃的字节数。正常每帧应答会贡献
-//          DUPLEX_PEER_PREAMBLE_LEN 个 (前导字节本就该在此被吸收);
-//          hdrx = hdr - ok × 前导长度, 即真正因帧头损坏而被丢弃的字节。
-//   ovf  = SCB 硬件 RX FIFO 溢出次数。库把 OVERFLOW 中断屏蔽了, 只能主动查状态位。
-//          若此值增长, 说明字节被硬件丢弃 (ISR 被高优先级中断挤住), 与帧同步无关。
-//   run  = 最近一次"连续丢弃"的总字节数 (从上次找到 0xAA 到下次找到 0xAA 之间)。
-//          正常帧 = 前导长度; 明显更大 = 该帧整体没能同步上。
-//   lead = 该次连续丢弃开头连续等于前导字节值的个数 (即前导有几个正确解出)。
-//   j[8] = 跳过上述前导后的头 8 个字节。这才是真正需要看的"垃圾形态":
-//            j 全 0 且 run == 前导长度        → 正常帧, 无异常
-//            j = AA 55 20 ...                → 帧头其实完好, 是别处的问题
-//            j 首字节乱、其后是 55 20 ...     → 仅首字节损坏 (单字节故障)
-//            j 整段都乱                      → 整帧位边界错乱 (采样时刻/边沿问题)
-// 说明: 前导与垃圾分开记录, 是因为前导长度提到 8 后, 若混在一起会把 j[] 占满,
-//       看不到真正有价值的后续字节。
-#define DUPLEX_JUNK_CAPTURE_LEN   8U
-
-extern volatile uint32_t duplex_hdr_drop_count;       // HEADER 状态丢弃的字节数
-extern volatile uint32_t duplex_rx_overflow_count;    // SCB RX FIFO 溢出次数
-extern volatile uint8_t  duplex_junk[DUPLEX_JUNK_CAPTURE_LEN]; // 跳过前导后的头 8 字节
-extern volatile uint8_t  duplex_junk_len;             // duplex_junk 有效个数
-extern volatile uint8_t  duplex_junk_lead;            // 开头连续等于前导值的个数
-extern volatile uint16_t duplex_junk_run_total;       // 最近一次连续丢弃的总字节数
-extern volatile uint16_t duplex_junk_run_max;         // 连续丢弃字节数的历史最大值
-
-// 小车端应答帧的前导字节配置。仅用于把 hdr 换算成 hdrx (诊断用),
-// 协议正确性不依赖它 —— 状态机对任何非 0xAA 字节都会丢弃。
-// 注意: 若改动小车端 car_board_comm.h 的 BOARD_TX_PREAMBLE_LEN / BYTE, 这两个要同步改,
-//       否则 hdrx 和 lead 会算错 (只影响诊断读数, 不影响通讯)。
-#define DUPLEX_PEER_PREAMBLE_LEN   8U
-#define DUPLEX_PEER_PREAMBLE_BYTE  0x00u
+// 说明: 8.9a 调试期曾另有一组深度诊断埋点 (UART 中断进入次数、原始字节数、SCB 硬件 RX FIFO
+//   溢出次数、HEADER 状态丢弃字节数与连续丢弃形态快照、DE 引脚回读、上电首字节留存),
+//   用于把"上行收不到应答"逐层切分到硬件层/帧同步层。链路定位完成后已移除, 详见 README 8.9a。
+//   若日后上行再度异常, 从 8.9a 提交取回这些埋点即可复现当时的诊断手段。
 
 // ================= 对外接口 =================
 void Duplex_Comm_Init(void);          // UART/方向引脚/FIFO 初始化, 进入接收态
