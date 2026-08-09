@@ -220,9 +220,22 @@ void uart4_isr (void)
 {
     if(uart_isr_mask(UART_4))            // 串口4接收中断
     {
-
+        // ============================================================================
+        // 板间双向通讯接入点 (DUPLEX_SWITCH 定义于 data_complex.h)
+        //   =1 双向: UART4 RX 用于接收小车 CMD_SLAVE 应答帧, 收到的字节写入 duplex 接收
+        //            FIFO, 由主循环 Duplex_Comm_Poll() 解析。
+        //   =0 单向: 维持原行为, 调用 SBUS 接收机回调 uart_receiver_handler()。
+        // 说明: uart_receiver_handler 是逐飞库的 SBUS 接收机回调函数指针, 仅在调用
+        //   set_wireless_type(RECEIVER_UART, ...) 后才会被绑定; 本工程从未调用该接口,
+        //   故它始终指向库内空实现 type_default_callback, UART4 上没有接收机逻辑在跑。
+        //   无线调参/无线打印走 UART1 (WIRELESS_UART_INDEX), 与 UART4 无关, 不受影响。
+        //   原调用保留在 #else 分支, 便于开关回退。
+        // ============================================================================
+#if DUPLEX_SWITCH
+        Duplex_Comm_On_Uart_Rx();                                                               // 双向: 接收小车应答帧入 duplex FIFO
+#else
         uart_receiver_handler();                                                                // 串口接收机回调函数
-       
+#endif
     }
     else                                // 串口4发送中断
     {

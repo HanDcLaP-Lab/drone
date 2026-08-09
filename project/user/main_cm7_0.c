@@ -68,6 +68,8 @@ int main(void) {
 
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(1500);
+    // 注意: DUPLEX_SWITCH=1 时 P19_2 由 Duplex_Comm_Init 接管为 RS485 方向引脚 (会重新
+    // 初始化为接收态低电平)。此处保持原有初始化不动, 供 DUPLEX_SWITCH=0 的单向模式使用。
     gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL); //uart
     gpio_init(DEBUG_PROBE, GPO, GPIO_LOW, GPO_PUSH_PULL); // 示波器探头
 
@@ -82,7 +84,12 @@ int main(void) {
         tof_init();
         wireless_uart_init_();
         seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
+#if DUPLEX_SWITCH
+        // 双向模式: 初始化 UART4/方向引脚(P19_2)/接收FIFO, 并接管 P19_2 进入接收态(低)
+        Duplex_Comm_Init();
+#else
         Board_Comm_Init();
+#endif
         small_driver_uart_init();
         small_driver_get_speed();
         Flight_Control_Init();
@@ -101,6 +108,12 @@ int main(void) {
 
     while (true) {
         gpio_high(DEBUG_PROBE);
+
+#if DUPLEX_SWITCH
+        // 双向模式: 时基必须在视觉分支(Duplex_Comm_Trigger)之前喂入, 否则请求时刻会戳成
+        // 上一轮的值, 使往返时延统计偏大一个主循环周期。
+        Duplex_Comm_Set_Now_Ms(dataC.pit0_cnt);
+#endif
 
         app_state_machine_update(); // 拨码模式下检测运行期切换
         debug_data_notify_handler();
@@ -154,7 +167,12 @@ int main(void) {
                 Float_Buffer_write(float_buffer, vision_snap);
                 //send_cnt++;
                 //if(send_cnt == 10){
+#if DUPLEX_SWITCH
+                // 双向模式: 视觉事件触发一次主从请求-应答 (每次触发只发一帧请求)
+                Duplex_Comm_Trigger(float_buffer);
+#else
                 Board_Comm_Send_Data(float_buffer);
+#endif
                 //   send_cnt = 0;
                 //}
                 static uint32_t last_visual_pos_print_ms = 0;
@@ -185,6 +203,19 @@ int main(void) {
         M7_0_data_send(share_data_from_0);
         SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
 
+#if DUPLEX_SWITCH
+        // 双向模式: 排空接收 FIFO 处理应答与超时判定 (时基已在循环顶部喂入)。
+        // 主循环约 0.4ms/轮, 远快于视觉周期(约20ms), 保证应答及时处理。
+        Duplex_Comm_Poll();
+
+        // 启动 3 秒后清零一次统计, 避开上电/接线稳定前的瞬态, 便于观察稳态丢包率
+        static uint8_t duplex_stats_reset_done = 0;
+        if (!duplex_stats_reset_done && dataC.pit0_cnt >= 3000U) {
+            Duplex_Comm_Reset_Stats();
+            duplex_stats_reset_done = 1;
+        }
+#endif
+
 /* 无线串口打印开始 */
         if (emergency_stop_print_pending) {
             emergency_stop_print_pending = 0;
@@ -196,6 +227,12 @@ int main(void) {
             //wireless_uart_send_string("merge\r\n");
         }
 /* 无线串口打印结束 */
+
+#if DUPLEX_SWITCH
+        // 板间双向通讯质量观察: 有线 printf (UART_0 @115200), 内部按
+        // DUPLEX_PRINT_PERIOD_MS 限频, 见 duplex_comm.c。
+        Duplex_Comm_Print_Stats();
+#endif
 
         gpio_low(DEBUG_PROBE);
         system_delay_us(400); // 

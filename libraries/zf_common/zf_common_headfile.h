@@ -119,6 +119,7 @@
 #include "image_process.h"
 #include "image_ctrl.h"
 #include "data_complex.h"
+#include "duplex_comm.h"
 #include "key_switch.h"
 #include "app.h"
 #include "data_complex.h"
