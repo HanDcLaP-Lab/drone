@@ -625,8 +625,16 @@ static void sort_lights(CameraObject *cam) {
         if (i == car_idx) continue;
         if (!is_valid_blob[i]) continue;
 
-        // 限制：找信标距离在10m以内 (1000cm)
-        if (phys_dist_sq[i] > TARGET_MAX_DISTANCE * TARGET_MAX_DISTANCE) continue;
+        // 矫正后位置距小车的距离 (小车不可见时回退到距无人机地面投影距离)
+        float car_dist_sq = phys_dist_sq[i];
+        if (car_idx != -1) {
+            float dx_car = ground_x[i] - car_plane_x;
+            float dy_car = ground_y[i] - car_plane_y;
+            car_dist_sq = dx_car * dx_car + dy_car * dy_car;
+        }
+
+        // 限制：信标距小车10m以内 (1000cm)
+        if (car_dist_sq > TARGET_MAX_DISTANCE * TARGET_MAX_DISTANCE) continue;
 
         // 计算目标质心到画面中心的像素距离平方 (用于边缘畸变补偿)
         float dx_c = cam->centers[i][1] - CAM_CX;
@@ -643,7 +651,7 @@ static void sort_lights(CameraObject *cam) {
 
         // 动态面积门槛平滑过渡：正上方(0m)要求面积>25，4m(400cm)处降为0
         float out_dist = sqrtf(phys_dist_sq[i]);
-        float min_target_area = 15.0f * (1.0f - out_dist / 200.0f);
+        float min_target_area = 5.0f * (1.0f - out_dist / 200.0f);
         if (min_target_area < 0.0f) min_target_area = 0.0f;
 
         // 面积不达标直接排除
@@ -651,16 +659,8 @@ static void sort_lights(CameraObject *cam) {
 
         // 面积过小的连通域长宽比不可靠, 直接通过形状筛选
         if (cam->dot_num[i] <= SMALL_BLOB_DIRECT_AREA || cam->aspect_ratio[i] < dynamic_target_max_ratio) {
-            // 【核心：按地面实际距小车距离打擂台，小车不可见时回退到距无人机地面投影距离】
-            float sort_dist_sq;
-            if (car_idx != -1) {
-                float dx_car = ground_x[i] - car_plane_x;
-                float dy_car = ground_y[i] - car_plane_y;
-                sort_dist_sq = dx_car * dx_car + dy_car * dy_car;
-            } else {
-                sort_dist_sq = phys_dist_sq[i];
-            }
-            float sort_dist = sqrtf(sort_dist_sq);
+            // 打擂台距离已在循环头部算好 (car_dist_sq)
+            float sort_dist = sqrtf(car_dist_sq);
 
             for (int rank = 0; rank < TARGET_CANDIDATE_COUNT; rank++) {
                 if (sort_dist < target_sort_dist[rank]) {
