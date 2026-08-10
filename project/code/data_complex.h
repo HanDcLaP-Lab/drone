@@ -69,7 +69,7 @@
 // ================= 高度保护参数 =================
 #define VISION_POSITION_MIN_HEIGHT_CM       35.0f // 低于此高度才让视觉坐标失效
 #define VISION_LOW_HEIGHT_HOLD_FRAMES       5U    // 图像约50Hz，5帧约100ms
-#define CAR_ENABLE_MIN_HEIGHT_CM            90.0f // 低于此高度下传car_en=0
+#define CAR_ENABLE_MIN_HEIGHT_CM            70.0f // 低于此高度下传car_en=0
 
 // ================= 视觉失联保护 =================
 // 基于 dataC.pit0_cnt (1ms) 的时间计数，取代依赖主循环负载的循环计数

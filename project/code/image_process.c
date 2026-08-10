@@ -9,7 +9,8 @@
 //        │
 //   ┌────┴──────────────────────────────────────────────┐
 //   │ 1. pixelTo3DRay(u,v)    像素→3D射线 (相机畸变校正) │
-//   │ 2. cameraToBody()        姿态旋转 (pitch/roll补偿)│
+//   │ 2. cameraToBody()        安装偏转(CAM_TOP_YAW_DEG) │
+//   │                           + 姿态旋转 (pitch/roll补偿)│
 //   │ 3. projectToGround()     相似三角形投影到水平地面   │
 //   │ 4. 上电航向固定系旋转 + 卡尔曼滤波 + 转回机体系       │
 //   └──────────────────────────────────────────────────┘
@@ -77,11 +78,17 @@ static Vector3D pixelTo3DRay(double u, double v) {
 static Vector3D cameraToBody(const Vector3D *cam, double sinp, double cosp, double sinr, double cosr) {
     Vector3D body;
 
+    // 相机安装偏转: 图像上方相对机头方向的旋转角 (CAM_TOP_YAW_DEG, 见image.h)
+    // 先绕光轴把相机系 (x=Right, y=Forward) 转到机体系, 再做倾角补偿。
+    // (F', R') = R_z(φ)·(cam.y, cam.x);  φ=0 时与旧代码完全一致
+    double sinq = sin(CAM_TOP_YAW_DEG * M_PI / 180.0);
+    double cosq = cos(CAM_TOP_YAW_DEG * M_PI / 180.0);
+
     // 映射输入向量到中间物理坐标系 (Forward, Right, Down) 以便使用标准旋转公式
     // pixelTo3DRay 输出: x=Right (Body Y), y=Forward (Body X), z=Up
     // 物理坐标: xb=Forward, yb=Right, zb=Down
-    double xb = cam->y;      // Forward
-    double yb = cam->x;      // Right
+    double xb = cam->y * cosq - cam->x * sinq;  // Forward
+    double yb = cam->y * sinq + cam->x * cosq;  // Right
     double zb = -cam->z;     // Down (取反，因为cam->z是负的)
 
     // 1. 应用 Roll (绕 Forward/X 轴旋转)

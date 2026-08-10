@@ -5,7 +5,7 @@
 
 
 // =================== 飞行参数配置 ===================
-#define TARGET_HEIGHT_CM 120.0f  // 目标高度
+#define TARGET_HEIGHT_CM 130.0f  // 目标高度
 #define LANDING_DESCENT_TIME_MS 7000U // 目标高度从当前值线性降至0的时间
 #define FLIGHT_TIMEOUT_MS       70000U // [新增] 全局飞行超时 (ms)，超时自动降落
 #define LANDING_CUTOFF_HEIGHT_CM 25.0f  // 新ToF帧低于此高度时关停
@@ -25,12 +25,12 @@
 #define TARGET_ACC_DISTANCE 100.0f    //为了防止无人机与信标很近时yaw变化大，角度跟踪的最小距离
 #define YAW_MIN_ERROR  5.0f    //角度跟踪设置的小死区
 
-#define ROLL_OFFSET 338.0f       //补偿重心偏移
-#define PITCH_OFFSET -240.0f     //补偿重心偏移
+#define ROLL_OFFSET 0.0f       //补偿重心偏移
+#define PITCH_OFFSET 0.0f     //补偿重心偏移
 // ================= 小车固定悬停点视觉补偿 =================
 // X前Y右，单位cm；数值是在无人机IMU yaw等于CAM_OFFSET_MEASURE_YAW_DEG时测得的机体系坐标。
-#define CAM_OFFSET_X                  (-4.0f)
-#define CAM_OFFSET_Y                  (-9.0f)
+#define CAM_OFFSET_X                  (11.0f)
+#define CAM_OFFSET_Y                  (20.0f)
 #define LANDING_CAM_OFFSET_Y_DELTA   (-15.0f)
 // 该yaw以无人机上电朝向为0；使用时会与视觉坐标一同转换到小车固定地面系。
 #define CAM_OFFSET_MEASURE_YAW_DEG     0.0f
