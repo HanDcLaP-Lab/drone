@@ -8,8 +8,8 @@
 #define IMG_CENTER_X (MT9V03X_W / 2.0f)
 #define IMG_CENTER_Y (MT9V03X_H / 2.0f)
 // 畸变中心 (Distortion Center)
-#define CAM_CX  111.5043628344
-#define CAM_CY  61.5005778257
+#define CAM_CX  107.67
+#define CAM_CY  58.67
 
 // 逆拉伸矩阵 (Inverse Stretch Matrix)
 #define INV_S11  1.0000000000
@@ -51,7 +51,7 @@
 #define MAX_LIGHTS 20       // 最大识别灯光数量
 #define THRESHOLD 130      //二值化阈值设置
 #define THRESHOLD_MAX 130   // 动态阈值上限 (近距离)
-#define THRESHOLD_MIN 100   // 动态阈值下限 (5m水平距离)
+#define THRESHOLD_MIN 70   // 动态阈值下限 (5m水平距离)
 
 // =========================================================
 // [新增] 广角全景摄像头有效成像圆形区域配置
@@ -119,6 +119,8 @@
 // ================= 信标识别 =================
 #define SMALL_BLOB_DIRECT_AREA  20      // 小光斑面积上限 (≤此值直接通过形状筛选)
 #define DEGENERATE_RATIO_MARK   99.0f   // 退化标记排除值 (ratio==100视为无效)
+#define TARGET_AREA_BASE        5.0f    // 信标动态面积门槛基数 (0m 处门槛 = 此值)
+#define TARGET_AREA_FADE_DIST   100.0f  // 面积门槛随距离线性衰减到 0 的距离 (cm)
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---

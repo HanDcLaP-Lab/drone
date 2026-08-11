@@ -44,6 +44,7 @@ uint16_t target = 0;
 uint16_t has_stopped = 0;
 
 volatile uint8_t emergency_stop_print_pending = 0; /* 倾斜急停提示 */
+volatile uint8_t periodic_print_pending = 0;       /* CH2 周期打印节拍 (主循环消费) */
 
 // **************************** PIT中断函数 ****************************
 void pit0_ch0_isr() {
@@ -83,6 +84,7 @@ void pit0_ch1_isr()
 void pit0_ch2_isr()  // 定时器通道 2 周期中断服务函数
 {
     pit_isr_flag_clear(PIT_CH2);
+    periodic_print_pending = 1;
 }
 
 void pit0_ch10_isr()  // 定时器通道 10 周期中断服务函数

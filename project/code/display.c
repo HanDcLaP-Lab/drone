@@ -13,6 +13,7 @@
 //   [i/n]-车链因/标链因 A面积 R长宽比 — 未认证点, 小车链/信标链各自的首个拦截原因
 //        (面积/长宽比/距离等; lose=该链门槛全过但竞选落选)
 // 第二行打印解算后的地面距离: 有小车 → 到小车; 无小车 → 到视野中心(图像中心投影)
+// 第三行打印连通域中心像素坐标 (Row, Col), 供远场亮点标定读取
 // key2 进入从头开始 / key3 进入从尾开始; key4 切走页面即退出,
 // 再次切回页面2 完全恢复现有逻辑。
 // 按键经 ISR 粘滞旗标送达 (key_switch.c), 不随20ms显示帧漏检;
@@ -309,7 +310,7 @@ static void blob_detail_classify(void) {
                 blob_detail_rej_tgt[i] = BLOB_DETAIL_REJ_TGT_DIST;
             } else {
                 float out_dist = sqrtf(phys_dist_sq[i]);
-                float min_target_area = 5.0f * (1.0f - out_dist / 200.0f);
+                float min_target_area = TARGET_AREA_BASE * (1.0f - out_dist / TARGET_AREA_FADE_DIST);
                 if (min_target_area < 0.0f) min_target_area = 0.0f;
                 if (cam->dot_num[i] <= min_target_area) {
                     blob_detail_rej_tgt[i] = BLOB_DETAIL_REJ_TGT_AREA;
@@ -400,6 +401,12 @@ static void blob_detail_render(void) {
     char dist_line[16];
     snprintf(dist_line, sizeof(dist_line), "D%.1fcm", blob_detail_dist[i]);
     ips200_show_string(0, BLOB_DETAIL_LINE_Y(1), dist_line);
+
+    // [新增] 第三行: 连通域中心像素坐标 (Row, Col), 供远场标定读取
+    char center_line[24];
+    snprintf(center_line, sizeof(center_line), "R%.2f C%.2f",
+             blob_detail_snap.centers[i][0], blob_detail_snap.centers[i][1]);
+    ips200_show_string(0, BLOB_DETAIL_LINE_Y(2), center_line);
 }
 
 void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, float target_x, float target_y, uint8_t target_valid){

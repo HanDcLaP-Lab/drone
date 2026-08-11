@@ -231,6 +231,11 @@ void wireless_uart_output_groud(void){
     wireless_uart_send_string("\n");
 }
 
+void wireless_uart_output_car_target_dist(void){   //打印小车-信标地面距离 (cm)
+    wireless_uart_send_float(vision_snap[S1_CAR_TARGET_DIST]);
+    wireless_uart_send_string("\n");
+}
+
 void wireless_uart_output_imu_sample_rate(void){
     uint16_t gyro_count = imu_gyro_new_sample_count;
     uint16_t acc_count = imu_acc_new_sample_count;

@@ -649,9 +649,9 @@ static void sort_lights(CameraObject *cam) {
             dynamic_target_max_ratio = TARGET_LIMIT_MAX_RATIO;
         }
 
-        // 动态面积门槛平滑过渡：正上方(0m)要求面积>25，4m(400cm)处降为0
+        // 动态面积门槛平滑过渡: 0m 处门槛 = TARGET_AREA_BASE, TARGET_AREA_FADE_DIST 处降为 0
         float out_dist = sqrtf(phys_dist_sq[i]);
-        float min_target_area = 5.0f * (1.0f - out_dist / 200.0f);
+        float min_target_area = TARGET_AREA_BASE * (1.0f - out_dist / TARGET_AREA_FADE_DIST);
         if (min_target_area < 0.0f) min_target_area = 0.0f;
 
         // 面积不达标直接排除

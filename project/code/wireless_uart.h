@@ -17,6 +17,7 @@ void wireless_uart_output_motor(void);
 void wireless_uart_motor_average_sample(void); // PIT_CH1中motor_pwm_set()之后调用
 void wireless_uart_output_motor_average(void); // CM7_0主循环调用
 void wireless_uart_output_groud(void);
+void wireless_uart_output_car_target_dist(void); // 打印小车-信标地面距离 (cm)
 void wireless_uart_output_imu_sample_rate(void);
 void wireless_uart_output_height(void);
 #endif

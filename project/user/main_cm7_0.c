@@ -58,6 +58,7 @@ float float_buffer[UART_DATA_LENGTH] = {0};
 int vis_cnt = 0;
 
 extern volatile uint8_t emergency_stop_print_pending;
+extern volatile uint8_t periodic_print_pending;
 static uint8_t merge_print_pending = 0;
 static uint8_t last_vision_locked_state = 0;
 
@@ -223,6 +224,10 @@ int main(void) {
             wireless_uart_send_string("emergency stop\r\n");
         }
         //wireless_uart_output_motor_average();
+        if (periodic_print_pending) {
+            periodic_print_pending = 0;
+            wireless_uart_output_car_target_dist();
+        }
         if (merge_print_pending) {
             merge_print_pending = 0;
             //wireless_uart_send_string("merge\r\n");
