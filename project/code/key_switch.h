@@ -48,6 +48,10 @@ extern Key_Switch_t dev_switch2;
 extern float debug_params[PARAM_COUNT];
 extern uint8_t current_param_idx;
 extern uint8_t display_page_idx;
+// [新增] 页面2连通域详情模式按键粘滞旗标: 10ms ISR 捕获置位, 显示层(20ms)消费后清零
+// (短按事件只在10ms周期内可见, 显示层20ms采样会漏检, 故用旗标桥接)
+extern volatile uint8_t detail_btn_k2;
+extern volatile uint8_t detail_btn_k3;
 
 // 外部可调用的接口函数
 void key_switch_init(void);

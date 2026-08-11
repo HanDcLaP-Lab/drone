@@ -13,6 +13,8 @@ Key_Switch_t dev_switch2;
 float debug_params[PARAM_COUNT] = {(float)THRESHOLD_MAX};
 uint8_t current_param_idx = 0;             // 当前选中的参数索引
 uint8_t display_page_idx = 0;              // [新增] 屏幕显示页面索引
+volatile uint8_t detail_btn_k2 = 0;        // [新增] 详情模式 key2 短按粘滞旗标 (ISR置位/显示层消费)
+volatile uint8_t detail_btn_k3 = 0;        // [新增] 详情模式 key3 短按粘滞旗标
 
 // 创建一个指针数组，把所有要扫描的按键/拨码开关集中管理
 static Key_Switch_t* const ALL_KEYS[] = { 
@@ -190,5 +192,16 @@ void Key_Switch_Param_Edit(void) {
         if (display_page_idx >= DISPLAY_PAGE_COUNT) {
             display_page_idx = 0;
         }
+    }
+
+    // [新增] 页面2连通域详情模式: key2/key3 短按粘滞旗标
+    // 短按事件只在10ms ISR周期内可见, 显示层20ms才采样一次, 直接读event会漏检;
+    // 在此(ISR)捕获并置位旗标, 显示层消费后清零。仅页面2期间捕获, 避免其他页的调参
+    // 按动被误判为详情模式操作。
+    if (dev_key2.event == KEY_EVT_SHORT && display_page_idx == 2) {
+        detail_btn_k2 = 1;
+    }
+    if (dev_key3.event == KEY_EVT_SHORT && display_page_idx == 2) {
+        detail_btn_k3 = 1;
     }
 }
