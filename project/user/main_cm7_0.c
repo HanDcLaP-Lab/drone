@@ -195,6 +195,7 @@ int main(void) {
                 // 触发视觉失联保护：强行回平姿态，清理视觉 PID 积分，原地悬停防止乱飞
                 Nonline_PID_Reset(&pid_image_x);
                 Nonline_PID_Reset(&pid_image_y);
+                Car_Feedforward_Reset(); // [新增] 视觉失联回平同步清前馈偏移
                 Set_Target_Attitude(0, 0, flight_target.target_yaw);
                 last_vision_locked_state = 0;
             }
@@ -235,7 +236,7 @@ int main(void) {
 /* 无线串口打印结束 */
 
         // [新增] 前馈角接收打印: 上行帧收到小车前馈角时经无线串口输出 (值变化才打印)。
-        // 暂不接入飞控, 仅供联调观察 (见 wireless_uart.c)。
+        // 仅供联调观察 (前馈本身已接入飞控, 见 image_ctrl.c Car_Position_Predict_Feedforward)。
         wireless_uart_output_feedforward_rx();
 
         // [调试用] 板间双向通讯质量观察: 有线 printf (UART_0 @115200), 内部按

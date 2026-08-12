@@ -91,6 +91,9 @@ void Board_Comm_Send_Data(volatile float *data_array)
 //===========================通讯传递数组赋值==============================
 //请将所有通讯赋值在下面三个函数完成
 
+extern float ff_disp_dir_deg;    // 定义于 image_ctrl.c: 前馈方向 (deg, 地面系), CM7_1 屏幕绘制
+extern float ff_disp_remain_cm;  // 定义于 image_ctrl.c: 前馈剩余偏移量 (cm), CM7_1 屏幕绘制
+
 void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_data_from_0
     data_out[S0_IMU_ROLL]    = imu_data.roll;
     data_out[S0_IMU_PITCH]   = imu_data.pitch;
@@ -108,6 +111,8 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
     data_out[S0_TARGET_YAW]   = flight_target.target_yaw;
     data_out[S0_DEBUG_ERR_X]  = dataC.debug_earth_err_x;
     data_out[S0_DEBUG_ERR_Y]  = dataC.debug_earth_err_y;
+    data_out[S0_FF_DIR]    = ff_disp_dir_deg;    // [新增] 前馈方向 (CM7_1 屏幕绘制)
+    data_out[S0_FF_REMAIN] = ff_disp_remain_cm;  // [新增] 前馈剩余偏移量 (CM7_1 屏幕绘制)
 
 }
 

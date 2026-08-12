@@ -19,52 +19,64 @@
 //   └──────────────────────────────────────────────────────┘
 // ******************************************************************************
 
+// =================== 前馈偏移状态 (见 Car_Position_Predict_Feedforward) ===================
+static float ff_event_deg = -1.0f;  // 已应用前馈事件的角度 (deg, -1=尚未收到过)
+static float ff_off_x = 0.0f;       // 事件时刻的地面系偏移向量X (cm)
+static float ff_off_y = 0.0f;       // 事件时刻的地面系偏移向量Y (cm)
+static uint32_t ff_event_ms = 0;    // 事件时刻 (dataC.pit0_cnt, ms)
+float ff_disp_dir_deg = 0.0f;       // 当前前馈方向 (deg, 地面系), 供 CM7_1 屏幕显示
+float ff_disp_remain_cm = 0.0f;     // 当前前馈剩余偏移量 (cm, 0=无前馈), 供 CM7_1 屏幕显示
+
 /**
- * @brief 小车位置预测前馈函数
- * 当小车与信标距离大于阈值时，根据已知的小车运动速度和方向预测其未来的位置。
- * 加入平滑处理，防止前馈量突变导致飞机剧烈晃动。
+ * @brief 小车方向前馈: 收到小车前馈角 (上行 ff_deg) 时, 将小车位置向该方向抛出
+ *        FF_THROW_DIST_CM (1m), 在 FF_CONVERGE_MS (1s) 内线性收敛回真实小车位置,
+ *        残余误差由位置环 KI 承接 (交棒)。
+ * 前馈始终只是叠加在实时小车坐标上的一个向量 (地面系), 不替代小车位置;
+ * 启用条件由调用方保证: 仅小车可见 (locked 1/3), 即未触发丢失回平。
  */
-static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y, float target_pos_x, float target_pos_y) {
-#if CAR_FF_ENABLE
-    static float last_ff_offset_x = 0.0f;
-    static float last_ff_offset_y = 0.0f;
-    
-    float target_offset_x = 0.0f;
-    float target_offset_y = 0.0f;
-
-    float dx = target_pos_x - *car_pos_x;
-    float dy = target_pos_y - *car_pos_y;
-    float dist = sqrtf(dx * dx + dy * dy);
-
-    // 如果距离大于阈值，计算目标前馈位移
-    if (dist > CAR_FF_DIST_THRESHOLD) {
-        float dir_x = dx / dist;
-        float dir_y = dy / dist;
-
-        // 预测位移 = 速度 * 预测时间
-        target_offset_x = dir_x * CAR_FF_SPEED * CAR_FF_PREDICT_TIME;
-        target_offset_y = dir_y * CAR_FF_SPEED * CAR_FF_PREDICT_TIME;
+static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y, float snapshot_yaw) {
+#if defined(CY_CORE_CM7_0) && CAR_FF_ENABLE
+    // 注: duplex_comm.c 仅编入 CM7_0 构建, CM7_1 无 duplex_uplink_data 可链, 故函数体限制在 CM7_0。
+    // ff_deg 已是无人机系 (无人机固定地面系, X前Y右, 0°=无人机前向, 顺时针正) 下的方向角,
+    // 小车端已换算 ((小车yaw-无人机yaw)-α), 此处直接生成地面系向量, 无需再与任何 yaw 组合。
+    float ff_deg = duplex_uplink_data[3];   // 上行前馈角 (deg, 0=无前馈)
+    if (ff_deg != 0.0f && ff_deg != ff_event_deg) {
+        // 新前馈事件: 仅在此时抛一次偏移 (小车确认前重传的相同角度不重复触发)
+        ff_event_deg = ff_deg;
+        ff_event_ms = dataC.pit0_cnt;
+        float rad = ff_deg * 3.14159265f / 180.0f;
+        ff_off_x = cosf(rad) * FF_THROW_DIST_CM;
+        ff_off_y = sinf(rad) * FF_THROW_DIST_CM;
     }
+    // 线性收敛: 事件后 FF_CONVERGE_MS 内衰减到 0
+    uint32_t elapsed = dataC.pit0_cnt - ff_event_ms;
+    float k = 1.0f - (float)elapsed / (float)FF_CONVERGE_MS;
+    if (k < 0.0f) k = 0.0f;
+    float earth_off_x = ff_off_x * k;
+    float earth_off_y = ff_off_y * k;
 
-    // 计算当前需要的变化量
-    float diff_x = target_offset_x - last_ff_offset_x;
-    float diff_y = target_offset_y - last_ff_offset_y;
-    float diff_dist = sqrtf(diff_x * diff_x + diff_y * diff_y);
+    // 地面系 → 机体系 (按小车位置快照偏航旋转), 叠加到实时小车坐标上
+    float yaw_rad = VISION_EARTH_YAW_DEG(snapshot_yaw) * 3.14159265f / 180.0f;
+    float cos_yaw = cosf(yaw_rad);
+    float sin_yaw = sinf(yaw_rad);
+    *car_pos_x += earth_off_x * cos_yaw + earth_off_y * sin_yaw;
+    *car_pos_y += -earth_off_x * sin_yaw + earth_off_y * cos_yaw;
 
-    // 限制单次最大变化距离 (平滑处理)
-    if (diff_dist > CAR_FF_MAX_CHANGE) {
-        diff_x = (diff_x / diff_dist) * CAR_FF_MAX_CHANGE;
-        diff_y = (diff_y / diff_dist) * CAR_FF_MAX_CHANGE;
-    }
-
-    // 更新本次的前馈偏置
-    last_ff_offset_x += diff_x;
-    last_ff_offset_y += diff_y;
-
-    // 将平滑后的前馈位移加到小车位置上
-    *car_pos_x += last_ff_offset_x;
-    *car_pos_y += last_ff_offset_y;
+    // 供 CM7_1 屏幕绘制: 方向 + 剩余长度 (随收敛缩短)
+    ff_disp_dir_deg = (k > 0.0f) ? ff_deg : 0.0f;
+    ff_disp_remain_cm = sqrtf(earth_off_x * earth_off_x + earth_off_y * earth_off_y);
+#else
+    (void)car_pos_x; (void)car_pos_y; (void)snapshot_yaw;   // CM7_1 构建或前馈关闭时空实现
 #endif
+}
+
+/** @brief 复位前馈偏移状态 (丢失回平/视觉失联时调用, 与 PID/滤波器复位同步) */
+void Car_Feedforward_Reset(void) {
+    ff_event_deg = -1.0f;
+    ff_off_x = 0.0f;
+    ff_off_y = 0.0f;
+    ff_disp_dir_deg = 0.0f;
+    ff_disp_remain_cm = 0.0f;
 }
 
 // =================== 内部静态状态变量 ===================
@@ -286,13 +298,9 @@ void Flight_Hover_Control_Task(void) {
     
     if (locked_lights == 1 || locked_lights == 3) {
         Hover_Car_Position_Filter(car_pos_x, car_pos_y, snapshot_yaw, &car_pos_x, &car_pos_y);
-    } 
 
-    // 2. 视觉位置前馈预测 (当同时看到小车和信标时)
-    if (locked_lights == 3) {
-        float target_pos_x = vision_snap[S1_TARGET_X] - dataC.camera_offset_x;
-        float target_pos_y = vision_snap[S1_TARGET_Y] - dataC.camera_offset_y;
-        Car_Position_Predict_Feedforward(&car_pos_x, &car_pos_y, target_pos_x, target_pos_y);
+        // 2. 小车方向前馈: 条件放松, 仅小车可见即可 (未触发丢失回平), 叠加于实时小车坐标之上
+        Car_Position_Predict_Feedforward(&car_pos_x, &car_pos_y, snapshot_yaw);
     }
 
     if (locked_lights == 1 || locked_lights == 3) {
@@ -329,6 +337,7 @@ void Flight_Hover_Control_Task(void) {
             Nonline_PID_Reset(&pid_image_x);
             Nonline_PID_Reset(&pid_image_y);
             hover_car_filter_initialized = 0;
+            Car_Feedforward_Reset(); // [新增] 丢失回平同步清前馈偏移
 
             Set_Target_Attitude(0.0f, 0.0f, flight_target.target_yaw);
 

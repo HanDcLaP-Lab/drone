@@ -4,6 +4,11 @@
 
 #define MERGE_MARK_HOLD_MS 1000U
 
+// ================= [新增] 前馈方向短线绘制参数 =================
+#define FF_SCREEN_PX_PER_CM  0.3f   // 剩余前馈偏移量 → 像素比例 (1m → 30px)
+#define FF_SCREEN_MAX_PX     30     // 短线最大长度 (px)
+#define FF_SCREEN_GAP_PX     6      // 起笔距红十字中心距离 (px, 半径4+粗细2, 不遮挡十字)
+
 // ================= [新增] 页面2 连通域详情模式 =================
 // key2/key3 短按进入: 立即暂停两幅图刷新 (不拷贝图像), 拷贝 cam_down 及
 // 关联 IMU 快照。进入后 key2 下翻 / key3 上翻 遍历所有连通域, 红色光标
@@ -506,6 +511,38 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
             }
         }
     }
+
+    // [新增] 前馈方向短线: 从小车红十字 (十字半径外起笔, 不遮挡红十字) 向前馈方向延伸,
+    // 灰色近似透明效果; 长度 ∝ 剩余前馈偏移量, 随实际前馈 1s 收敛而缩短。
+    // 地面系→图像系粗略映射 (不做畸变校正): 相机安装旋转180° (CAM_TOP_YAW_DEG),
+    // 前向(0°)→图像下方(row+), 右向(90°)→图像左方(col-)。
+#if defined(CY_CORE_CM7_1)
+    if (car_valid) {
+        float ff_dir = share_data_from_0[S0_FF_DIR];
+        float ff_remain = share_data_from_0[S0_FF_REMAIN];
+        if (ff_remain > 0.0f) {
+            float ff_rad = ff_dir * 3.14159265f / 180.0f;
+            float d_col = -sinf(ff_rad);
+            float d_row =  cosf(ff_rad);
+            int16_t len = (int16_t)(ff_remain * FF_SCREEN_PX_PER_CM);
+            if (len > FF_SCREEN_MAX_PX) len = FF_SCREEN_MAX_PX;
+            if (len > 0) {
+                int16_t fcx = (int16_t)car_x;
+                int16_t fcy = (int16_t)car_y;
+                int16_t x0 = fcx + (int16_t)(d_col * FF_SCREEN_GAP_PX);
+                int16_t y0 = fcy + (int16_t)(d_row * FF_SCREEN_GAP_PX);
+                int16_t x1 = fcx + (int16_t)(d_col * (FF_SCREEN_GAP_PX + len));
+                int16_t y1 = fcy + (int16_t)(d_row * (FF_SCREEN_GAP_PX + len));
+                // 钳位到图像区
+                if (x0 < 0) x0 = 0; if (x0 >= MT9V03X_W) x0 = MT9V03X_W - 1;
+                if (y0 < 0) y0 = 0; if (y0 >= MT9V03X_H) y0 = MT9V03X_H - 1;
+                if (x1 < 0) x1 = 0; if (x1 >= MT9V03X_W) x1 = MT9V03X_W - 1;
+                if (y1 < 0) y1 = 0; if (y1 >= MT9V03X_H) y1 = MT9V03X_H - 1;
+                ips200_draw_line(x0, y0, x1, y1, RGB565_GRAY);
+            }
+        }
+    }
+#endif
 
     // 检查信标是否有效
     if (target_valid) {

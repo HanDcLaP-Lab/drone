@@ -3,11 +3,9 @@
 #include "zf_common_headfile.h"
 
 // =================== 视觉前馈宏定义 ===================
-#define CAR_FF_ENABLE           0       // 开启/关闭视觉前馈 (1:开启, 0:关闭)
-#define CAR_FF_DIST_THRESHOLD   50.0f    // 预测触发距离阈值 (cm)
-#define CAR_FF_SPEED            40.0f    // 小车运动速度 (cm/s, 即0.4m/s)
-#define CAR_FF_PREDICT_TIME     0.25f    // 预测前瞻时间 (s) 结合机械延迟建议0.25s起步
-#define CAR_FF_MAX_CHANGE       2.0f     // 每次循环前馈增量的最大变化限制 (cm)
+#define CAR_FF_ENABLE           1       // 开启/关闭小车方向前馈 (1:开启, 0:关闭)
+#define FF_THROW_DIST_CM        100.0f  // 收到前馈角时向该方向抛出的偏移距离 (cm, 1m)
+#define FF_CONVERGE_MS          1000U   // 前馈偏移线性收敛到真实小车位置的时间 (ms, 交棒位置环KI)
 
 #define ROTATE_RECOVER_TIME 1000
 
@@ -35,4 +33,10 @@
  * @note 内部处理视觉补偿、姿态设定及 PID 计算
  */
 void Flight_Hover_Control_Task(void);
+
+// =================== 前馈偏移对外接口 ===================
+// 方向: 无人机地面系 (0°=前向, 顺时针为正, 与上行 ff_deg 一致)
+void Car_Feedforward_Reset(void);         // 复位前馈偏移状态 (丢失回平/视觉失联时调用)
+extern float ff_disp_dir_deg;             // 当前前馈方向角 (deg, 0=无前馈)   → M7_0_data_send 下传 CM7_1 屏幕绘制
+extern float ff_disp_remain_cm;           // 当前前馈剩余偏移量 (cm, 0=无前馈) → 同上
 #endif
