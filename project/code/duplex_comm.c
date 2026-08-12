@@ -11,6 +11,7 @@
 
 // ================= 对外状态 / 统计 =================
 float duplex_uplink_data[DUPLEX_UPLINK_COUNT] = {0};
+volatile uint8_t duplex_ff_deg_received = 0;   // [新增] 前馈接收反馈 (见 duplex_comm.h)
 volatile uint8_t  duplex_uplink_update_flag = 0;
 volatile uint32_t duplex_request_count      = 0;
 volatile uint32_t duplex_reply_ok_count     = 0;
@@ -141,7 +142,7 @@ void Duplex_Comm_Trigger(const float *downlink)
     if (!downlink) return;
 
     // 上一次请求还没等到应答就又被触发 → 判上一次丢包
-    // (正常不会发生: 超时 10ms < 视觉周期约 20ms, Poll 会先判超时)
+    // (正常不会发生: 超时 8ms < 视觉周期 10ms @100Hz, Poll 会先判超时)
     if (duplex_awaiting_reply) {
         duplex_timeout_count++;
         duplex_last_err = DUPLEX_ERR_TIMEOUT;
@@ -167,7 +168,7 @@ void Duplex_Comm_Trigger(const float *downlink)
     // 回环残字节"。该理由不成立且造成约 3.7% 的上行丢包, 已删除:
     //   ① 不存在回环: DE 与 RE# 接在一起, 发送期间收发器的接收端物理关闭。实测 cmd 计数
     //      全程为 0 也证实了这点 (若有回环, 自身请求帧会因 cmd=MASTER≠SLAVE 被记入 cmd)。
-    //   ② 重置会劈开半帧: 应答 18B @1Mbps 耗时 180us, 若 Poll 恰在传输中途读走前半帧
+    //   ② 重置会劈开半帧: 应答 22B @1Mbps 耗时 220us, 若 Poll 恰在传输中途读走前半帧
     //      (状态机停在 BODY), 紧接着视觉帧触发本函数把状态机打回 HEADER1, 则后半字节
     //      再也找不到帧头, 被逐个静默丢弃 —— 整帧丢失且不计入任何错误计数器。
     //      现象特征: raw 字节数明显多于 ok×18, 而 dec/cmd/fifo 全为 0。
@@ -204,6 +205,9 @@ static void Duplex_Process_Full_Frame(void)
     for (uint8_t i = 0; i < DUPLEX_UPLINK_COUNT; i++) {
         duplex_uplink_data[i] = decoded.data[i];
     }
+    // [新增] 前馈接收反馈: 上行载荷 [3] 为非零前馈角才算"已接收",
+    // 下传帧 [12] 的反馈标志据此生成 (小车据此决定重传)。收到0或整帧丢失都不置位。
+    duplex_ff_deg_received = (decoded.data[3] != 0.0f) ? 1U : 0U;
     duplex_uplink_update_flag = 1;
 
     if (duplex_awaiting_reply) {
@@ -272,7 +276,7 @@ void Duplex_Comm_Poll(void)
             case DUPLEX_STEP_BODY:
                 duplex_rx_frame[duplex_rx_idx++] = read_byte;
 
-                // 命令字一到位就先判别: 自身 54 字节请求帧回环时, 按上行 18 字节累积会
+                // 命令字一到位就先判别: 自身 58 字节请求帧回环时, 按上行 22 字节累积会
                 // 读出 cmd=CMD_MASTER, 此处提前丢弃并重同步, 不必等累满整帧再判。
                 if (duplex_rx_idx == DUPLEX_DATA_OFFSET &&
                     duplex_rx_frame[DUPLEX_CMD_OFFSET] != DUPLEX_PEER_CMD) {
@@ -340,9 +344,10 @@ void Duplex_Comm_Reset_Stats(void)
 //   rtt   最近一次往返时延 (ms)
 //   max   往返时延最大值 (ms)
 //   err   最近失败原因码 (0无/1解码/2命令字/3超时/4FIFO/5seq不符)
-//   u0/1/2 小车上传载荷 (当前为 IMU roll/pitch/yaw)
+//   u0/1/2/3 小车上传载荷 (IMU roll/pitch/yaw + 前馈角 ff_deg)
+//   fb    前馈接收反馈 (0=未收到, 1=已收到非零前馈角)
 //
-// 注意: printf 为阻塞式 (每字节忙等 TxComplete), 本行约 70 字节 @115200 要占住主循环约 6ms。
+// 注意: printf 为阻塞式 (每字节忙等 TxComplete), 本行约 80 字节 @115200 要占住主循环约 7ms。
 //   默认不调用 (见 main_cm7_0.c 的注释掉的调用处), 仅在需要观察链路质量时临时开启。
 void Duplex_Comm_Print_Stats(void)
 {
@@ -352,7 +357,7 @@ void Duplex_Comm_Print_Stats(void)
     last_print_ms = duplex_now_ms;
 
     // 浮点参数显式转 double: 可变参数会默认提升, 显式写出与 wireless_uart.c 既有风格一致
-    printf("dup,%u,%u,%u,%u,%u,%u,sq%u,%u,%u,%u,%.2f,%.2f,%.2f\r\n",
+    printf("dup,%u,%u,%u,%u,%u,%u,sq%u,%u,%u,%u,%.2f,%.2f,%.2f,%.2f,fb%u\r\n",
            (unsigned)duplex_request_count,
            (unsigned)duplex_reply_ok_count,
            (unsigned)duplex_timeout_count,
@@ -365,5 +370,7 @@ void Duplex_Comm_Print_Stats(void)
            (unsigned)duplex_last_err,
            (double)duplex_uplink_data[0],
            (double)duplex_uplink_data[1],
-           (double)duplex_uplink_data[2]);
+           (double)duplex_uplink_data[2],
+           (double)duplex_uplink_data[3],
+           (unsigned)duplex_ff_deg_received);
 }

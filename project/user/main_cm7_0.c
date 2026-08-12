@@ -226,13 +226,17 @@ int main(void) {
         //wireless_uart_output_motor_average();
         if (periodic_print_pending) {
             periodic_print_pending = 0;
-            wireless_uart_output_car_target_dist();
+            //wireless_uart_output_car_target_dist();
         }
         if (merge_print_pending) {
             merge_print_pending = 0;
             //wireless_uart_send_string("merge\r\n");
         }
 /* 无线串口打印结束 */
+
+        // [新增] 前馈角接收打印: 上行帧收到小车前馈角时经无线串口输出 (值变化才打印)。
+        // 暂不接入飞控, 仅供联调观察 (见 wireless_uart.c)。
+        wireless_uart_output_feedforward_rx();
 
         // [调试用] 板间双向通讯质量观察: 有线 printf (UART_0 @115200), 内部按
         // DUPLEX_PRINT_PERIOD_MS 限频, 见 duplex_comm.c。

@@ -17,8 +17,8 @@
 #define BOARD_BAUDRATE   1000000
 #define BOARD_TX_PIN     UART4_TX_P14_1  
 #define BOARD_RX_PIN     UART4_RX_P14_0  
-#define UART_DATA_LENGTH 12 // 下传数组长度 (12个float)
-// 协议帧格式: 0xAA 0x55 + 48字节(12×float) + 1字节累加校验和 + 0x7F
+#define UART_DATA_LENGTH 13 // 下传数组长度 (13个float, [12]=前馈接收反馈标志, 见 Float_Buffer_write)
+// 协议帧格式: 0xAA 0x55 + 52字节(13×float) + 1字节累加校验和 + 0x7F
 // 数组索引映射详见 data_complex.c 中 Float_Buffer_write()，小车端对应 car_board_comm.h
 //============================================================
 #define M7_x_DATA_LENGTH 20
@@ -68,7 +68,7 @@
 
 // ================= 高度保护参数 =================
 #define VISION_POSITION_MIN_HEIGHT_CM       35.0f // 低于此高度才让视觉坐标失效
-#define VISION_LOW_HEIGHT_HOLD_FRAMES       5U    // 图像约50Hz，5帧约100ms
+#define VISION_LOW_HEIGHT_HOLD_FRAMES       10U   // 图像约100Hz，10帧约100ms
 #define CAR_ENABLE_MIN_HEIGHT_CM            70.0f // 低于此高度下传car_en=0
 
 // ================= 视觉失联保护 =================

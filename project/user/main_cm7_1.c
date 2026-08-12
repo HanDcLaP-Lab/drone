@@ -71,7 +71,7 @@ int main(void)
     uint8_t frame_start_snap_valid = 0;
     while(true)
     {          
-        // 等待摄像头采集完成 (同步物理帧率，50Hz)
+        // 等待摄像头采集完成 (同步物理帧率，100Hz)
         if (mt9v03x_finish_flag)
         {
             mt9v03x_finish_flag = 0;
@@ -115,10 +115,14 @@ int main(void)
             share_data_from_1[S1_FRAME_SEQ] = frame_seq;
             SCB_CleanDCache_by_Addr(&share_data_from_1, sizeof(share_data_from_1));
 
-            // 3. 屏幕打印
+            // 3. 屏幕打印 (100Hz 下每 2 帧刷新一次 ≈ 50Hz,
+            //    防止 IPS200 两幅灰度图的全屏刷新拖垮 10ms 主循环)
             if (drone_mode == 0) // DRONE_STATE_DEBUG = 0
             {
-                display_image_debug_display(cam_down.car_center_x, cam_down.car_center_y, cam_down.car_valid, cam_down.target_center_x, cam_down.target_center_y, cam_down.target_valid);
+                static uint8_t display_div = 0;
+                if ((++display_div & 1U) == 0U) {
+                    display_image_debug_display(cam_down.car_center_x, cam_down.car_center_y, cam_down.car_valid, cam_down.target_center_x, cam_down.target_center_y, cam_down.target_valid);
+                }
             }
 
             // 图像处理效率观测

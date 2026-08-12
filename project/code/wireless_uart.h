@@ -20,4 +20,5 @@ void wireless_uart_output_groud(void);
 void wireless_uart_output_car_target_dist(void); // 打印小车-信标地面距离 (cm)
 void wireless_uart_output_imu_sample_rate(void);
 void wireless_uart_output_height(void);
+void wireless_uart_output_feedforward_rx(void); // [新增] 前馈角接收打印 (无线, 值变化才输出)
 #endif

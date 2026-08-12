@@ -41,7 +41,7 @@ CM7_0:
   PIT_CH1 1.25ms: imu.c:Mahony_Update → fly_ctrl.c:Flight_Control_Loop → motor_pwm_set
   main_cm7_0 (main loop): reads share_data_from_1 → image_ctrl.c:Flight_Hover_Control_Task → writes share_data_from_0
 
-CM7_1 (50Hz camera):
+CM7_1 (100Hz camera):
   image.c:main → image_process.c:pipeline → image_ctrl.c → data_complex.c:M7_1_data_send → share_data_from_1
 ```
 

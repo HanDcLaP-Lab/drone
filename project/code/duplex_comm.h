@@ -21,11 +21,11 @@
 
 // ================= 协议帧定义 =================
 // 帧布局: 0xAA 0x55 + cmd + seq + N×float(小端) + 累加校验(cmd+seq+数据区 模256) + 0x7F
-// 下行(主机→从机) N = DUPLEX_DOWNLINK_COUNT = 12, 整帧 54 字节
-// 上行(从机→主机) N = DUPLEX_UPLINK_COUNT   =  3, 整帧 18 字节
+// 下行(主机→从机) N = DUPLEX_DOWNLINK_COUNT = 13, 整帧 58 字节
+// 上行(从机→主机) N = DUPLEX_UPLINK_COUNT   =  4, 整帧 22 字节
 // 两个方向帧长不同, 靠 cmd 区分; 各自状态机只按本方向的帧长累积。
-#define DUPLEX_DOWNLINK_COUNT     UART_DATA_LENGTH   // 下行 float 个数 (12, 与原协议一致)
-#define DUPLEX_UPLINK_COUNT       3U                 // 上行 float 个数 (测试阶段: IMU roll/pitch/yaw)
+#define DUPLEX_DOWNLINK_COUNT     UART_DATA_LENGTH   // 下行 float 个数 (13, 与原协议一致)
+#define DUPLEX_UPLINK_COUNT       4U                 // 上行 float 个数 (IMU roll/pitch/yaw + 前馈角)
 
 #define DUPLEX_FLOAT_BYTES        4U
 #define DUPLEX_HEADER1            0xAAu
@@ -39,8 +39,8 @@
 
 // 按 float 个数换算整帧长度: 帧头2 + cmd1 + seq1 + 数据区 + 校验1 + 帧尾1
 #define DUPLEX_FRAME_SIZE(n)      (DUPLEX_DATA_OFFSET + (n) * DUPLEX_FLOAT_BYTES + 2U)
-#define DUPLEX_DOWNLINK_FRAME_SIZE  DUPLEX_FRAME_SIZE(DUPLEX_DOWNLINK_COUNT)   // 54
-#define DUPLEX_UPLINK_FRAME_SIZE    DUPLEX_FRAME_SIZE(DUPLEX_UPLINK_COUNT)     // 18
+#define DUPLEX_DOWNLINK_FRAME_SIZE  DUPLEX_FRAME_SIZE(DUPLEX_DOWNLINK_COUNT)   // 58
+#define DUPLEX_UPLINK_FRAME_SIZE    DUPLEX_FRAME_SIZE(DUPLEX_UPLINK_COUNT)     // 22
 
 #define DUPLEX_CMD_MASTER         0x10u   // 命令字: 主机(无人机)请求帧
 #define DUPLEX_CMD_SLAVE          0x20u   // 命令字: 从机(小车)应答帧
@@ -74,19 +74,20 @@
 #define DUPLEX_DIR_SETUP_US       20U
 #define DUPLEX_TX_HOLD_US         20U
 
-// 应答超时。@1Mbps 下行 54B≈0.54ms + 上行 18B≈0.18ms + DE 切换 0.2ms ≈ 1ms,
+// 应答超时。@1Mbps 下行 58B≈0.58ms + 上行 22B≈0.22ms + DE 切换 0.2ms ≈ 1ms,
 // 实测典型往返 1~3ms; 但主循环里的 printf 是阻塞式的 (每字节忙等 TxComplete),
 // 一行调试信息就能占住主循环数毫秒, 期间 Poll 不执行 → 应答被推迟处理 → rtt 被顶高。
-// 实测 max_rtt 曾达 12ms, 正是这个原因。
+// 实测 max_rtt 曾达 12ms, 正是这个原因 (printf 默认关闭后 rtt 回到毫秒级)。
 //
-// 取 15ms 的依据: 需同时满足
-//   ① 远大于实测 max_rtt (12ms), 避免把"处理被推迟"误判成丢包;
-//   ② 小于视觉周期 (约 20ms), 保证下一次 Trigger 到来前已完成超时判定。
+// 100Hz 摄像头下视觉周期为 10ms, 取 8ms 的依据: 需同时满足
+//   ① 大于典型 RTT (1~3ms) 与主循环调度抖动, 避免正常应答被误判成丢包;
+//   ② 小于视觉周期 (10ms), 保证下一次 Trigger 到来前 Poll 已完成超时判定,
+//      否则 Trigger 会抢先把"上一次请求"判超时, 且迟到的旧应答再记一次 seq 不符 → 双计数。
 // 另有 seq 匹配作为第二道保险 (见 Duplex_Process_Full_Frame): 迟到的应答即便跨过了超时线,
-// 只要 seq 与最近一次请求不符就不会被错认成本次应答, 因此放宽阈值是安全的。
-#define DUPLEX_REPLY_TIMEOUT_MS   15U
+// 只要 seq 与最近一次请求不符就不会被错认成本次应答, 因此阈值可适度放宽到 8ms。
+#define DUPLEX_REPLY_TIMEOUT_MS   8U
 
-#define DUPLEX_RX_FIFO_SIZE       128U    // 接收 FIFO 容量 (字节), 远大于单帧 18B
+#define DUPLEX_RX_FIFO_SIZE       128U    // 接收 FIFO 容量 (字节), 远大于单帧 22B
 
 // 调试打印周期, 由 Duplex_Comm_Print_Stats 内部限频。
 // printf 是阻塞式的 (每字节忙等 TxComplete), 一行约 90 字节 @115200 要占住主循环约 7.8ms,
@@ -110,12 +111,15 @@ typedef struct {
 } duplex_uplink_frame_t;
 
 // ================= 对外状态 / 统计 =================
-// car_uplink_data 索引映射 (小车→无人机上传协议, 应答帧载荷):
+// duplex_uplink_data 索引映射 (小车→无人机上传协议, 应答帧载荷):
 //   [0] imu roll  — 小车横滚角 (deg)
 //   [1] imu pitch — 小车俯仰角 (deg)
 //   [2] imu yaw   — 小车偏航角 (deg)
-// 测试阶段仅供观察, 不接入飞控任何逻辑; 后续前馈控制改传小车速度相关量。
+//   [3] ff_deg    — 小车前馈方向角 (deg, 0=无前馈) [新增, 暂不接入飞控, 供无线串口打印观察]
 extern float duplex_uplink_data[DUPLEX_UPLINK_COUNT];
+// 前馈接收反馈: 1 = 最近一次成功解码的应答载荷 [3] 为非零前馈角, 0 = 未收到 (含收到0/无应答)。
+// 由 Duplex_Process_Full_Frame 每次解码成功后刷新, 下传帧 [12] 反馈标志据此生成。
+extern volatile uint8_t duplex_ff_deg_received;
 extern volatile uint8_t  duplex_uplink_update_flag;   // 收到有效应答置 1 (由消费方清零)
 extern volatile uint32_t duplex_request_count;        // 已发起请求数
 extern volatile uint32_t duplex_reply_ok_count;       // 收到有效应答数

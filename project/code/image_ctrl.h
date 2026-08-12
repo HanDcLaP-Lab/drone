@@ -16,7 +16,8 @@
 #define VISION_EARTH_YAW_DEG(yaw_deg) ((yaw_deg) - VISION_INITIAL_YAW_OFFSET_DEG)
 
 // =================== 目标丢失容忍宏定义 ===================
-#define LOST_TOLERANCE_FRAMES   3       // 连续丢失多少帧后才触发 PID 复位+回平 (防单帧噪点误触发)
+#define LOST_TOLERANCE_FRAMES   6       // 连续丢失多少帧后才触发 PID 复位+回平 (防单帧噪点误触发)
+                                        // 100Hz 下 6 帧 ≈ 60ms, 与 50Hz 时 3 帧 ≈ 60ms 语义一致
 
 // =================== 偏航搜索与对准宏定义 ===================
 #define TARGET_ALIGN_ENABLE      0       // 开启/关闭信标对准机制 (1:开启, 0:关闭)

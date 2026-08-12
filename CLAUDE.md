@@ -14,12 +14,12 @@ This is a multi-core Cortex-M7 drone flight control system for the CYT4BB platfo
   - Motor PWM output
   - Interrupt handling (PIT_CH0: 1ms)
 
-- **CM7_1**: Image processing core (20ms processing loop)  
+- **CM7_1**: Image processing core (event-driven, syncs to 100Hz camera frames, 10ms cycles)  
   - MT9V03X camera processing (120x188 resolution)
   - Per-pixel dynamic threshold: center 130 → edge 40 (3×3 block LUT)
   - Pipeline: binarize → double closing (dilate→erode→dilate→erode) → DFS components → sort → ground projection
   - Visual tracking (car and beacon recognition)
-  - Interrupt handling (PIT_CH1: 20ms)
+  - Main loop polls mt9v03x_finish_flag (VSYNC-driven, not PIT-based)
 
 **Inter-core communication:**
 - Two shared data arrays: `share_data_from_0[16]` (CM7_0 → CM7_1) and `share_data_from_1[16]` (CM7_1 → CM7_0)
@@ -101,7 +101,7 @@ New frame (post 5.12a):
 - User code goes in `project/code/` (automatically picked up by build system)
 - Core application files:
   - `project/user/main_cm7_0.c`: CM7_0 entry point with 1ms interrupt
-  - `project/user/main_cm7_1.c`: CM7_1 entry point with 20ms interrupt
+  - `project/user/main_cm7_1.c`: CM7_1 entry point, polls `mt9v03x_finish_flag` (100Hz frame sync)
 
 ### Testing and Debugging
 - **Mode selection**: Set `DRONE_MODE_SELECT` to switch-controlled, forced debug, or forced normal mode
@@ -119,12 +119,12 @@ New frame (post 5.12a):
 
 ### Interrupt Safety
 - CM7_0 uses PIT_CH0 (1ms) for flight control
-- CM7_1 uses PIT_CH1 (20ms) for image processing
+- CM7_1 image processing is event-driven on the camera VSYNC (100Hz), not on a PIT interrupt
 - Avoid using the same PIT timer on both cores
 - Clear Dcache after writing to shared data arrays
 
 ### Memory and Performance
-- Image processing optimized for 50Hz camera frame rate (20ms cycles)
+- Image processing optimized for 100Hz camera frame rate (10ms cycles)
 - Use `float` for all floating-point calculations (Cortex-M7 FPU)
 - Keep control loop deterministic within 1ms timing constraint
 

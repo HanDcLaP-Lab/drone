@@ -3,7 +3,7 @@
 // ******************************************************************************
 // 视觉悬停控制 (位置环 + 偏航搜索状态机)
 //
-//   Flight_Hover_Control_Task() (CM7_0主循环, ~25ms周期)
+//   Flight_Hover_Control_Task() (CM7_0主循环, ~10ms周期, 100Hz摄像头)
 //        │
 //   ┌────┴───────────────────────────────────────────────────┐
 //   │ 1. 读取Core1原始小车坐标与锁定状态                      │
@@ -69,7 +69,7 @@ static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y,
 
 // =================== 内部静态状态变量 ===================
 static uint32_t last_ang_cnt = 0;
-static uint32_t real_dt_ang = 20; 
+static uint32_t real_dt_ang = 10;   // 初始值 10ms (100Hz 帧周期)
 static uint8_t last_locked_lights = 0; 
 static uint8_t has_seen_beacon = 0;
 static int8_t search_seq_idx = 0;      // 搜索序列索引 (0~3)
@@ -137,7 +137,8 @@ static void Flight_Hover_Position_Control(float car_pos_x, float car_pos_y, floa
     dataC.debug_earth_err_y = earth_err_y;
 
     float dt_sec = real_dt_ang / 1000.0f;
-    if (dt_sec < 0.015f) dt_sec = 0.015f;
+    // 100Hz 帧周期 10ms: 下限 5ms 容忍帧率抖动/漏帧, 上限 50ms 防 dt 测量异常 (失联保护由 VISION_LOST_TIMEOUT_MS 兜底)
+    if (dt_sec < 0.005f) dt_sec = 0.005f;
     if (dt_sec > 0.05f) dt_sec = 0.05f;
 
     float target_earth_accel_x = Nonline_PID_Calculate(&pid_image_x, earth_err_x, dt_sec);

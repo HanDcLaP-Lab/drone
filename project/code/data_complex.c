@@ -112,7 +112,7 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 }
 
 // **************************** 下传协议映射 (无人机→小车) ****************************
-// buffer[12] 索引映射，与小车端 uart_data[12] 一一对应:
+// buffer[13] 索引映射，与小车端 uart_data[13] 一一对应:
 //   [0] car_raw_x           — 小车机体系X (cm, 未滤波)       ← S1_CAR_RAW_X (pos.raw_car.x)
 //   [1] car_raw_y           — 小车机体系Y (cm, 未滤波)       ← S1_CAR_RAW_Y (pos.raw_car.y)
 //   [2] target_raw_x        — 主信标机体系X (cm, 未滤波)     ← S1_RAW_TARGET_X
@@ -125,7 +125,10 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 //   [9] target2_raw_y       — 第二信标机体系Y (cm, 未滤波)    ← S1_RAW_TARGET2_Y
 //   [10] target3_raw_x      — 第三信标机体系X (cm, 未滤波)    ← S1_RAW_TARGET3_X
 //   [11] target3_raw_y      — 第三信标机体系Y (cm, 未滤波)    ← S1_RAW_TARGET3_Y
+//   [12] ff_ack             — 前馈接收反馈 (0=未收到, 1=已收到非零前馈角) ← duplex_ff_deg_received
 // ******************************************************************************
+extern volatile uint8_t duplex_ff_deg_received;   // 定义于 duplex_comm.c (仅 CM7_0 构建)
+
 void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share_data一般传入share_data_from_1
 {
     car_en_height = (imu_data.z >= CAR_ENABLE_MIN_HEIGHT_CM);
@@ -142,6 +145,8 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
     buffer[9] = share_data[S1_RAW_TARGET2_Y];
     buffer[10] = share_data[S1_RAW_TARGET3_X];
     buffer[11] = share_data[S1_RAW_TARGET3_Y];
+    // [新增] 前馈接收反馈: 由 duplex_comm 最近一次解码的应答前馈角刷新 (0=未收到, 1=已收到)
+    buffer[12] = (float)duplex_ff_deg_received;
 }
 
 #elif defined(CY_CORE_CM7_1)
