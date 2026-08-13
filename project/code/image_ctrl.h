@@ -4,7 +4,7 @@
 
 // =================== 视觉前馈宏定义 ===================
 #define CAR_FF_ENABLE           1       // 开启/关闭小车方向前馈 (1:开启, 0:关闭)
-#define FF_THROW_DIST_CM        100.0f  // 收到前馈角时向该方向抛出的偏移距离 (cm, 1m)
+#define FF_THROW_DIST_CM        50.0f  // 收到前馈角时向该方向抛出的偏移距离 (cm, 1m)
 #define FF_CONVERGE_MS          1000U   // 前馈偏移线性收敛到真实小车位置的时间 (ms, 交棒位置环KI)
 
 #define ROTATE_RECOVER_TIME 1000
