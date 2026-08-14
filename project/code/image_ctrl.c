@@ -48,12 +48,16 @@ static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y,
         ff_off_x = cosf(rad) * FF_THROW_DIST_CM;   // 地面系偏移向量 (事件方向, 世界固定)
         ff_off_y = sinf(rad) * FF_THROW_DIST_CM;
     }
-    // 线性收敛: 事件后 FF_CONVERGE_MS 内衰减到 0 (世界方向恒定, 每帧旋入当前机体系)
+    // 收敛: 事件后 FF_CONVERGE_MS 内衰减到 0 (世界方向恒定, 每帧旋入当前机体系);
+    // 抛出量先经 FF_THROW_RAMP_MS 斜坡升至峰值, 消除阶跃对位置环/姿态链的冲击 (原地下坠源)
     uint32_t elapsed = dataC.pit0_cnt - ff_event_ms;
     float k = 1.0f - (float)elapsed / (float)FF_CONVERGE_MS;
     if (k < 0.0f) k = 0.0f;
-    float earth_off_x = ff_off_x * k;
-    float earth_off_y = ff_off_y * k;
+    float ramp = (float)elapsed / (float)FF_THROW_RAMP_MS;
+    if (ramp > 1.0f) ramp = 1.0f;
+    float throw_scale = k * ramp;
+    float earth_off_x = ff_off_x * throw_scale;
+    float earth_off_y = ff_off_y * throw_scale;
 
     // 地面系 → 机体系 (按本帧快照偏航), 叠加到机体系小车坐标
     float yaw_rad = VISION_EARTH_YAW_DEG(snapshot_yaw) * 3.14159265f / 180.0f;
