@@ -196,7 +196,7 @@ void uart2_isr (void)
     if(uart_isr_mask(UART_2))            // 串口2接收中断
     {
         
-        gnss_uart_callback();            // GPS模块回调函数      
+        uart_control_callback();         // 无刷驱动回调函数 (转速/电压电流温度)
         
     }
     else                                // 串口2发送中断
@@ -274,7 +274,7 @@ void uart6_isr (void)
 {
     if(uart_isr_mask(UART_6))            // 串口6接收中断
     {
-        uart_control_callback();//无刷驱动回调函数
+        // 无刷驱动回调已移至 uart2_isr (SMALL_DRIVER_UART = UART_2), 修复 DR-08
         
        
     }

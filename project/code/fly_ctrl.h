@@ -12,7 +12,7 @@
 #define HOVER_THROTTLE 5150    // 基础悬停油门 
 #define MAX_PWM 8500
 #define MIN_PWM 0
-#define MAX_TILT_ANGLE 9.0f  // 最大计算倾角限制 (度)
+#define MAX_TILT_ANGLE 10.0f  // 最大计算倾角限制 (度)
 #define MAX_REAL_ANGLE 40.0f // 最大实际倾角限制 (度) 超过停机
 #define CTRL_DT_CTLOOP 0.00125f  // 飞控控制周期 (1.25ms, 800Hz)
 

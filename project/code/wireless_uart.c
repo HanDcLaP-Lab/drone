@@ -187,24 +187,34 @@ void wireless_uart_motor_average_sample(void){
     motor_avg_sample_count++;
 }
 
-// [新增] 前馈角接收打印 (无线): 上行帧收到小车前馈角时输出, 供联调观察。
-// 只在值变化时打印一行, 不接入飞控任何逻辑。0 表示当前无前馈。
-// 格式: FFD_RX,<ff_deg>,fb:<0=未收到 1=已收到>    (ff_deg 见 duplex_uplink_data[3])
+// [新增] 前馈事件打印 (无线): 前馈事件角变化时输出一行, 供联调观察。
+// 格式: FFD_RX,<事件前馈角>,<光流修正后角>,fb:<0=未收到 1=已收到>
+//   两个角度均为地面系 (0°=车头, 顺时针正, [0,360))。
+//   事件角取自 ff_event_deg, 修正后角 = atan2(ff_off_y, ff_off_x), 二者同一次事件、严格配对;
+//   换算在打印函数内完成, 不影响主流程。
 // 仅在 CM7_0 构建引用 duplex 符号 (duplex_comm.c 只编入 CM7_0, CM7_1 无该符号可链)。
 void wireless_uart_output_feedforward_rx(void){
 #if DUPLEX_SWITCH && defined(CY_CORE_CM7_0)
-    static float   last_printed_ff = 0.0f;
-    static uint8_t last_printed_fb = 0;
-    float ff = duplex_uplink_data[3];
+    static float last_printed_event_deg = -1.0f;   // 初始 -1 与 ff_event_deg 一致, 避免上电误打印
+    float event_deg = ff_event_deg;                // 事件前馈角 (deg, -1=无事件)
     uint8_t fb = duplex_ff_deg_received;
 
-    // 值未变且反馈未变不重复打印; fb 跳变 (0→1 确认收到) 也要打印
-    if (ff == last_printed_ff && fb == last_printed_fb) return;
-    last_printed_ff = ff;
-    last_printed_fb = fb;
+    // 仅在前馈事件角变化时打印 (与 ff_off_x/y 同一事件, 严格配对)
+    if (event_deg == last_printed_event_deg) return;
+    last_printed_event_deg = event_deg;
+
+    // 修正后角度: 读取同一次事件的修正后偏移向量, 在此换算为角度
+    float ff_corrected_deg = 0.0f;
+    if (event_deg > 0.0f)
+    {
+        ff_corrected_deg = atan2f(ff_off_y, ff_off_x) * 180.0f / 3.14159265f;   // 向量 → 角度 (地面系)
+        if (ff_corrected_deg < 0.0f) ff_corrected_deg += 360.0f;                // 归一化到 [0,360)
+    }
 
     wireless_uart_send_string("FFD_RX,");
-    wireless_uart_send_float(ff);
+    wireless_uart_send_float(event_deg);
+    wireless_uart_send_string(",");
+    wireless_uart_send_float(ff_corrected_deg);
     wireless_uart_send_string(",fb:");
     wireless_uart_send_int((int32_t)fb);
     wireless_uart_send_string("\r\n");
@@ -287,4 +297,23 @@ void wireless_uart_output_height(void){
     wireless_uart_send_string(",");
     wireless_uart_send_float(z_acc);
     wireless_uart_send_string("\n");
+}
+
+// [新增] 打印驱动板电压/电流/温度 (无线): 供调参观察。
+// 格式: 电池电压(V),母线电流(A),板载温度(℃)  (电压两位小数, 电流温度三位小数, 与驱动端一致)
+// 仅在 CM7_0 构建引用 motor_value (small_driver_uart_control.c 只编入 CM7_0, CM7_1 无该符号可链)。
+void wireless_uart_output_driver_status(void){
+#if defined(CY_CORE_CM7_0)
+    snprintf(buf, sizeof(buf), "%.2f", motor_value.battery_voltage);
+    wireless_uart_send_string(buf);
+    wireless_uart_send_string(",");
+    snprintf(buf, sizeof(buf), "%.3f", motor_value.bus_current);
+    wireless_uart_send_string(buf);
+    wireless_uart_send_string(",");
+    snprintf(buf, sizeof(buf), "%.3f", motor_value.board_temperature);
+    wireless_uart_send_string(buf);
+    wireless_uart_send_string("\r\n");
+#else
+    return;
+#endif
 }

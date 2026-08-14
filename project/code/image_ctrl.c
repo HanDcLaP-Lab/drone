@@ -20,9 +20,9 @@
 // ******************************************************************************
 
 // =================== 前馈偏移状态 (见 Car_Position_Predict_Feedforward) ===================
-static float ff_event_deg = -1.0f;  // 已应用前馈事件的角度 (deg, -1=尚未收到过)
-static float ff_off_x = 0.0f;       // 事件时刻的地面系偏移向量X (cm)
-static float ff_off_y = 0.0f;       // 事件时刻的地面系偏移向量Y (cm)
+float ff_event_deg = -1.0f;          // 已应用前馈事件的角度 (deg, -1=尚未收到过, 供打印函数触发)
+float ff_off_x = 0.0f;              // 事件时刻的修正后地面系偏移向量X (cm, 供打印函数换算角度)
+float ff_off_y = 0.0f;              // 事件时刻的修正后地面系偏移向量Y (cm, 供打印函数换算角度)
 static uint32_t ff_event_ms = 0;    // 事件时刻 (dataC.pit0_cnt, ms)
 float ff_disp_dir_deg = 0.0f;       // 当前前馈方向 (deg, 机体系 0°=机头), 供 CM7_1 屏幕显示
 float ff_disp_remain_cm = 0.0f;     // 当前前馈剩余偏移量 (cm, 0=无前馈), 供 CM7_1 屏幕显示
@@ -45,8 +45,21 @@ static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y,
         ff_event_deg = ff_deg;
         ff_event_ms = dataC.pit0_cnt;
         float rad = ff_deg * 3.14159265f / 180.0f;
-        ff_off_x = cosf(rad) * FF_THROW_DIST_CM;   // 地面系偏移向量 (事件方向, 世界固定)
-        ff_off_y = sinf(rad) * FF_THROW_DIST_CM;
+        float base_off_x = cosf(rad) * FF_THROW_DIST_CM;   // 地面系偏移向量 (事件方向, 世界固定)
+        float base_off_y = sinf(rad) * FF_THROW_DIST_CM;
+
+        // [新增] 光流速度修正: kick 事件瞬间, 把无人机当前实际速度(光流)按时间常数折算成位移,
+        // 从抛向量中扣除, 作为"实际采纳"的 kick 方向与幅值; 随后整体随 throw_scale 衰减。
+        // 坐标系统一: 光流原始轴系为"右X后Y", upixel.c 已映射为机体系 (opt_vel_x=前向, opt_vel_y=右向,
+        // 单位 cm/s); 而抛向量位于地面系(X前Y右), 故先把机体系速度按偏航旋入地面系再相减。
+        // 光流失效(valid=0 或高度<80cm)时 filt_vel 已归零, 本修正项自动消失, 退化为纯方向抛出。
+        float ev_yaw_rad = VISION_EARTH_YAW_DEG(snapshot_yaw) * 3.14159265f / 180.0f;
+        float ev_cos = cosf(ev_yaw_rad);
+        float ev_sin = sinf(ev_yaw_rad);
+        float flow_earth_x = upixels_data.filt_vel_x * ev_cos - upixels_data.filt_vel_y * ev_sin;
+        float flow_earth_y = upixels_data.filt_vel_x * ev_sin + upixels_data.filt_vel_y * ev_cos;
+        ff_off_x = base_off_x - FF_FLOW_CORRECTION_S * flow_earth_x;
+        ff_off_y = base_off_y - FF_FLOW_CORRECTION_S * flow_earth_y;
     }
     // 收敛: 事件后 FF_CONVERGE_MS 内衰减到 0 (世界方向恒定, 每帧旋入当前机体系);
     // 抛出量先经 FF_THROW_RAMP_MS 斜坡升至峰值, 消除阶跃对位置环/姿态链的冲击 (原地下坠源)

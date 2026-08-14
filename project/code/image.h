@@ -5,8 +5,15 @@
 
 #include "zf_common_headfile.h"
 
+// =========================================================
+// 一、图像尺寸
+// =========================================================
 #define IMG_CENTER_X (MT9V03X_W / 2.0f)
 #define IMG_CENTER_Y (MT9V03X_H / 2.0f)
+
+// =========================================================
+// 二、相机标定参数 (畸变中心 / 逆拉伸矩阵 / 映射多项式)
+// =========================================================
 // 畸变中心 (Distortion Center)
 #define CAM_CX  107.67
 #define CAM_CY  58.67
@@ -24,7 +31,7 @@
 #define CAM_A4  0.0000005377
 
 // =========================================================
-// 相机安装偏转角 (图像上方相对机体头方向, 绕光轴/机体Z轴旋转)
+// 三、相机安装偏转角 (图像上方相对机体头方向, 绕光轴/机体Z轴旋转)
 //   0.0f   = 图像上方朝机头 (当前代码安装关系, 默认)
 //  +90.0f  = 图像上方朝机体右方 (俯视顺时针)
 //  ±180.0f = 图像上下左右镜像 (历史安装曾与此相差 180°)
@@ -32,54 +39,93 @@
 // =========================================================
 #define CAM_TOP_YAW_DEG 180.0f
 
+// -------- 旧镜头标定值 (保留备用) --------
 // #define CAM_CX 95.4766785462
 // #define CAM_CY 47.4355457766
-
 
 // #define INV_S11 1.0000000000
 // #define INV_S12 0.0000000000
 // #define INV_S21 0.0000000000
 // #define INV_S22 1.0000000000
 
-
 // #define CAM_A0 48.8530755252
 // #define CAM_A2 -0.0086558507
 // #define CAM_A3 0.0000383442
 // #define CAM_A4 -0.0000012656
-// 宏定义
-#define STACK_SIZE 4096     // DFS 栈大小
-#define MAX_LIGHTS 20       // 最大识别灯光数量
-#define THRESHOLD 130      //二值化阈值设置
-#define THRESHOLD_MAX 130   // 动态阈值上限 (近距离)
-#define THRESHOLD_MIN 70   // 动态阈值下限 (5m水平距离)
 
 // =========================================================
+// 四、二值化与图像处理算法
+// =========================================================
+#define STACK_SIZE 4096     // DFS 栈大小
+#define MAX_LIGHTS 20       // 最大识别灯光数量
+#define THRESHOLD 130       // 二值化阈值设置
+#define THRESHOLD_MAX 130   // 动态阈值上限 (近距离)
+#define THRESHOLD_MIN 70    // 动态阈值下限 (5m水平距离)
+
+// =========================================================
+// 五、成像圆形区域 / 形态学掩模 / 边缘泛光清除
 // [新增] 广角全景摄像头有效成像圆形区域配置
 // =========================================================
-#define FOV_DIAMETER 125.0f   // 视野有效圆直径
+#define FOV_DIAMETER 125.0f               // 视野有效圆直径
 #define FOV_RADIUS (FOV_DIAMETER / 2.0f)
 #define FOV_RADIUS_SQ (FOV_RADIUS * FOV_RADIUS)
 
-#define MORPH_MASK_DIAMETER 70.0f  // [新增] 形态学有效区域圆直径(限制边缘噪声膨胀)
+#define MORPH_MASK_DIAMETER 70.0f         // [新增] 形态学有效区域圆直径(限制边缘噪声膨胀)
 #define MORPH_MASK_RADIUS (MORPH_MASK_DIAMETER / 2.0f)
 #define MORPH_MASK_RADIUS_SQ (MORPH_MASK_RADIUS * MORPH_MASK_RADIUS)
 
-#define EDGE_CLEAN_DIAMETER 180.0f  // [新增] 边缘泛光清除圆直径(从FOV独立出来，可单独调整)
+#define EDGE_CLEAN_DIAMETER 180.0f        // [新增] 边缘泛光清除圆直径(从FOV独立出来，可单独调整)
 #define EDGE_CLEAN_RADIUS (EDGE_CLEAN_DIAMETER / 2.0f)
 #define EDGE_CLEAN_RADIUS_SQ (EDGE_CLEAN_RADIUS * EDGE_CLEAN_RADIUS)
 
-#define CAR_MAX_DISTANCE  200.0f  //小车最大距离，超过不认为是小车
-#define TARGET_MAX_DISTANCE  400.0f  //信标最大距离(距小车矫正后地面位置，小车不可见时回退距无人机投影)，超过不认为是信标
 // =========================================================
+// 六、边缘安全边距 / 形态学 / 边缘泛光清除
+// =========================================================
+#define EDGE_SAFE_MARGIN_X 15.0f
+#define EDGE_SAFE_MARGIN_Y 0.0f
+
+#define K_Y 1.11f
+
+// 形态学参数
+#define ERODE_MIN_NEIGHBORS 8       // 腐蚀: 8邻域至少保留此数亮像素
+
+// 边缘泛光清除
+#define EDGE_BLOB_THRESHOLD 8       // 二值化前清除边缘泛光的灰度阈值 (0~255)
+
+// =========================================================
+// 七、距离估算
+// =========================================================
+#define HEIGHT_ESTIMATE_MIN 30.0f   // 距离估算最低高度 (cm)
+#define DIST_COMP_THRESHOLD 150.0f  // 距离补偿起效距离 (cm)
+#define DIST_COMP_SCALE    100.0f   // 距离补偿基准距离 (cm)
+
+// =========================================================
+// 八、小车 / 信标识别 (按 CAR / TARGET 分类)
+// =========================================================
+// --- 通用 (小车与信标共用) ---
 // [新增] 面积动态补偿参数 (解决边缘灯光变小的问题)
-// =========================================================
 // 1. 最小面积 (灯必须大于这个面积才算有效)
 #define BASE_MIN_AREA 1.0f
 
-// =========================================================
+#define DEGENERATE_RATIO_MARK   99.0f   // 退化标记排除值 (ratio==100视为无效)
+
+// --- CAR (小车) ---
+#define CAR_MAX_DISTANCE    200.0f   // 小车最大距离，超过不认为是小车
+#define CAR_MIN_AREA            6U     // 小车最小连通域面积
+#define CAR_MAX_CENTER_DIST_SQ  3600.0f // 小车距画面中心最大距离平方 (60²)
+#define CAR_BASE_MIN_RATIO      2.6f     // 中心基础下限：在中心时长宽比大于 3.0 即认为是小车
+#define CAR_RATIO_COMP_COEF     0.00006f // 补偿系数：假设边缘距离平方约 12000，12000*0.0002=2.4。边缘门槛会提升到 3.0+2.4 = 5.4
+#define CAR_IDEAL_MAX_RATIO     25.0f    // [新增] 小车理想长宽比上限 (用于得分截断，防线缆高倍率加分)
+#define CAR_ABSOLUTE_MAX_RATIO  1000.0f  // [未启用] 小车绝对长宽比红线 (超过此值直接视为细长线缆剔除)
+
+// --- TARGET (信标) ---
+#define TARGET_MAX_DISTANCE 400.0f   // 信标最大距离(距小车矫正后地面位置，小车不可见时回退距无人机投影)，超过不认为是信标
+#define SMALL_BLOB_DIRECT_AREA  20      // 小光斑面积上限 (≤此值直接通过形状筛选)
+#define TARGET_AREA_BASE        15.0f   // 信标动态面积门槛基数 (0m 处门槛 = 此值)
+#define TARGET_AREA_FADE_DIST   100.0f  // 面积门槛随距离线性衰减到 0 的距离 (cm)
+
 // [新增] 信标 (圆形灯) 动态透视畸变补偿参数
 // 逻辑：画面中心卡得很严，越靠近画面边缘容错越大，但有绝对上限
-// =========================================================
 // 1. 基础上限：信标在画面正中心时允许的最大长宽比 (此时几乎没畸变，卡严一点)
 #define TARGET_BASE_MAX_RATIO   2.5f
 
@@ -91,36 +137,6 @@
 // 3. 绝对上限：就算偏离到屏幕最边缘，长宽比也不能超过这个值 (防止把真正的小车当成信标)
 #define TARGET_LIMIT_MAX_RATIO  9.1f
 
-#define CAR_BASE_MIN_RATIO      2.6f     // 中心基础下限：在中心时长宽比大于 3.0 即认为是小车
-#define CAR_RATIO_COMP_COEF     0.00006f  // 补偿系数：假设边缘距离平方约 12000，12000*0.0002=2.4。边缘门槛会提升到 3.0+2.4 = 5.4
-#define CAR_IDEAL_MAX_RATIO     25.0f    // [新增] 小车理想长宽比上限 (用于得分截断，防线缆高倍率加分)
-#define CAR_ABSOLUTE_MAX_RATIO  1000.0f    // [未启用] 小车绝对长宽比红线 (超过此值直接视为细长线缆剔除)
-
-#define EDGE_SAFE_MARGIN_X 15.0f
-#define EDGE_SAFE_MARGIN_Y 0.0f
-
-#define K_Y 1.11f
-
-// ================= 形态学参数 =================
-#define ERODE_MIN_NEIGHBORS     8       // 腐蚀: 8邻域至少保留此数亮像素
-
-// ================= 边缘泛光清除 =================
-#define EDGE_BLOB_THRESHOLD      8    // 二值化前清除边缘泛光的灰度阈值 (0~255)
-
-// ================= 距离估算 =================
-#define HEIGHT_ESTIMATE_MIN     30.0f   // 距离估算最低高度 (cm)
-#define DIST_COMP_THRESHOLD     150.0f  // 距离补偿起效距离 (cm)
-#define DIST_COMP_SCALE         100.0f  // 距离补偿基准距离 (cm)
-
-// ================= 小车识别 =================
-#define CAR_MIN_AREA            6U     // 小车最小连通域面积
-#define CAR_MAX_CENTER_DIST_SQ  3600.0f // 小车距画面中心最大距离平方 (60²)
-
-// ================= 信标识别 =================
-#define SMALL_BLOB_DIRECT_AREA  20      // 小光斑面积上限 (≤此值直接通过形状筛选)
-#define DEGENERATE_RATIO_MARK   99.0f   // 退化标记排除值 (ratio==100视为无效)
-#define TARGET_AREA_BASE        15.0f    // 信标动态面积门槛基数 (0m 处门槛 = 此值)
-#define TARGET_AREA_FADE_DIST   100.0f  // 面积门槛随距离线性衰减到 0 的距离 (cm)
 // --- 摄像头对象结构体 ---
 typedef struct {
     // --- 基础属性 ---

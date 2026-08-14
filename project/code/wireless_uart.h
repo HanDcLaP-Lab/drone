@@ -21,4 +21,5 @@ void wireless_uart_output_car_target_dist(void); // 打印小车-信标地面距
 void wireless_uart_output_imu_sample_rate(void);
 void wireless_uart_output_height(void);
 void wireless_uart_output_feedforward_rx(void); // [新增] 前馈角接收打印 (无线, 值变化才输出)
+void wireless_uart_output_driver_status(void);  // [新增] 打印驱动板电压/电流/温度 (无线)
 #endif

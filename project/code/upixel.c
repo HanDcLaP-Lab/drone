@@ -149,8 +149,7 @@ void upixels_calc_velocity(float current_height_cm)
     upixels_data.opt_vel_x = (trans_body_x * eff_height_cm * 100.0f) / dt_us;
     upixels_data.opt_vel_y = (trans_body_y * eff_height_cm * 100.0f) / dt_us;
 
-    // 4. 一阶低通滤波去毛刺 (alpha 越小滤波越强，0.3 约等效 5Hz 截止 @100Hz 采样)
-    #define FLOW_LPF_ALPHA  0.3f
+    // 4. 一阶低通滤波去毛刺
     upixels_data.filt_vel_x += FLOW_LPF_ALPHA * (upixels_data.opt_vel_x - upixels_data.filt_vel_x);
     upixels_data.filt_vel_y += FLOW_LPF_ALPHA * (upixels_data.opt_vel_y - upixels_data.filt_vel_y);
 }

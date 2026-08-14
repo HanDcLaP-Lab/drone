@@ -93,7 +93,7 @@ int main(void) {
         Board_Comm_Init();
 #endif
         small_driver_uart_init();
-        small_driver_get_speed();
+        //small_driver_get_speed();
         Flight_Control_Init();
         dataC.camera_offset_x = CAM_OFFSET_X;
         dataC.camera_offset_y = CAM_OFFSET_Y;
@@ -229,6 +229,7 @@ int main(void) {
         if (periodic_print_pending) {
             periodic_print_pending = 0;
             //wireless_uart_output_car_target_dist();
+            //wireless_uart_output_driver_status();
         }
         if (merge_print_pending) {
             merge_print_pending = 0;
