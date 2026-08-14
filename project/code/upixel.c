@@ -120,27 +120,34 @@ void upixels_calc_velocity(float current_height_cm)
     float eff_height_cm = current_height_cm;
 #endif
 
-    // 2. 陀螺仪角速度解耦补偿 (Gyro Compensation):
-    //    消除机体纯旋转造成的伪光流位移
-    //    imu_data.gpitch (deg/s): 绕Y轴俯仰 -> 对应光流X轴位移
-    //    imu_data.groll  (deg/s): 绕X轴横滚 -> 对应光流Y轴位移
-    //    旋转积分(rad*10000) = (deg/s * pi / 180) * (dt_us * 1e-6) * 10000 = deg/s * dt_us * (pi / 18000)
+    // 2. 轴向映射与陀螺仪角速度解耦补偿 (Gyro Compensation):
+    //    消除机体旋转造成的伪光流位移，并将光流轴系精准映射到机体轴系 (NED: X+前, Y+右)
+    //    物理几何映射关系:
+    //      - 光流 Y+ 朝后 (机体 X-): 前后平移由 -flow_y 测量; 机头抬起(gpitch>0)使视野前移误测出正向假位移，需加上 gpitch 补偿
+    //      - 光流 X+ 朝右 (机体 Y+): 左右平移由 flow_x 测量; 左侧抬起(groll>0)使视野左移误测出正向假位移，需减去 groll 补偿
+    //    角度单位转换: (deg/s * pi / 180) * (dt_us * 1e-6) * 10000 = deg/s * dt_us * (pi / 18000)
     #define GYRO_TO_FLOW_FACTOR (3.14159265f / 18000.0f)
+
 #if OPT_GYRO_COMP_ENABLE
-    float rot_flow_x = OPT_GYRO_SIGN_X * imu_data.gpitch * dt_us * GYRO_TO_FLOW_FACTOR;
-    float rot_flow_y = OPT_GYRO_SIGN_Y * imu_data.groll  * dt_us * GYRO_TO_FLOW_FACTOR;
-    float trans_flow_x = (float)upixels_data.flow_x_integral - rot_flow_x;
-    float trans_flow_y = (float)upixels_data.flow_y_integral - rot_flow_y;
+    // 旋转在机体各轴产生的假角位移量
+    float rot_body_x = -OPT_GYRO_SIGN_PITCH * imu_data.gpitch * dt_us * GYRO_TO_FLOW_FACTOR;
+    float rot_body_y =  OPT_GYRO_SIGN_ROLL  * imu_data.groll  * dt_us * GYRO_TO_FLOW_FACTOR;
+
+    // 净平移角位移 (已扣除旋转干扰，并转换为机体系: X+前, Y+右)
+    // trans_body_x = -flow_y - (-gpitch * dt * scale) = -flow_y + gpitch * dt * scale
+    // trans_body_y =  flow_x - (groll * dt * scale)   =  flow_x - groll * dt * scale
+    float trans_body_x = OPT_SIGN_BODY_X * (-(float)upixels_data.flow_y_integral - rot_body_x);
+    float trans_body_y = OPT_SIGN_BODY_Y * ((float)upixels_data.flow_x_integral - rot_body_y);
 #else
-    float trans_flow_x = (float)upixels_data.flow_x_integral;
-    float trans_flow_y = (float)upixels_data.flow_y_integral;
+    float trans_body_x = OPT_SIGN_BODY_X * (-(float)upixels_data.flow_y_integral);
+    float trans_body_y = OPT_SIGN_BODY_Y * (float)upixels_data.flow_x_integral;
 #endif
 
-    // 3. 计算物理平移速度:
-    //    V (cm/s) = (trans_flow / 10000) * eff_height_cm / (dt_us / 1000000)
-    //             = (trans_flow * eff_height_cm * 100) / dt_us
-    upixels_data.opt_vel_x = (trans_flow_x * eff_height_cm * 100.0f) / dt_us;
-    upixels_data.opt_vel_y = (trans_flow_y * eff_height_cm * 100.0f) / dt_us;
+    // 3. 计算机体系物理平移速度 (cm/s, opt_vel_x=机体前向速度, opt_vel_y=机体右向速度):
+    //    V (cm/s) = (trans_body / 10000) * eff_height_cm / (dt_us / 1000000)
+    //             = (trans_body * eff_height_cm * 100) / dt_us
+    upixels_data.opt_vel_x = (trans_body_x * eff_height_cm * 100.0f) / dt_us;
+    upixels_data.opt_vel_y = (trans_body_y * eff_height_cm * 100.0f) / dt_us;
 
     // 4. 一阶低通滤波去毛刺 (alpha 越小滤波越强，0.3 约等效 5Hz 截止 @100Hz 采样)
     #define FLOW_LPF_ALPHA  0.3f
