@@ -24,46 +24,52 @@ static float ff_event_deg = -1.0f;  // 已应用前馈事件的角度 (deg, -1=�
 static float ff_off_x = 0.0f;       // 事件时刻的地面系偏移向量X (cm)
 static float ff_off_y = 0.0f;       // 事件时刻的地面系偏移向量Y (cm)
 static uint32_t ff_event_ms = 0;    // 事件时刻 (dataC.pit0_cnt, ms)
-float ff_disp_dir_deg = 0.0f;       // 当前前馈方向 (deg, 地面系), 供 CM7_1 屏幕显示
+float ff_disp_dir_deg = 0.0f;       // 当前前馈方向 (deg, 机体系 0°=机头), 供 CM7_1 屏幕显示
 float ff_disp_remain_cm = 0.0f;     // 当前前馈剩余偏移量 (cm, 0=无前馈), 供 CM7_1 屏幕显示
 
 /**
  * @brief 小车方向前馈: 收到小车前馈角 (上行 ff_deg) 时, 将小车位置向该方向抛出
  *        FF_THROW_DIST_CM (1m), 在 FF_CONVERGE_MS (1s) 内线性收敛回真实小车位置,
  *        残余误差由位置环 KI 承接 (交棒)。
- * 前馈始终只是叠加在实时小车坐标上的一个向量 (地面系), 不替代小车位置;
+ * 前馈始终只是叠加在实时小车坐标上的一个向量 (地面系方向, 随帧旋入机体系), 不替代小车位置;
  * 启用条件由调用方保证: 仅小车可见 (locked 1/3), 即未触发丢失回平。
  */
 static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y, float snapshot_yaw) {
 #if defined(CY_CORE_CM7_0) && CAR_FF_ENABLE
     // 注: duplex_comm.c 仅编入 CM7_0 构建, CM7_1 无 duplex_uplink_data 可链, 故函数体限制在 CM7_0。
-    // ff_deg 已是无人机系 (无人机固定地面系, X前Y右, 0°=无人机前向, 顺时针正) 下的方向角,
-    // 小车端已换算 ((小车yaw-无人机yaw)-α), 此处直接生成地面系向量, 无需再与任何 yaw 组合。
+    // ff_deg 为无人机地面系方向角 (X前Y右, 0°=上电机头, 顺时针正): 小车端按 (小车yaw-α) 换算上发,
+    // 本帧按快照偏航旋入机体系后叠加到 car_pos (机体系), 与位置环的帧处理一致。
     float ff_deg = duplex_uplink_data[3];   // 上行前馈角 (deg, 0=无前馈)
     if (ff_deg != 0.0f && ff_deg != ff_event_deg) {
         // 新前馈事件: 仅在此时抛一次偏移 (小车确认前重传的相同角度不重复触发)
         ff_event_deg = ff_deg;
         ff_event_ms = dataC.pit0_cnt;
         float rad = ff_deg * 3.14159265f / 180.0f;
-        ff_off_x = cosf(rad) * FF_THROW_DIST_CM;
+        ff_off_x = cosf(rad) * FF_THROW_DIST_CM;   // 地面系偏移向量 (事件方向, 世界固定)
         ff_off_y = sinf(rad) * FF_THROW_DIST_CM;
     }
-    // 线性收敛: 事件后 FF_CONVERGE_MS 内衰减到 0
+    // 收敛: 事件后 FF_CONVERGE_MS 内衰减到 0 (世界方向恒定, 每帧旋入当前机体系);
+    // 抛出量先经 FF_THROW_RAMP_MS 斜坡升至峰值, 消除阶跃对位置环/姿态链的冲击 (原地下坠源)
     uint32_t elapsed = dataC.pit0_cnt - ff_event_ms;
     float k = 1.0f - (float)elapsed / (float)FF_CONVERGE_MS;
     if (k < 0.0f) k = 0.0f;
-    float earth_off_x = ff_off_x * k;
-    float earth_off_y = ff_off_y * k;
+    float ramp = (float)elapsed / (float)FF_THROW_RAMP_MS;
+    if (ramp > 1.0f) ramp = 1.0f;
+    float throw_scale = k * ramp;
+    float earth_off_x = ff_off_x * throw_scale;
+    float earth_off_y = ff_off_y * throw_scale;
 
-    // 地面系 → 机体系 (按小车位置快照偏航旋转), 叠加到实时小车坐标上
+    // 地面系 → 机体系 (按本帧快照偏航), 叠加到机体系小车坐标
     float yaw_rad = VISION_EARTH_YAW_DEG(snapshot_yaw) * 3.14159265f / 180.0f;
     float cos_yaw = cosf(yaw_rad);
     float sin_yaw = sinf(yaw_rad);
     *car_pos_x += earth_off_x * cos_yaw + earth_off_y * sin_yaw;
     *car_pos_y += -earth_off_x * sin_yaw + earth_off_y * cos_yaw;
 
-    // 供 CM7_1 屏幕绘制: 方向 + 剩余长度 (随收敛缩短)
-    ff_disp_dir_deg = (k > 0.0f) ? ff_deg : 0.0f;
+    // 供 CM7_1 屏幕绘制: 方向 = 事件地面系方向旋入机体系 (= 飞行实际施加方向, 屏幕映射为机体系);
+    // 上行值仅在车端发送期非零, 若取上行值, 整个 1s 收敛期几乎都读到 0=无前馈,
+    // 短线会被画成固定 0° 机头方向。
+    ff_disp_dir_deg = (k > 0.0f) ? (ff_event_deg - VISION_EARTH_YAW_DEG(snapshot_yaw)) : 0.0f;
     ff_disp_remain_cm = sqrtf(earth_off_x * earth_off_x + earth_off_y * earth_off_y);
 #else
     (void)car_pos_x; (void)car_pos_y; (void)snapshot_yaw;   // CM7_1 构建或前馈关闭时空实现

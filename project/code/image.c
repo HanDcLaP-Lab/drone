@@ -726,14 +726,13 @@ void image_processing_loop(void) {
     uint16_t h = cam_down.height;
 
     // 3次膨胀 (交替使用 bin 和 tmp 缓冲区，链式传递)
-    //dilate_pass(bin, tmp, w, h);  // 1: bin -> tmp
-    // dilate_pass(tmp, bin, w, h);  // 2: tmp -> bin
-    // dilate_pass(bin, tmp, w, h);  // 3: bin -> tmp
+    dilate_pass(bin, tmp, w, h);  // 1: bin -> tmp
+    //dilate_pass(tmp, bin, w, h);  // 2: tmp -> bin
+    //dilate_pass(bin, tmp, w, h);  // 3: bin -> tmp
     // // 3次腐蚀 (交替使用 bin 和 tmp 缓冲区，最终输出至 bin)
-    // erode_pass(tmp, bin, w, h);   // 1: tmp -> bin
-    // erode_pass(bin, tmp, w, h);   // 2: bin -> tmp
-    erode_pass(bin, tmp, w, h);   // 3: tmp -> bin
-    bin = tmp;
+    //erode_pass(tmp, bin, w, h);   // 1: tmp -> bin
+    //erode_pass(bin, tmp, w, h);   // 2: bin -> tmp
+    erode_pass(tmp, bin, w, h);   // 3: tmp -> bin
 
     // 3. 连通域提取与质心、特征值计算一次性完成
     extract_components(&cam_down, visited_buffer);

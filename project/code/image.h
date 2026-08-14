@@ -60,7 +60,7 @@
 #define FOV_RADIUS (FOV_DIAMETER / 2.0f)
 #define FOV_RADIUS_SQ (FOV_RADIUS * FOV_RADIUS)
 
-#define MORPH_MASK_DIAMETER 40.0f  // [新增] 形态学有效区域圆直径(限制边缘噪声膨胀)
+#define MORPH_MASK_DIAMETER 70.0f  // [新增] 形态学有效区域圆直径(限制边缘噪声膨胀)
 #define MORPH_MASK_RADIUS (MORPH_MASK_DIAMETER / 2.0f)
 #define MORPH_MASK_RADIUS_SQ (MORPH_MASK_RADIUS * MORPH_MASK_RADIUS)
 
@@ -69,7 +69,7 @@
 #define EDGE_CLEAN_RADIUS_SQ (EDGE_CLEAN_RADIUS * EDGE_CLEAN_RADIUS)
 
 #define CAR_MAX_DISTANCE  200.0f  //小车最大距离，超过不认为是小车
-#define TARGET_MAX_DISTANCE  2500.0f  //信标最大距离(距小车矫正后地面位置，小车不可见时回退距无人机投影)，超过不认为是信标
+#define TARGET_MAX_DISTANCE  400.0f  //信标最大距离(距小车矫正后地面位置，小车不可见时回退距无人机投影)，超过不认为是信标
 // =========================================================
 // [新增] 面积动态补偿参数 (解决边缘灯光变小的问题)
 // =========================================================
@@ -113,13 +113,13 @@
 #define DIST_COMP_SCALE         100.0f  // 距离补偿基准距离 (cm)
 
 // ================= 小车识别 =================
-#define CAR_MIN_AREA            15U     // 小车最小连通域面积
+#define CAR_MIN_AREA            6U     // 小车最小连通域面积
 #define CAR_MAX_CENTER_DIST_SQ  3600.0f // 小车距画面中心最大距离平方 (60²)
 
 // ================= 信标识别 =================
 #define SMALL_BLOB_DIRECT_AREA  20      // 小光斑面积上限 (≤此值直接通过形状筛选)
 #define DEGENERATE_RATIO_MARK   99.0f   // 退化标记排除值 (ratio==100视为无效)
-#define TARGET_AREA_BASE        5.0f    // 信标动态面积门槛基数 (0m 处门槛 = 此值)
+#define TARGET_AREA_BASE        15.0f    // 信标动态面积门槛基数 (0m 处门槛 = 此值)
 #define TARGET_AREA_FADE_DIST   100.0f  // 面积门槛随距离线性衰减到 0 的距离 (cm)
 // --- 摄像头对象结构体 ---
 typedef struct {

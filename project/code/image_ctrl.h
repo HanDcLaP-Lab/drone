@@ -4,13 +4,15 @@
 
 // =================== 视觉前馈宏定义 ===================
 #define CAR_FF_ENABLE           1       // 开启/关闭小车方向前馈 (1:开启, 0:关闭)
-#define FF_THROW_DIST_CM        100.0f  // 收到前馈角时向该方向抛出的偏移距离 (cm, 1m)
-#define FF_CONVERGE_MS          1000U   // 前馈偏移线性收敛到真实小车位置的时间 (ms, 交棒位置环KI)
+#define FF_THROW_DIST_CM        130.0f  // 收到前馈角时向该方向抛出的偏移距离峰值 (cm)
+#define FF_CONVERGE_MS          2000U   // 前馈偏移线性收敛到真实小车位置的时间 (ms, 交棒位置环KI)
+#define FF_THROW_RAMP_MS        300U    // 抛出量斜坡上升时间 (ms): 事件后线性升至峰值,
+                                        // 避免 50cm 阶跃对位置环/姿态链的冲击 (原地下坠源)
 
 #define ROTATE_RECOVER_TIME 1000
 
 // 从无人机上电yaw零点换算到小车固定地面系时减去的初始夹角。
-#define VISION_INITIAL_YAW_OFFSET_DEG 0.0f  //无人机相对小车向逆时针角度时为正
+#define VISION_INITIAL_YAW_OFFSET_DEG 180.0f  //无人机相对小车向逆时针角度时为正
 #define VISION_EARTH_YAW_DEG(yaw_deg) ((yaw_deg) - VISION_INITIAL_YAW_OFFSET_DEG)
 
 // =================== 目标丢失容忍宏定义 ===================
@@ -35,8 +37,8 @@
 void Flight_Hover_Control_Task(void);
 
 // =================== 前馈偏移对外接口 ===================
-// 方向: 无人机地面系 (0°=前向, 顺时针为正, 与上行 ff_deg 一致)
+// 显示方向: 机体系 (0°=当前机头, 顺时针正, 已按快照偏航旋入, 与飞行实际施加一致)
 void Car_Feedforward_Reset(void);         // 复位前馈偏移状态 (丢失回平/视觉失联时调用)
-extern float ff_disp_dir_deg;             // 当前前馈方向角 (deg, 0=无前馈)   → M7_0_data_send 下传 CM7_1 屏幕绘制
+extern float ff_disp_dir_deg;             // 当前前馈方向角 (deg, 机体系 0°=机头, 0=无前馈) → M7_0_data_send 下传 CM7_1 屏幕绘制
 extern float ff_disp_remain_cm;           // 当前前馈剩余偏移量 (cm, 0=无前馈) → 同上
 #endif

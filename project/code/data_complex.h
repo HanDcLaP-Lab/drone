@@ -39,7 +39,7 @@
 #define S0_TARGET_YAW     11  // flight_target.target_yaw   目标偏航角 (deg)
 #define S0_OPT_COUNT_500MS 12 // upixels_count_500ms     500ms内光流更新次数
 #define S0_DEBUG_ERR_Y    13  // dataC.debug_earth_err_y    调试: 地面误差Y
-#define S0_FF_DIR         14  // 前馈方向角 (deg, 地面系, 0°=前顺时针正; 剩余量为0时无效) ← ff_disp_dir_deg
+#define S0_FF_DIR         14  // 前馈方向角 (deg, 机体系 0°=机头顺时针正; 剩余量为0时无效) ← ff_disp_dir_deg
 #define S0_FF_REMAIN      15  // 前馈剩余偏移量 (cm, 0=无前馈) ← ff_disp_remain_cm
 #define S0_OPT_VEL_X      16  // upixels_data.opt_vel_x     光流原始速度X (cm/s)
 #define S0_OPT_VEL_Y      17  // upixels_data.opt_vel_y     光流原始速度Y (cm/s)
