@@ -1,9 +1,9 @@
 #include "upixel.h"
 
 upixels_data_t upixels_data = {0};
-static uart_index_enum upixels_uart_idx;
-float opt_vel_x = 0.0f;
-float opt_vel_y = 0.0f;
+volatile uint8_t upixels_frame_ready = 0; // 完整帧解析就绪标志
+volatile uint16_t upixels_frame_count = 0; // 累计接收帧数
+volatile uint16_t upixels_count_500ms = 0; // 过去 500ms 内的更新次数
 /**
  * @brief 光流模块初始化
  * @param uart_n   使用的UART模块号
@@ -91,20 +91,76 @@ uint8 upixels_parse_byte(uint8 data)
  */
 void upixels_calc_velocity(float current_height_cm)
 {
-    // 数据不可用或时间为0时，跳过解算防异常
-    if (upixels_data.valid != 0xF5 || upixels_data.integration_timespan == 0) {
+    // 门限保护：状态不可用 (valid==0) 或 高度低于 80cm 时，主动归零并重置滤波器
+    if (upixels_data.valid == 0 || current_height_cm < OPT_MIN_VALID_HEIGHT_CM) {
+        upixels_data.opt_vel_x = 0.0f;
+        upixels_data.opt_vel_y = 0.0f;
+        upixels_data.filt_vel_x = 0.0f;
+        upixels_data.filt_vel_y = 0.0f;
         return;
     }
     
-    // 贴地保护：防止起飞前或降落时高度为0导致速度异常发散
-    if (current_height_cm < 10.0f) {
-        current_height_cm = 10.0f; 
+    // 积分时间为 0 时跳过解算防除零
+    if (upixels_data.integration_timespan == 0) {
+        return;
     }
 
-    // 代入化简后的公式：V (cm/s) = (integral * H * 100) / timespan
-    upixels_data.opt_vel_x = ((float)upixels_data.flow_x_integral * current_height_cm * 100.0f) / (float)upixels_data.integration_timespan;
-    upixels_data.opt_vel_y = ((float)upixels_data.flow_y_integral * current_height_cm * 100.0f) / (float)upixels_data.integration_timespan;
+    float dt_us = (float)upixels_data.integration_timespan;
+
+    // 1. 姿态角倾斜修正 (Tilt Compensation): 修正镜头法向对地实际斜距
+#if OPT_TILT_COMP_ENABLE
+    float roll_rad = imu_data.roll * (3.14159265f / 180.0f);
+    float pitch_rad = imu_data.pitch * (3.14159265f / 180.0f);
+    float cos_tilt = cosf(roll_rad) * cosf(pitch_rad);
+    if (cos_tilt < 0.707f) {
+        cos_tilt = 0.707f; // 倾角 > 45° 时截断保护
+    }
+    float eff_height_cm = current_height_cm / cos_tilt;
+#else
+    float eff_height_cm = current_height_cm;
+#endif
+
+    // 2. 陀螺仪角速度解耦补偿 (Gyro Compensation):
+    //    消除机体纯旋转造成的伪光流位移
+    //    imu_data.gpitch (deg/s): 绕Y轴俯仰 -> 对应光流X轴位移
+    //    imu_data.groll  (deg/s): 绕X轴横滚 -> 对应光流Y轴位移
+    //    旋转积分(rad*10000) = (deg/s * pi / 180) * (dt_us * 1e-6) * 10000 = deg/s * dt_us * (pi / 18000)
+    #define GYRO_TO_FLOW_FACTOR (3.14159265f / 18000.0f)
+#if OPT_GYRO_COMP_ENABLE
+    float rot_flow_x = OPT_GYRO_SIGN_X * imu_data.gpitch * dt_us * GYRO_TO_FLOW_FACTOR;
+    float rot_flow_y = OPT_GYRO_SIGN_Y * imu_data.groll  * dt_us * GYRO_TO_FLOW_FACTOR;
+    float trans_flow_x = (float)upixels_data.flow_x_integral - rot_flow_x;
+    float trans_flow_y = (float)upixels_data.flow_y_integral - rot_flow_y;
+#else
+    float trans_flow_x = (float)upixels_data.flow_x_integral;
+    float trans_flow_y = (float)upixels_data.flow_y_integral;
+#endif
+
+    // 3. 计算物理平移速度:
+    //    V (cm/s) = (trans_flow / 10000) * eff_height_cm / (dt_us / 1000000)
+    //             = (trans_flow * eff_height_cm * 100) / dt_us
+    upixels_data.opt_vel_x = (trans_flow_x * eff_height_cm * 100.0f) / dt_us;
+    upixels_data.opt_vel_y = (trans_flow_y * eff_height_cm * 100.0f) / dt_us;
+
+    // 4. 一阶低通滤波去毛刺 (alpha 越小滤波越强，0.3 约等效 5Hz 截止 @100Hz 采样)
+    #define FLOW_LPF_ALPHA  0.3f
+    upixels_data.filt_vel_x += FLOW_LPF_ALPHA * (upixels_data.opt_vel_x - upixels_data.filt_vel_x);
+    upixels_data.filt_vel_y += FLOW_LPF_ALPHA * (upixels_data.opt_vel_y - upixels_data.filt_vel_y);
 }
+/**
+ * @brief 主循环中调用的光流速度计算消费函数
+ * @param current_height_cm 当前高度
+ */
+void upixels_poll_and_calc(float current_height_cm)
+{
+    // 当中断完成一整帧的流式解析后置位，主循环消费并解算速度
+    if (upixels_frame_ready)
+    {
+        upixels_frame_ready = 0; // 清除新帧标志位
+        upixels_calc_velocity(current_height_cm);
+    }
+}
+
 /**
  * @brief 在主循环中高频调用的数据拉取与解析函数
  */
@@ -112,7 +168,7 @@ void upixels_get_data_loop(void)
 {
     uint8 rx_data;
     // 不断查询是否收到新数据，如果有则送入状态机解析
-    while (uart_query_byte(upixels_uart_idx, &rx_data)) 
+    while (uart_query_byte(UPIXEL_UART, &rx_data)) 
     {
         upixels_parse_byte(rx_data);
     }

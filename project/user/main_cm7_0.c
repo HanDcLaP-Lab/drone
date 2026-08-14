@@ -51,7 +51,7 @@
 
 #define LED1 (P19_0)
 #define UART_KEY (P19_2)
-#define DEBUG_PROBE (P02_0)  // 示波器探头: 高=ISR执行中
+#define DEBUG_PROBE (P02_3)  // 示波器探头: 高=ISR执行中 (P02_0 已让给光流 UART5_RX)
 
 float float_buffer[UART_DATA_LENGTH] = {0};
 
@@ -83,6 +83,7 @@ int main(void) {
         // 2. 初始化底层传感器与执行器
         imu_init();
         tof_init();
+        upixels_init();  // 光流模块 LC-302-3C (UART3 @19200)
         wireless_uart_init_();
         seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
 #if DUPLEX_SWITCH
@@ -243,6 +244,20 @@ int main(void) {
         // DUPLEX_PRINT_PERIOD_MS 限频, 见 duplex_comm.c。
         // printf 阻塞式, 一行约占住主循环 6ms, 正常运行默认不开。
         //Duplex_Comm_Print_Stats();
+
+        // ============ 光流接收解析 + 速度解算 + 1秒有线打印 ============
+        upixels_poll_and_calc(imu_data.z);  // 检测中断标志位，有新数据时拉取解析并解算物理速度
+
+        static uint32_t last_flow_print_ms = 0;
+        if ((uint32_t)(dataC.pit0_cnt - last_flow_print_ms) >= 1000U) {
+            last_flow_print_ms = dataC.pit0_cnt;
+            uint16_t count_1s = upixels_frame_count;
+            upixels_frame_count = 0; // 重置开始下一个 1s 统计周期
+            upixels_count_500ms = count_1s; // 同步更新供屏幕显示
+
+            printf("%d\r\n", count_1s);
+        }
+        // ============ 光流接收解析 + 速度解算 + 1秒有线打印结束 ============
 
         gpio_low(DEBUG_PROBE);
         system_delay_us(400); // 

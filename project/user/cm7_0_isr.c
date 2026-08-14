@@ -39,7 +39,7 @@
 #include "zf_common_headfile.h"
 #include "debug_data.h"
 
-#define DEBUG_PROBE (P02_0)
+#define DEBUG_PROBE (P02_3)
 uint16_t target = 0;
 uint16_t has_stopped = 0;
 
@@ -249,11 +249,18 @@ void uart4_isr (void)
 
 void uart5_isr (void)
 {
-    if(uart_isr_mask(UART_5))            // 串口5接收中断
+    if(uart_isr_mask(UART_5))            // 串口5接收中断 — 光流模块 LC-302-3C
     {
-        
-        
-       
+        uint8 rx_data;
+        // 即时拉取字节入状态机，防止逐飞库16字节FIFO满溢被清空丢包 (单字节状态机耗时<100ns)
+        while(uart_query_byte(UPIXEL_UART, &rx_data))
+        {
+            if(upixels_parse_byte(rx_data))
+            {
+                upixels_frame_count++;   // 递增统计帧计数
+                upixels_frame_ready = 1; // 通知主循环消费解算物理速度
+            }
+        }
     }
     else                                // 串口5发送中断
     {

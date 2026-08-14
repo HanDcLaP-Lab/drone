@@ -109,10 +109,14 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
     data_out[S0_TARGET_ROLL]  = flight_target.target_roll;
     data_out[S0_TARGET_PITCH] = flight_target.target_pitch;
     data_out[S0_TARGET_YAW]   = flight_target.target_yaw;
-    data_out[S0_DEBUG_ERR_X]  = dataC.debug_earth_err_x;
+    data_out[S0_OPT_COUNT_500MS] = (float)upixels_count_500ms;
     data_out[S0_DEBUG_ERR_Y]  = dataC.debug_earth_err_y;
     data_out[S0_FF_DIR]    = ff_disp_dir_deg;    // [新增] 前馈方向 (CM7_1 屏幕绘制)
     data_out[S0_FF_REMAIN] = ff_disp_remain_cm;  // [新增] 前馈剩余偏移量 (CM7_1 屏幕绘制)
+    data_out[S0_OPT_VEL_X]  = upixels_data.opt_vel_x;
+    data_out[S0_OPT_VEL_Y]  = upixels_data.opt_vel_y;
+    data_out[S0_OPT_FILT_X] = upixels_data.filt_vel_x;
+    data_out[S0_OPT_FILT_Y] = upixels_data.filt_vel_y;
 
 }
 

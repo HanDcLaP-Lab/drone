@@ -430,6 +430,13 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
         merge_mark_active = 0;
     }
 
+    // 检测页面切换，切页时全屏清空一次，避免残影重叠
+    static uint8_t last_rendered_page_idx = 0xFF;
+    if (display_page_idx != last_rendered_page_idx) {
+        ips200_clear();
+        last_rendered_page_idx = display_page_idx;
+    }
+
     // ================= [新增] 页面2: 连通域详情模式状态机 =================
     {
         // 按键经 ISR 粘滞旗标送达 (key_switch.c), 避免20ms显示帧漏检10ms短按事件
@@ -466,6 +473,7 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
         return;
     }
 
+  if(display_page_idx != 3) {
     // 将底层的 0/1 放大为 0/255 以便屏幕显示
     for(int i = 0; i < MT9V03X_H * MT9V03X_W; i++) {
         image_copy[0][i] = cam_down.binarized_image[i] ? 255 : 0;
@@ -592,9 +600,10 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
             }
         }
     }
+  } // if(display_page_idx != 3)
     
-    // 显示页面号 (页面2的指示器移到屏幕底部, 避免压住分屏图像)
-    if(display_page_idx != 2)
+    // 显示页面号 (页面2/3的指示器在各自页面块内处理)
+    if(display_page_idx != 2 && display_page_idx != 3)
     {
         ips200_show_string(160, 16*10, "P:");
         ips200_show_int(176, 16*10, display_page_idx, 1);
@@ -672,5 +681,34 @@ void display_image_debug_display(float car_x, float car_y, uint8_t car_valid, fl
         ips200_show_int(176, 16*18, display_page_idx, 1);
         ips200_show_string(160, 16*19, "M:");
         ips200_show_int(176, 16*19, merge_mark_active, 1);
+    }
+    // 页面3：光流数据
+    else if(display_page_idx == 3)
+    {
+        ips200_show_string(0, 16*0, "== OptFlow ==");
+
+        ips200_show_string(0, 16*2, "Vx:");
+        ips200_show_float(40, 16*2, share_data_from_0[S0_OPT_VEL_X], 4, 1);
+        ips200_show_string(120, 16*2, "Vy:");
+        ips200_show_float(160, 16*2, share_data_from_0[S0_OPT_VEL_Y], 4, 1);
+
+        ips200_show_string(0, 16*3, "Fx:");
+        ips200_show_float(40, 16*3, share_data_from_0[S0_OPT_FILT_X], 4, 1);
+        ips200_show_string(120, 16*3, "Fy:");
+        ips200_show_float(160, 16*3, share_data_from_0[S0_OPT_FILT_Y], 4, 1);
+
+        ips200_show_string(0, 16*5, "H:");
+        ips200_show_float(40, 16*5, share_data_from_0[S0_IMU_HEIGHT], 4, 1);
+        ips200_show_string(120, 16*5, "cm");
+
+        ips200_show_string(0, 16*7, "Cnt500:");
+        ips200_show_int(64, 16*7, (int)share_data_from_0[S0_OPT_COUNT_500MS], 4);
+
+        ips200_show_string(0, 16*8, "FPS:");
+        ips200_show_int(40, 16*8, (int)(share_data_from_0[S0_OPT_COUNT_500MS] * 2.0f), 4);
+        ips200_show_string(80, 16*8, "Hz");
+
+        ips200_show_string(160, 16*18, "P:");
+        ips200_show_int(176, 16*18, display_page_idx, 1);
     }
 }
