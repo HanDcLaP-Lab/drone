@@ -256,7 +256,7 @@ int main(void) {
             upixels_frame_count = 0; // 重置开始下一个 1s 统计周期
             upixels_count_500ms = count_1s; // 同步更新供屏幕显示
 
-            printf("%d\r\n", count_1s);
+            //printf("%d\r\n", count_1s);
         }
         // ============ 光流接收解析 + 速度解算 + 1秒有线打印结束 ============
 

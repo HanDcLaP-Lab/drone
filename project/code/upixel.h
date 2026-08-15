@@ -15,8 +15,10 @@
 #define OPT_TILT_COMP_ENABLE      1      // 1: 启用机体倾角高度修正
 
 // 符号微调系数
-#define OPT_SIGN_BODY_X           (1.0f) // 机体前向速度符号
-#define OPT_SIGN_BODY_Y           (1.0f) // 机体右向速度符号
+// 注意: 光流方程平移流 = -V/R (地面纹理相对相机朝机体运动反方向移动), 故需取负恢复实际速度。
+// 2026-xx: 由 +1 改为 -1, 修复前馈中光流速度方向相反、由"补偿"变"助长"的问题。
+#define OPT_SIGN_BODY_X           (-1.0f) // 机体前向速度符号
+#define OPT_SIGN_BODY_Y           (-1.0f) // 机体右向速度符号
 #define OPT_GYRO_SIGN_PITCH       (1.0f) // 俯仰角速度补偿符号
 #define OPT_GYRO_SIGN_ROLL        (1.0f) // 横滚角速度补偿符号
 // 一阶低通滤波去毛刺 (alpha 越小滤波越强)
