@@ -34,6 +34,9 @@ Nonline_PID_t pid_image_y;
 PID_t pid_g_roll;
 PID_t pid_g_pitch;
 PID_t pid_g_yaw;
+
+PID_t pid_opt_vel_x;
+PID_t pid_opt_vel_y;
 static volatile uint32_t landing_start_ms = 0;
 static volatile uint32_t landing_tof_seq = 0;
 static volatile float landing_start_height = 0.0f;
@@ -72,6 +75,10 @@ void Flight_Control_Init(void) {
     Nonline_PID_Init(&pid_image_x, 0.094f, 0.018f, 0.073f, 0.0003f, 50, MAX_TILT_ANGLE , 7.0f);
     Nonline_PID_Init(&pid_image_y, 0.094f, 0.018f, 0.073f, 0.0003f, 50, MAX_TILT_ANGLE , 7.0f);
 
+    // 光流速度环 (低高度定点外环, 输出目标倾角给角度环/角速度环)
+    PID_Init(&pid_opt_vel_x, 0.10f, 0.02f, 0.0f, 100, MAX_TILT_ANGLE, 7.0f);
+    PID_Init(&pid_opt_vel_y, 0.10f, 0.02f, 0.0f, 100, MAX_TILT_ANGLE, 7.0f);
+
 }
 
 void Flight_Unlock(void) {
@@ -92,6 +99,8 @@ void Flight_Unlock(void) {
     PID_Reset(&pid_g_yaw);
     Nonline_PID_Reset(&pid_image_x); // [新增] 重置视觉PID，防止积分累积
     Nonline_PID_Reset(&pid_image_y);
+    PID_Reset(&pid_opt_vel_x); // [新增] 重置光流速度环PID
+    PID_Reset(&pid_opt_vel_y);
 
     // 锁定当前航向为目标航向，防止解锁即转圈
     flight_target.target_yaw = imu_data.yaw;
@@ -196,14 +205,14 @@ static void Flight_State_Update(void) {
 }
 
 /**
- * @brief 高度环油门输出 (倾角补偿)
- * @return 油门值 (base_throttle × 倾角补偿)
+ * @brief 高度环修正量输出 (倾角补偿)
+ * @return 修正量 (tof_base_throttle × 倾角补偿); 悬停基准由各电机校准 PWM 在混控中叠加
  * @note  高度 PID 已移至 tof_update() 内部, 响应数据就绪 + 实测 dt
  *        此处仅每 1.25ms 更新倾角补偿以匹配当前姿态
  */
 static int16_t Flight_Control_Height(void) {
-    float roll_rad = imu_data.roll * (PI / 180.0f);
-    float pitch_rad = imu_data.pitch * (PI / 180.0f);
+    float roll_rad = Calibration_Get_Corrected_Roll() * (PI / 180.0f);
+    float pitch_rad = Calibration_Get_Corrected_Pitch() * (PI / 180.0f);
     float cos_tilt = cosf(roll_rad) * cosf(pitch_rad);
     float compensation_factor = 1.0f;
     if (cos_tilt > 0.1f) {
@@ -214,9 +223,9 @@ static int16_t Flight_Control_Height(void) {
 }
 
 void Flight_Control_Angle(void) {
-    // 1. 计算误差 (绝对系)
-    float roll_error = flight_target.target_roll - imu_data.roll;
-    float pitch_error = flight_target.target_pitch - imu_data.pitch;
+    // 1. 计算误差 (绝对系); 校准完成后以记录的 roll/pitch 平均值为新零点
+    float roll_error = flight_target.target_roll - Calibration_Get_Corrected_Roll();
+    float pitch_error = flight_target.target_pitch - Calibration_Get_Corrected_Pitch();
     float yaw_error = flight_target.target_yaw - imu_data.yaw;
 
     // 2. PID 计算 (输出即视为机体角速度目标，基于小角度假设)
@@ -256,18 +265,26 @@ static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pi
     motor_offset.rf = (int16_t)( PITCH_OFFSET - ROLL_OFFSET);
     motor_offset.lb = (int16_t)(-PITCH_OFFSET + ROLL_OFFSET);
     motor_offset.rb = (int16_t)(-PITCH_OFFSET - ROLL_OFFSET);
+
+    // 校准完成后直接用各电机平均 PWM 作为基准, 再叠加高度环修正量;
+    // 未完成时 Calibration_Get_Hover_PWM()==HOVER_THROTTLE, 故与当前逻辑完全一致
+    int16_t base_lf = (int16_t)(Calibration_Get_Hover_PWM(0) + base_throttle);
+    int16_t base_rf = (int16_t)(Calibration_Get_Hover_PWM(1) + base_throttle);
+    int16_t base_lb = (int16_t)(Calibration_Get_Hover_PWM(2) + base_throttle);
+    int16_t base_rb = (int16_t)(Calibration_Get_Hover_PWM(3) + base_throttle);
+
     // 混控算法 (X型四旋翼)
     // LF (左前, CW): Base + Pitch + Roll - Yaw
-    motor_out.lf = (int16_t)((base_throttle + out_pitch + out_roll + out_yaw + motor_offset.lf) * flight_target.start_up_scale * flight_target.output_scale);
+    motor_out.lf = (int16_t)((base_lf + out_pitch + out_roll + out_yaw + motor_offset.lf) * flight_target.start_up_scale * flight_target.output_scale);
 
     // RF (右前, CCW): Base + Pitch - Roll + Yaw
-    motor_out.rf = (int16_t)((base_throttle + out_pitch - out_roll - out_yaw + motor_offset.rf) * flight_target.start_up_scale * flight_target.output_scale);
+    motor_out.rf = (int16_t)((base_rf + out_pitch - out_roll - out_yaw + motor_offset.rf) * flight_target.start_up_scale * flight_target.output_scale);
 
     // LB (左后, CCW): Base - Pitch + Roll + Yaw
-    motor_out.lb = (int16_t)((base_throttle - out_pitch + out_roll - out_yaw + motor_offset.lb) * flight_target.start_up_scale * flight_target.output_scale);
+    motor_out.lb = (int16_t)((base_lb - out_pitch + out_roll - out_yaw + motor_offset.lb) * flight_target.start_up_scale * flight_target.output_scale);
 
     // RB (右后, CW): Base - Pitch - Roll - Yaw
-    motor_out.rb = (int16_t)((base_throttle - out_pitch - out_roll + out_yaw + motor_offset.rb) * flight_target.start_up_scale * flight_target.output_scale);
+    motor_out.rb = (int16_t)((base_rb - out_pitch - out_roll + out_yaw + motor_offset.rb) * flight_target.start_up_scale * flight_target.output_scale);
 
     // 输出限幅
     // 查找最大值，若超限则四颗电机等比例缩放，保持推力矢量方向不变

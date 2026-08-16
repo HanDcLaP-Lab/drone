@@ -91,7 +91,7 @@ uint8 upixels_parse_byte(uint8 data)
  */
 void upixels_calc_velocity(float current_height_cm)
 {
-    // 门限保护：状态不可用 (valid==0) 或 高度低于 80cm 时，主动归零并重置滤波器
+    // 门限保护：状态不可用 (valid==0) 或 高度低于落地关停高度时，主动归零并重置滤波器
     if (upixels_data.valid == 0 || current_height_cm < OPT_MIN_VALID_HEIGHT_CM) {
         upixels_data.opt_vel_x = 0.0f;
         upixels_data.opt_vel_y = 0.0f;

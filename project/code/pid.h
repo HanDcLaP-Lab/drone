@@ -52,6 +52,9 @@ extern Nonline_PID_t pid_image_y;
 extern PID_t pid_g_roll;
 extern PID_t pid_g_pitch;
 extern PID_t pid_g_yaw;
+
+extern PID_t pid_opt_vel_x;
+extern PID_t pid_opt_vel_y;
 // =================== 函数声明 ===================
 
 /**

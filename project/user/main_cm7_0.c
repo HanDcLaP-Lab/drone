@@ -95,6 +95,7 @@ int main(void) {
         small_driver_uart_init();
         //small_driver_get_speed();
         Flight_Control_Init();
+        Calibration_Init(); // [新增] 起飞后悬停校准
         dataC.camera_offset_x = CAM_OFFSET_X;
         dataC.camera_offset_y = CAM_OFFSET_Y;
 
@@ -118,6 +119,7 @@ int main(void) {
 #endif
 
         app_state_machine_update(); // 拨码模式下检测运行期切换
+        Calibration_Update(); // [新增] 起飞后悬停校准状态机 (非阻塞)
         debug_data_notify_handler();
         debug_data_send_handler();
 
@@ -193,11 +195,15 @@ int main(void) {
         {
             // 未收到新视觉帧: 按 1ms 物理时间判定失联 (与主循环负载解耦)
             if ((uint32_t)(dataC.pit0_cnt - last_vision_ms) > VISION_LOST_TIMEOUT_MS) {
-                // 触发视觉失联保护：强行回平姿态，清理视觉 PID 积分，原地悬停防止乱飞
+                // 触发视觉失联保护：清理视觉 PID 积分
                 Nonline_PID_Reset(&pid_image_x);
                 Nonline_PID_Reset(&pid_image_y);
                 Car_Feedforward_Reset(); // [新增] 视觉失联回平同步清前馈偏移
-                Set_Target_Attitude(0, 0, flight_target.target_yaw);
+                if (imu_data.z >= VISION_POSITION_MIN_HEIGHT_CM) {
+                    // 高高度: 视觉失联时回平防止乱飞
+                    Set_Target_Attitude(0, 0, flight_target.target_yaw);
+                }
+                // 低高度: 由光流速度环独立接管, 不在这里强制回平
                 last_vision_locked_state = 0;
             }
         }
@@ -246,8 +252,10 @@ int main(void) {
         // printf 阻塞式, 一行约占住主循环 6ms, 正常运行默认不开。
         //Duplex_Comm_Print_Stats();
 
-        // ============ 光流接收解析 + 速度解算 + 1秒有线打印 ============
+        // ============ 光流接收解析 + 速度解算 + 低高度速度环 ============
+        uint8_t flow_frame_new = upixels_frame_ready;
         upixels_poll_and_calc(imu_data.z);  // 检测中断标志位，有新数据时拉取解析并解算物理速度
+        Flight_OpticalFlow_Control_Task(flow_frame_new); // [新增] 低高度光流速度-角度-角速度定点
 
         static uint32_t last_flow_print_ms = 0;
         if ((uint32_t)(dataC.pit0_cnt - last_flow_print_ms) >= 1000U) {

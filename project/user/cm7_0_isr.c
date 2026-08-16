@@ -67,7 +67,8 @@ void pit0_ch1_isr()
     IMU_Update_Loop();
     Flight_Control_Loop();
 
-    if (fabsf(imu_data.pitch) > MAX_REAL_ANGLE || fabsf(imu_data.roll) > MAX_REAL_ANGLE) {
+    if (fabsf(Calibration_Get_Corrected_Pitch()) > MAX_REAL_ANGLE ||
+        fabsf(Calibration_Get_Corrected_Roll())  > MAX_REAL_ANGLE) {
         if (has_stopped == 0) {
             car_en = 0;
             emergency_stop_print_pending = 1;

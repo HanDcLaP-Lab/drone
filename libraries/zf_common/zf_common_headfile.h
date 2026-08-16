@@ -119,6 +119,8 @@
 #include "display.h"
 #include "image_process.h"
 #include "image_ctrl.h"
+#include "opticalflow_ctrl.h"
+#include "calibration.h"
 #include "data_complex.h"
 #include "duplex_comm.h"
 #include "key_switch.h"

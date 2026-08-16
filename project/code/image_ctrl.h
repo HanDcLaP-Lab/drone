@@ -32,6 +32,9 @@
  */
 void Flight_Hover_Control_Task(void);
 
+// [新增] 进入光流速度环时由 opticalflow_ctrl 调用, 复位视觉侧状态
+void Image_Hover_Reset_For_OpticalFlow(void);
+
 // =================== 前馈偏移对外接口 ===================
 // 显示方向: 机体系 (0°=当前机头, 顺时针正, 已按快照偏航旋入, 与飞行实际施加一致)
 void Car_Feedforward_Reset(void);         // 复位前馈偏移状态 (丢失回平/视觉失联时调用)

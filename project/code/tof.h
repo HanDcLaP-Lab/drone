@@ -30,7 +30,7 @@ extern volatile uint8_t         vl53l8cx_data_ready;
 
 // ================== 通用 ToF 接口 ==================
 extern float    tof_actual_dt;       // 实测 TOF 帧间隔 (秒), 调试用
-extern int16_t  tof_base_throttle;   // 高度 PID 计算的基础油门 (不含倾角补偿)
+extern int16_t  tof_base_throttle;   // 高度 PID 修正量 (不含悬停基准, 倾角补偿在 fly_ctrl 中叠加)
 extern float    z_rate;              // 调试: 高度位置环输出 (目标爬升率 cm/s)
 extern float    z_acc;               // 调试: 高度速度环输出 (油门增量)
 extern volatile uint32_t tof_update_seq; // 有效高度数据更新序号

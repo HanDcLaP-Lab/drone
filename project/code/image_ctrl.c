@@ -113,7 +113,23 @@ static uint8_t lost_frames = 0;          // 连续丢失目标帧数 (防单帧�
 static KalmanFilter1 hover_car_earth_x_filter;
 static KalmanFilter1 hover_car_earth_y_filter;
 static uint8_t hover_car_filter_initialized = 0;
-// =================== 内部辅助控制函数 ===================
+
+/**
+ * @brief 进入光流速度环时复位视觉侧状态 (由 opticalflow_ctrl 调用)
+ */
+void Image_Hover_Reset_For_OpticalFlow(void) {
+    Nonline_PID_Reset(&pid_image_x);
+    Nonline_PID_Reset(&pid_image_y);
+    hover_car_filter_initialized = 0;
+    Car_Feedforward_Reset();
+    lost_frames = 0;
+    last_locked_lights = 0;
+    has_seen_beacon = 0;
+    search_seq_idx = 0;
+    search_wait_timer = 0;
+    is_turning = 0;
+    was_aligning = 0;
+}
 
 /**
  * @brief 在小车固定地面系扣除悬停点偏移并滤波，输出供飞控使用的机体系位置
@@ -315,10 +331,26 @@ void Flight_Hover_Control_Task(void) {
     uint8_t locked_lights = (uint8_t)vision_snap[S1_LOCKED_COUNT];
     float snapshot_yaw = vision_snap[S1_SNAPSHOT_YAW];
     
+    // 2. 计算真实时间差 dt (防除零)
+    if (last_ang_cnt != 0) real_dt_ang = dataC.pit0_cnt - last_ang_cnt;
+    last_ang_cnt = dataC.pit0_cnt;
+
+    // ================== 模式切换: 带滞回 ==================
+    if (OpticalFlow_Mode_Should_Be_Active()) {
+        OpticalFlow_Mode_Enter();
+        return;
+    }
+    OpticalFlow_Mode_Exit();
+
+    // 视觉环使用真实帧间隔作为平滑/控制 dt
+    float dt_sec = real_dt_ang / 1000.0f;
+    if (dt_sec < 0.005f) dt_sec = 0.005f;
+    if (dt_sec > 0.05f) dt_sec = 0.05f;
+
     if (locked_lights == 1 || locked_lights == 3) {
         Hover_Car_Position_Filter(car_pos_x, car_pos_y, snapshot_yaw, &car_pos_x, &car_pos_y);
 
-        // 2. 小车方向前馈: 条件放松, 仅小车可见即可 (未触发丢失回平), 叠加于实时小车坐标之上
+        // 3. 小车方向前馈: 条件放松, 仅小车可见即可 (未触发丢失回平), 叠加于实时小车坐标之上
         Car_Position_Predict_Feedforward(&car_pos_x, &car_pos_y, snapshot_yaw);
     }
 
@@ -326,10 +358,6 @@ void Flight_Hover_Control_Task(void) {
         dataC.debug_body_track_x = car_pos_x;
         dataC.debug_body_track_y = car_pos_y;
     }
-
-    // 3. 计算真实时间差 dt (防除零)
-    if (last_ang_cnt != 0) real_dt_ang = dataC.pit0_cnt - last_ang_cnt;
-    last_ang_cnt = dataC.pit0_cnt;
 
     // car_en 只由飞控锁定/解锁/降落/急停维护，视觉对准不再让小车完全停止。
 
@@ -346,7 +374,7 @@ void Flight_Hover_Control_Task(void) {
 
         last_locked_lights = locked_lights;
         lost_frames = 0; // 有目标，清零丢失计数器
-        Set_Target_Attitude(target_roll_val, target_pitch_val, flight_target.target_yaw);
+        OpticalFlow_Set_Target_Attitude_Smoothed(target_roll_val, target_pitch_val, flight_target.target_yaw, dt_sec);
 
     } 
     // ================== 完全丢失目标逻辑 ==================
@@ -358,7 +386,7 @@ void Flight_Hover_Control_Task(void) {
             hover_car_filter_initialized = 0;
             Car_Feedforward_Reset(); // [新增] 丢失回平同步清前馈偏移
 
-            Set_Target_Attitude(0.0f, 0.0f, flight_target.target_yaw);
+            OpticalFlow_Set_Target_Attitude_Smoothed(0.0f, 0.0f, flight_target.target_yaw, dt_sec);
 
             // 清理所有扫描与防抖状态
             last_locked_lights = 0;

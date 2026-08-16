@@ -8,7 +8,7 @@
 #define TARGET_HEIGHT_CM 130.0f  // 目标高度
 #define LANDING_DESCENT_TIME_MS 7000U // 目标高度从当前值线性降至0的时间
 #define FLIGHT_TIMEOUT_MS       70000U // [新增] 全局飞行超时 (ms)，超时自动降落
-#define LANDING_CUTOFF_HEIGHT_CM 25.0f  // 新ToF帧低于此高度时关停
+#define LANDING_CUTOFF_HEIGHT_CM 10.0f  // 新ToF帧低于此高度时关停
 #define HOVER_THROTTLE 5150    // 基础悬停油门 
 #define MAX_PWM 8500
 #define MIN_PWM 0
@@ -27,6 +27,7 @@
 
 #define ROLL_OFFSET 0.0f       //补偿重心偏移
 #define PITCH_OFFSET 0.0f     //补偿重心偏移
+
 // ================= 小车固定悬停点视觉补偿 =================
 // X前Y右，单位cm；数值是在无人机IMU yaw等于CAM_OFFSET_MEASURE_YAW_DEG时测得的机体系坐标。
 #define CAM_OFFSET_X                  (-1.0f)
@@ -35,6 +36,11 @@
 // 该yaw以无人机上电朝向为0；使用时会与视觉坐标一同转换到小车固定地面系。
 #define CAM_OFFSET_MEASURE_YAW_DEG     0.0f
 
+// ================= 高度保护参数 =================
+#define VISION_POSITION_MIN_HEIGHT_CM       40.0f // 低于此高度才让视觉坐标失效
+#define VISION_POSITION_HYSTERESIS_CM       5.0f  // [新增] 视觉/光流模式切换滞回，防止阈值附近反复切换
+#define VISION_LOW_HEIGHT_HOLD_FRAMES       10U   // 图像约100Hz，10帧约100ms
+#define CAR_ENABLE_MIN_HEIGHT_CM            70.0f // 低于此高度下传car_en=0
 
 //--------------------飞行状态----------------------//
 typedef enum {
