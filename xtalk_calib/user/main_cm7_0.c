@@ -1,12 +1,7 @@
 /*********************************************************************************************************************
- * VL53L8CX Xtalk 校准工程
- * 独立于原飞控工程，共享 drone/libraries，仅用于校准并导出 xtalk 数据。
- * 使用方法：
- *   1. 将 VL53L8CX 正对一个平坦目标，距离 600mm，目标尽量覆盖全视场；
- *   2. 编译下载本工程，打开串口；
- *   3. 按提示发送任意一个字符开始校准；
- *   4. 校准完成后串口会打印 C 头文件格式的 xtalk 数据；
- *   5. 将打印内容保存为 project/code/vl53l8cx_xtalk_calib_data.h 供原工程使用。
+ * VL53L8CX Xtalk У׼���� (���� SeekFree �չ���, �� CM7_0 ��д)
+ * ���� drone/libraries, CM7_1 ���ֿչ��̲��䡣
+ * ע��: ������ zf_common_headfile.h, ��������ɿع���ͷ�ļ���
  ********************************************************************************************************************/
 
 #include <stdio.h>
@@ -17,11 +12,11 @@
 #include "zf_driver_spi.h"
 #include "zf_driver_gpio.h"
 #include "zf_driver_delay.h"
-#include "platform.h"
-#include "vl53l8cx_api.h"
-#include "vl53l8cx_plugin_xtalk.h"
+#include "vl53l8cx/platform.h"
+#include "vl53l8cx/vl53l8cx_api.h"
+#include "vl53l8cx/vl53l8cx_plugin_xtalk.h"
 
-// ================= 与飞控工程一致的 VL53L8CX 硬件配置 =================
+// ================= ��ɿع���һ�µ� VL53L8CX Ӳ������ =================
 #define XTALK_SPI_IDX      SPI_3
 #define XTALK_SPI_CLK      SPI3_CLK_P03_2
 #define XTALK_SPI_MOSI     SPI3_MOSI_P03_1
@@ -29,10 +24,10 @@
 #define XTALK_CS_PIN       P03_3
 #define XTALK_SPI_BAUDRATE (8 * 1000 * 1000)
 
-// 校准参数
-#define XTALK_REFLECTANCE_PERCENT  3U    // ST 推荐 3% 反射率
-#define XTALK_NB_SAMPLES           16U   // 采样数 1~16
-#define XTALK_DISTANCE_MM          600U  // 标定距离 600~3000mm
+// У׼����
+#define XTALK_REFLECTANCE_PERCENT  3U
+#define XTALK_NB_SAMPLES           16U
+#define XTALK_DISTANCE_MM          600U
 
 static VL53L8CX_Configuration g_vl53l8cx_dev;
 
@@ -43,7 +38,6 @@ static void VL53L8CX_Hw_Init(void) {
 
     g_vl53l8cx_dev.platform.spi_n  = XTALK_SPI_IDX;
     g_vl53l8cx_dev.platform.cs_pin = XTALK_CS_PIN;
-    // xshut_pin 不赋值：硬件 LPn 已拉高
 }
 
 static uint8_t VL53L8CX_Wait_Alive(void) {
@@ -59,7 +53,8 @@ static uint8_t VL53L8CX_Wait_Alive(void) {
     }
 }
 
-int main(void) {
+int main(void)
+{
     clock_init(SYSTEM_CLOCK_250M);
     debug_init();
     system_delay_ms(1500);
@@ -76,7 +71,6 @@ int main(void) {
     }
     printf("VL53L8CX init done\r\n");
 
-    // 恢复飞控工程使用的常规配置（校准函数会临时切换并在结束后恢复）
     vl53l8cx_set_resolution(&g_vl53l8cx_dev, VL53L8CX_RESOLUTION_4X4);
     vl53l8cx_set_ranging_frequency_hz(&g_vl53l8cx_dev, 50);
     vl53l8cx_set_ranging_mode(&g_vl53l8cx_dev, VL53L8CX_RANGING_MODE_CONTINUOUS);
@@ -86,9 +80,8 @@ int main(void) {
     printf("Send any UART char to start xtalk calibration...\r\n");
 
     uint8_t rx = 0;
-    while (uart_query_byte(UART_0, &rx) == 0) {
-        // 等待用户输入
-    }
+    //while (uart_query_byte(UART_0, &rx) == 0) {
+    //}
 
     printf("Calibrating xtalk ...\r\n");
     status = vl53l8cx_calibrate_xtalk(&g_vl53l8cx_dev,
@@ -110,7 +103,7 @@ int main(void) {
         while (1);
     }
 
-    printf("\r\n// ============ 将以下内容保存为 vl53l8cx_xtalk_calib_data.h ============\r\n");
+    printf("\r\n// ============ ���������ݱ���Ϊ vl53l8cx_xtalk_calib_data.h ============\r\n");
     printf("#ifndef _VL53L8CX_XTALK_CALIB_DATA_H_\r\n");
     printf("#define _VL53L8CX_XTALK_CALIB_DATA_H_\r\n");
     printf("#include <stdint.h>\r\n");

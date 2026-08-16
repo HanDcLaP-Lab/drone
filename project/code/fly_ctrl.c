@@ -59,8 +59,8 @@ void Flight_Control_Init(void) {
 
     // ----------- 初始化 PID 参数 -----------
     // 高度环
-    PID_Init(&pid_height_pos, 0.7f, 0.2f, 0.0f, 30, 20, 40.0f);
-    PID_Init(&pid_height_vel, 16.031f, 0.0f, 0.15f, 80, 1500, 15.0f);
+    PID_Init(&pid_height_pos, 0.7f, 0.4f, 0.0f, 30, 20, 40.0f);
+    PID_Init(&pid_height_vel, 16.031f, 0.0f, 0.15f, 80, 2500, 15.0f);
     // 角度环a
     Nonline_PID_Init(&pid_roll, 9.328f, 0.239f, 0.0f, 0.05f, 20, 300, 40.0f);
     Nonline_PID_Init(&pid_pitch, 9.328f, 0.239f, 0.0f, 0.05f, 20, 300, 40.0f);
@@ -160,11 +160,11 @@ static void Flight_State_Update(void) {
     // 3. 根据状态设定目标高度及特殊行为
     switch (flight_target.cur_state) {
         case normal:
-            flight_target.target_height = TARGET_HEIGHT_CM;
+            // 起飞缓启动改为对目标高度缩放, 不再直接缩放 PWM 输出
+            flight_target.target_height = TARGET_HEIGHT_CM * flight_target.start_up_scale;
             if (flight_target.is_armed == 1) {
                 if (flight_target.start_up_scale < 1.0f) {
-                    flight_target.start_up_scale += CTRL_DT_CTLOOP * 0.2f;  // 约5秒加满
-                    flight_target.start_up_scale = 1.0f;
+                    flight_target.start_up_scale += CTRL_DT_CTLOOP * 0.4f;  // 约5秒加满
                     if (flight_target.start_up_scale > 1.0f) {
                         flight_target.start_up_scale = 1.0f;
                     }
@@ -276,16 +276,16 @@ static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pi
 
     // 混控算法 (X型四旋翼)
     // LF (左前, CW): Base + Pitch + Roll - Yaw
-    motor_out.lf = (int16_t)((base_lf + out_pitch + out_roll + out_yaw + motor_offset.lf) * flight_target.start_up_scale * flight_target.output_scale);
+    motor_out.lf = (int16_t)((base_lf + out_pitch + out_roll + out_yaw + motor_offset.lf) * flight_target.output_scale);
 
     // RF (右前, CCW): Base + Pitch - Roll + Yaw
-    motor_out.rf = (int16_t)((base_rf + out_pitch - out_roll - out_yaw + motor_offset.rf) * flight_target.start_up_scale * flight_target.output_scale);
+    motor_out.rf = (int16_t)((base_rf + out_pitch - out_roll - out_yaw + motor_offset.rf) * flight_target.output_scale);
 
     // LB (左后, CCW): Base - Pitch + Roll + Yaw
-    motor_out.lb = (int16_t)((base_lb - out_pitch + out_roll - out_yaw + motor_offset.lb) * flight_target.start_up_scale * flight_target.output_scale);
+    motor_out.lb = (int16_t)((base_lb - out_pitch + out_roll - out_yaw + motor_offset.lb) * flight_target.output_scale);
 
     // RB (右后, CW): Base - Pitch - Roll - Yaw
-    motor_out.rb = (int16_t)((base_rb - out_pitch - out_roll + out_yaw + motor_offset.rb) * flight_target.start_up_scale * flight_target.output_scale);
+    motor_out.rb = (int16_t)((base_rb - out_pitch - out_roll + out_yaw + motor_offset.rb) * flight_target.output_scale);
 
     // 输出限幅
     // 查找最大值，若超限则四颗电机等比例缩放，保持推力矢量方向不变

@@ -6,8 +6,8 @@
 #if TOF_SENSOR_VL53L8CX
 #include "vl53l8cx/platform.h"        // SPI 引脚宏 / platform 函数
 #if VL53L8CX_USE_XTALK_CALIB
-#include "vl53l8cx_plugin_xtalk.h"
-#include "vl53l8cx_xtalk_calib_data.h"
+#include "vl53l8cx/vl53l8cx_plugin_xtalk.h"
+#include "vl53l8cx/vl53l8cx_xtalk_calib_data.h"
 #endif
 #endif
 

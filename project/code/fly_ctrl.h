@@ -8,7 +8,7 @@
 #define TARGET_HEIGHT_CM 130.0f  // 目标高度
 #define LANDING_DESCENT_TIME_MS 7000U // 目标高度从当前值线性降至0的时间
 #define FLIGHT_TIMEOUT_MS       70000U // [新增] 全局飞行超时 (ms)，超时自动降落
-#define LANDING_CUTOFF_HEIGHT_CM 10.0f  // 新ToF帧低于此高度时关停
+#define LANDING_CUTOFF_HEIGHT_CM 5.0f  // 新ToF帧低于此高度时关停
 #define HOVER_THROTTLE 5150    // 基础悬停油门 
 #define MAX_PWM 8500
 #define MIN_PWM 0

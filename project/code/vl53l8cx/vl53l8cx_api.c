@@ -365,7 +365,7 @@ uint8_t vl53l8cx_init(
 	if (crc_checksum != (uint32_t)0xc0b6c9e)
 	{
 		status |= VL53L8CX_STATUS_FW_CHECKSUM_FAIL;
-		goto exit
+		goto exit;
 	}
 
 	/* Get offset NVM data and store them into the offset buffer */

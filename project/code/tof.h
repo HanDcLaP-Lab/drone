@@ -3,7 +3,7 @@
 
 // ================== 传感器切换与引脚配置 ==================
 // 置 1 后编译时包含 vl53l8cx_xtalk_calib_data.h 并加载校准数据
-#define VL53L8CX_USE_XTALK_CALIB   0
+#define VL53L8CX_USE_XTALK_CALIB   1
 // 1 = VL53L8CX (SPI), 0 = DL1B (软I2C, 逐飞库)
 #define TOF_SENSOR_VL53L8CX  1
 
