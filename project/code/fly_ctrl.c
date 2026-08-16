@@ -69,8 +69,8 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_pitch, 2.764f, 3.327f, 0.115f, 120, 3500, 60.0f);
     PID_Init(&pid_g_yaw, 6.1f, 1.32f, 0.00f, 150, 3500, 60.0f);
     // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.094f, 0.012f, 0.073f, 0.0003f, 50, MAX_TILT_ANGLE , 7.0f);
-    Nonline_PID_Init(&pid_image_y, 0.094f, 0.012f, 0.073f, 0.0003f, 50, MAX_TILT_ANGLE , 7.0f);
+    Nonline_PID_Init(&pid_image_x, 0.094f, 0.018f, 0.073f, 0.0003f, 50, MAX_TILT_ANGLE , 7.0f);
+    Nonline_PID_Init(&pid_image_y, 0.094f, 0.018f, 0.073f, 0.0003f, 50, MAX_TILT_ANGLE , 7.0f);
 
 }
 

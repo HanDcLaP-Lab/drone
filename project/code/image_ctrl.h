@@ -2,16 +2,8 @@
 #define _IMAGE_CTRL_H
 #include "zf_common_headfile.h"
 
-// =================== 视觉前馈宏定义 ===================
-#define CAR_FF_ENABLE           1       // 开启/关闭小车方向前馈 (1:开启, 0:关闭)
-#define FF_THROW_DIST_CM        140.0f  // 收到前馈角时向该方向抛出的偏移距离峰值 (cm)
-#define FF_CONVERGE_MS          2200U   // 前馈偏移线性收敛到真实小车位置的时间 (ms, 交棒位置环KI)
-#define FF_THROW_RAMP_MS        300U    // 抛出量斜坡上升时间 (ms): 事件后线性升至峰值,
-                                        // 避免 50cm 阶跃对位置环/姿态链的冲击 (原地下坠源)
-#define FF_FLOW_CORRECTION_S    1.1f    // [新增] 光流速度修正时间常数 (s): kick 事件瞬间将无人机实际
-                                        // 速度(光流, cm/s)折算为位移(cm)并从抛向量中扣除, 修正既有动量
-                                        // 对 kick 方向的干扰。取值≈无人机速度响应时间量级, 可调;
-                                        // 光流失效(valid=0 或高度<80cm)时 filt_vel 已归零, 本项自动降级。
+// 视觉前馈参数 (CAR_FF_ENABLE / FF_THROW_DIST_CM / FF_CONVERGE_MS / FF_THROW_RAMP_MS / FF_FLOW_CORRECTION_S)
+// 已移至 config.h, 按 STRATEGY 宏切换不同策略组, 详见 config.h
 
 #define ROTATE_RECOVER_TIME 1000
 

@@ -108,6 +108,7 @@
 #include "seekfree_assistant.h"
 #include "seekfree_assistant_interface.h"
 //=====================================================组件应用层=====================================================
+#include "config.h"
 #include "imu.h"
 #include "tof.h"
 #include "fly_ctrl.h"
