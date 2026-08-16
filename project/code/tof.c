@@ -5,6 +5,10 @@
 
 #if TOF_SENSOR_VL53L8CX
 #include "vl53l8cx/platform.h"        // SPI 引脚宏 / platform 函数
+#if VL53L8CX_USE_XTALK_CALIB
+#include "vl53l8cx_plugin_xtalk.h"
+#include "vl53l8cx_xtalk_calib_data.h"
+#endif
 #endif
 
 // ================== 全局变量定义 ==================
@@ -158,7 +162,11 @@ void tof_init(void){
     vl53l8cx_set_ranging_mode(&vl53l8cx_dev, VL53L8CX_RANGING_MODE_CONTINUOUS);
     vl53l8cx_set_target_order(&vl53l8cx_dev, VL53L8CX_TARGET_ORDER_CLOSEST);
 
-    // 5. 开始测距
+    // 5. 若启用 xtalk 校准数据, 则加载后开始测距
+#if VL53L8CX_USE_XTALK_CALIB
+    vl53l8cx_set_caldata_xtalk(&vl53l8cx_dev, (uint8_t*)vl53l8cx_xtalk_calib_data);
+    printf("VL53L8CX xtalk calib data loaded\n");
+#endif
     vl53l8cx_start_ranging(&vl53l8cx_dev);
     printf("VL53L8CX ranging started\n");
 #else
