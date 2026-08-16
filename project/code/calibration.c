@@ -27,7 +27,7 @@ static uint32_t buzzer_until_ms = 0;
 static void Buzzer_Start(void) {
     gpio_high(BUZZER_PIN);
     buzzer_on = 1;
-    buzzer_until_ms = dataC.pit0_cnt + 100U;
+    buzzer_until_ms = dataC.pit0_cnt + 200U;
 }
 
 #endif // CALIBRATION_ENABLE

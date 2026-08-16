@@ -32,7 +32,7 @@
 // X前Y右，单位cm；数值是在无人机IMU yaw等于CAM_OFFSET_MEASURE_YAW_DEG时测得的机体系坐标。
 #define CAM_OFFSET_X                  (-1.0f)
 #define CAM_OFFSET_Y                  (-2.0f)
-#define LANDING_CAM_OFFSET_Y_DELTA   (-15.0f)
+#define LANDING_CAM_OFFSET_Y_DELTA   (-30.0f)
 // 该yaw以无人机上电朝向为0；使用时会与视觉坐标一同转换到小车固定地面系。
 #define CAM_OFFSET_MEASURE_YAW_DEG     0.0f
 

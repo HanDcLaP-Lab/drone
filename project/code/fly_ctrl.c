@@ -59,8 +59,8 @@ void Flight_Control_Init(void) {
 
     // ----------- 初始化 PID 参数 -----------
     // 高度环
-    PID_Init(&pid_height_pos, 0.7f, 0.2f, 0.0f, 30, 35, 40.0f);
-    PID_Init(&pid_height_vel, 16.031f, 0.0f, 0.429f, 80, 3000, 40.0f);
+    PID_Init(&pid_height_pos, 0.7f, 0.2f, 0.0f, 30, 20, 40.0f);
+    PID_Init(&pid_height_vel, 16.031f, 0.0f, 0.15f, 80, 1500, 15.0f);
     // 角度环a
     Nonline_PID_Init(&pid_roll, 9.328f, 0.239f, 0.0f, 0.05f, 20, 300, 40.0f);
     Nonline_PID_Init(&pid_pitch, 9.328f, 0.239f, 0.0f, 0.05f, 20, 300, 40.0f);
@@ -164,6 +164,7 @@ static void Flight_State_Update(void) {
             if (flight_target.is_armed == 1) {
                 if (flight_target.start_up_scale < 1.0f) {
                     flight_target.start_up_scale += CTRL_DT_CTLOOP * 0.2f;  // 约5秒加满
+                    flight_target.start_up_scale = 1.0f;
                     if (flight_target.start_up_scale > 1.0f) {
                         flight_target.start_up_scale = 1.0f;
                     }

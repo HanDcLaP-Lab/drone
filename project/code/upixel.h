@@ -10,7 +10,7 @@
 // ================= 光流与机体坐标系安装映射 =================
 // 物理安装校准: 光流 Y+ 朝向飞机后方(机体X-), 光流 X+ 朝向飞机右方(机体Y+)
 // 姿态角定义: Pitch 机头抬起为正(gpitch>0), Roll 左侧抬起(右倾)为正(groll>0)
-#define OPT_MIN_VALID_HEIGHT_CM   LANDING_CUTOFF_HEIGHT_CM  // 门限保护: 高度低于落地关停高度或valid=0时主动归零并复位滤波
+#define OPT_MIN_VALID_HEIGHT_CM   0  // 门限保护: 高度低于落地关停高度或valid=0时主动归零并复位滤波
 #define OPT_GYRO_COMP_ENABLE      1      // 1: 启用陀螺仪角速度解耦补偿 (消除纯旋转产生的假速度)
 #define OPT_TILT_COMP_ENABLE      1      // 1: 启用机体倾角高度修正
 
