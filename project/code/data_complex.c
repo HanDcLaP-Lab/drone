@@ -141,6 +141,7 @@ extern volatile uint8_t duplex_ff_deg_received;   // 定义于 duplex_comm.c (�
 void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share_data一般传入share_data_from_1
 {
     car_en_height = (imu_data.z >= CAR_ENABLE_MIN_HEIGHT_CM);
+    uint8_t car_en_calib = Calibration_Is_Complete();
 
     buffer[0] = share_data[S1_CAR_RAW_X];
     buffer[1] = share_data[S1_CAR_RAW_Y];
@@ -148,7 +149,7 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
     buffer[3] = share_data[S1_RAW_TARGET_Y];
     buffer[4] = VISION_EARTH_YAW_DEG(share_data[S1_SNAPSHOT_YAW]);
     buffer[5] = share_data[S1_LOCKED_COUNT];
-    buffer[6] = (float)(car_en && car_en_height);
+    buffer[6] = (float)(car_en && car_en_height && car_en_calib);
     buffer[7] = share_data[S1_CAR_TARGET_DIST];
     buffer[8] = share_data[S1_RAW_TARGET2_X];
     buffer[9] = share_data[S1_RAW_TARGET2_Y];

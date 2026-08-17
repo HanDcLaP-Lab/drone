@@ -58,6 +58,13 @@ void Calibration_Init(void) {
     calib_ctrl.hover_pwm[3] = HOVER_THROTTLE;
     calib_ctrl.buzzer_on = 0;
     calib_ctrl.buzzer_until_ms = 0;
+
+    // 校准完成前放大最外环积分限幅 (抗物理偏置)
+    pid_image_x.max_i = IMAGE_PID_MAX_I_CALIB;
+    pid_image_y.max_i = IMAGE_PID_MAX_I_CALIB;
+#else
+    pid_image_x.max_i = IMAGE_PID_MAX_I_NORMAL;
+    pid_image_y.max_i = IMAGE_PID_MAX_I_NORMAL;
 #endif
 }
 
@@ -75,6 +82,10 @@ void Calibration_Reset(void) {
     calib_ctrl.buzzer_on = 0;
     calib_ctrl.buzzer_until_ms = 0;
     gpio_low(BUZZER_PIN);
+
+    // 重新进入校准流程: 放大最外环积分限幅
+    pid_image_x.max_i = IMAGE_PID_MAX_I_CALIB;
+    pid_image_y.max_i = IMAGE_PID_MAX_I_CALIB;
 #endif
 }
 
@@ -125,9 +136,14 @@ void Calibration_Update(void) {
                 calib_ctrl.hover_pwm[2] = (int16_t)(calib_ctrl.sum_motor[2] / (int32_t)calib_ctrl.sample_cnt);
                 calib_ctrl.hover_pwm[3] = (int16_t)(calib_ctrl.sum_motor[3] / (int32_t)calib_ctrl.sample_cnt);
 
-                // 零点变化后清除角度环积分, 避免旧积分在新零点下造成偏置
+                // 零点变化后清除角度环与视觉位置环积分, 恢复最外环积分限幅为正常值
                 Nonline_PID_Reset(&pid_roll);
                 Nonline_PID_Reset(&pid_pitch);
+                pid_image_x.max_i = IMAGE_PID_MAX_I_NORMAL;
+                pid_image_y.max_i = IMAGE_PID_MAX_I_NORMAL;
+                Nonline_PID_Reset(&pid_image_x);
+                Nonline_PID_Reset(&pid_image_y);
+
                 calib_ctrl.state = CALIB_STATE_DONE;
                 Buzzer_Start(); // 校准完成提示音
             }
@@ -179,6 +195,6 @@ uint8_t Calibration_Is_Complete(void) {
 #if CALIBRATION_ENABLE
     return (calib_ctrl.state == CALIB_STATE_DONE) ? 1U : 0U;
 #else
-    return 0U;
+    return 1U;
 #endif
 }

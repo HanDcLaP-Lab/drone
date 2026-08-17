@@ -8,13 +8,18 @@
 #define TARGET_HEIGHT_CM 130.0f  // 目标高度
 #define LANDING_DESCENT_TIME_MS 7000U // 目标高度从当前值线性降至0的时间
 #define FLIGHT_TIMEOUT_MS       70000U // [新增] 全局飞行超时 (ms)，超时自动降落
-#define LANDING_CUTOFF_HEIGHT_CM 5.0f  // 新ToF帧低于此高度时关停
+#define LANDING_CUTOFF_HEIGHT_CM 10.0f  // 新ToF帧低于此高度时触发触地关停
+#define LANDING_CUTOFF_RAMP_MS  2000U  // 触地后 PWM scale 线性缩小到 0 的时间 (ms)
 #define HOVER_THROTTLE 5150    // 基础悬停油门 
 #define MAX_PWM 8500
-#define MIN_PWM 0
+#define MIN_PWM 800
 #define MAX_TILT_ANGLE 12.0f  // 最大计算倾角限制 (度)
 #define MAX_REAL_ANGLE 40.0f // 最大实际倾角限制 (度) 超过停机
 #define CTRL_DT_CTLOOP 0.00125f  // 飞控控制周期 (1.25ms, 800Hz)
+
+// ================= 最外环积分限幅配置 =================
+#define IMAGE_PID_MAX_I_NORMAL       50.0f   // 视觉位置外环正常积分限幅
+#define IMAGE_PID_MAX_I_CALIB        150.0f  // 姿态校准完成前放大的积分限幅 (用于抗稳态偏置定点)
 
 #define MIN_ERROR 0.0f  //飞机跟踪小车的死区设置
 //扫描旋转

@@ -40,6 +40,7 @@ PID_t pid_opt_vel_y;
 static volatile uint32_t landing_start_ms = 0;
 static volatile uint32_t landing_tof_seq = 0;
 static volatile float landing_start_height = 0.0f;
+static volatile uint32_t landing_cutoff_start_ms = 0; // [新增] 触地关停开始时刻 (ms)
 static uint32_t flight_start_ms = 0; // [新增] 解锁时刻 (pit0_cnt)，用于全局飞行超时
 static float mode_smooth_roll = 0.0f;      // 模式切换平滑中的目标横滚
 static float mode_smooth_pitch = 0.0f;     // 模式切换平滑中的目标俯仰
@@ -77,9 +78,9 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_g_roll, 2.764f, 3.327f, 0.115f, 120, 3500, 60.0f);
     PID_Init(&pid_g_pitch, 2.764f, 3.327f, 0.115f, 120, 3500, 60.0f);
     PID_Init(&pid_g_yaw, 6.1f, 1.32f, 0.00f, 150, 3500, 60.0f);
-    // 视觉部分
-    Nonline_PID_Init(&pid_image_x, 0.094f, 0.018f, 0.073f, 0.0003f, 50, MAX_TILT_ANGLE , 7.0f);
-    Nonline_PID_Init(&pid_image_y, 0.094f, 0.018f, 0.073f, 0.0003f, 50, MAX_TILT_ANGLE , 7.0f);
+    // 视觉部分 (初始/校准完成前使用放大的积分限幅)
+    Nonline_PID_Init(&pid_image_x, 0.094f, 0.018f, 0.073f, 0.0003f, IMAGE_PID_MAX_I_CALIB, MAX_TILT_ANGLE, 7.0f);
+    Nonline_PID_Init(&pid_image_y, 0.094f, 0.018f, 0.073f, 0.0003f, IMAGE_PID_MAX_I_CALIB, MAX_TILT_ANGLE, 7.0f);
 
     // 光流速度环 (低高度定点外环, 输出目标倾角给角度环/角速度环)
     PID_Init(&pid_opt_vel_x, 0.10f, 0.02f, 0.0f, 100, MAX_TILT_ANGLE, 7.0f);
@@ -93,6 +94,7 @@ void Flight_Unlock(void) {
     flight_target.cur_state = FLIGHT_STATE_NORMAL;
     car_en = 1;
     flight_target.start_up_scale = 0.0f;
+    flight_target.output_scale = 1.0f;
     dataC.camera_offset_y = CAM_OFFSET_Y;
 
     // 解锁瞬间重置积分，防止暴冲
@@ -237,14 +239,21 @@ static void Flight_State_Update(void) {
         landing_tof_seq = tof_update_seq;
         if (imu_data.z < LANDING_CUTOFF_HEIGHT_CM) {
             flight_target.cur_state = FLIGHT_STATE_LANDING;
+            landing_cutoff_start_ms = dataC.pit0_cnt;
+            car_en = 0;
         }
     }
 
     // 3. 根据状态设定目标高度及特殊行为
     switch (flight_target.cur_state) {
         case FLIGHT_STATE_NORMAL:
-            // 起飞缓启动改为对目标高度缩放, 不再直接缩放 PWM 输出
+#if AUTO_TAKEOFF_ENABLE
+            // 自动起飞开启: 起飞缓启动对目标高度缩放, 不直接缩放 PWM 输出
             flight_target.target_height = TARGET_HEIGHT_CM * flight_target.start_up_scale;
+#else
+            // 自动起飞关闭: 目标高度直接设定为期望高度, start_up_scale 叠加乘在 PWM 最终输出上
+            flight_target.target_height = TARGET_HEIGHT_CM;
+#endif
             if (flight_target.is_armed == ARM_STATE_ARMED) {
                 if (flight_target.start_up_scale < 1.0f) {
                     flight_target.start_up_scale += CTRL_DT_CTLOOP * 0.4f;  // 约2.5秒加满
@@ -271,12 +280,22 @@ static void Flight_State_Update(void) {
             break;
         }
         case FLIGHT_STATE_LANDING:
+        {
             flight_target.target_height = 0.0f;
             flight_target.height = 0.0f;
             flight_target.start_up_scale = 0.0f;
             car_en = 0;
-            Flight_Lock();
+
+            // 触地关停阶段: 在 LANDING_CUTOFF_RAMP_MS 内将 PWM output_scale 线性平滑减小到 0
+            uint32_t elapsed_ms = dataC.pit0_cnt - landing_cutoff_start_ms;
+            if (elapsed_ms < LANDING_CUTOFF_RAMP_MS) {
+                flight_target.output_scale = 1.0f - (float)elapsed_ms / (float)LANDING_CUTOFF_RAMP_MS;
+            } else {
+                flight_target.output_scale = 0.0f;
+                Flight_Lock();
+            }
             break;
+        }
         default:
             break;
     }
@@ -357,39 +376,85 @@ static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pi
     int16_t base_lb = (int16_t)(Calibration_Get_Hover_PWM(2) + base_throttle);
     int16_t base_rb = (int16_t)(Calibration_Get_Hover_PWM(3) + base_throttle);
 
+    // 综合缩放因子: output_scale 与 start_up_scale (当自动起飞关闭时叠加)
+#if AUTO_TAKEOFF_ENABLE
+    float total_scale = flight_target.output_scale;
+#else
+    float total_scale = flight_target.output_scale * flight_target.start_up_scale;
+#endif
+
     // 混控算法 (X型四旋翼)
     // LF (左前, CW): Base + Pitch + Roll - Yaw
-    motor_out.lf = (int16_t)((base_lf + out_pitch + out_roll + out_yaw + motor_offset.lf) * flight_target.output_scale);
+    motor_out.lf = (int16_t)((base_lf + out_pitch + out_roll + out_yaw + motor_offset.lf) * total_scale);
 
     // RF (右前, CCW): Base + Pitch - Roll + Yaw
-    motor_out.rf = (int16_t)((base_rf + out_pitch - out_roll - out_yaw + motor_offset.rf) * flight_target.output_scale);
+    motor_out.rf = (int16_t)((base_rf + out_pitch - out_roll - out_yaw + motor_offset.rf) * total_scale);
 
     // LB (左后, CCW): Base - Pitch + Roll + Yaw
-    motor_out.lb = (int16_t)((base_lb - out_pitch + out_roll - out_yaw + motor_offset.lb) * flight_target.output_scale);
+    motor_out.lb = (int16_t)((base_lb - out_pitch + out_roll - out_yaw + motor_offset.lb) * total_scale);
 
     // RB (右后, CW): Base - Pitch - Roll - Yaw
-    motor_out.rb = (int16_t)((base_rb - out_pitch - out_roll + out_yaw + motor_offset.rb) * flight_target.output_scale);
+    motor_out.rb = (int16_t)((base_rb - out_pitch - out_roll + out_yaw + motor_offset.rb) * total_scale);
 
-    // 输出限幅
-    // 查找最大值，若超限则四颗电机等比例缩放，保持推力矢量方向不变
+    // 输出限幅与映射: 查找最大值与最小值，若越界则映射到 [current_min_pwm, MAX_PWM]，保持推力矢量方向大致不变
+    int16_t current_min_pwm = (flight_target.cur_state == FLIGHT_STATE_LANDING) ?
+                              (int16_t)(MIN_PWM * flight_target.output_scale) : MIN_PWM;
+
     int16_t max_motor = motor_out.lf;
+    int16_t min_motor = motor_out.lf;
     if (motor_out.rf > max_motor) max_motor = motor_out.rf;
     if (motor_out.lb > max_motor) max_motor = motor_out.lb;
     if (motor_out.rb > max_motor) max_motor = motor_out.rb;
 
-    if (max_motor > MAX_PWM) {
-        float scale = (float)MAX_PWM / max_motor;
-        motor_out.lf = (int16_t)(motor_out.lf * scale);
-        motor_out.rf = (int16_t)(motor_out.rf * scale);
-        motor_out.lb = (int16_t)(motor_out.lb * scale);
-        motor_out.rb = (int16_t)(motor_out.rb * scale);
+    if (motor_out.rf < min_motor) min_motor = motor_out.rf;
+    if (motor_out.lb < min_motor) min_motor = motor_out.lb;
+    if (motor_out.rb < min_motor) min_motor = motor_out.rb;
+
+    if (max_motor > MAX_PWM || min_motor < current_min_pwm) {
+        if (max_motor > min_motor) {
+            float span = (float)(max_motor - min_motor);
+            float target_range = (float)(MAX_PWM - current_min_pwm);
+            if (span > target_range) {
+                // 差值跨度超过可用区间: 线性归一化压缩到 [current_min_pwm, MAX_PWM]
+                float scale = target_range / span;
+                motor_out.lf = (int16_t)(current_min_pwm + (motor_out.lf - min_motor) * scale);
+                motor_out.rf = (int16_t)(current_min_pwm + (motor_out.rf - min_motor) * scale);
+                motor_out.lb = (int16_t)(current_min_pwm + (motor_out.lb - min_motor) * scale);
+                motor_out.rb = (int16_t)(current_min_pwm + (motor_out.rb - min_motor) * scale);
+            } else if (max_motor > MAX_PWM) {
+                // 上限超限但跨度可容纳: 整体平移下调, 保持差分力矩完全不变
+                int16_t shift = max_motor - MAX_PWM;
+                motor_out.lf -= shift;
+                motor_out.rf -= shift;
+                motor_out.lb -= shift;
+                motor_out.rb -= shift;
+            } else if (min_motor < current_min_pwm) {
+                // 下限超限但跨度可容纳: 整体平移上调, 保持差分力矩完全不变
+                int16_t shift = current_min_pwm - min_motor;
+                motor_out.lf += shift;
+                motor_out.rf += shift;
+                motor_out.lb += shift;
+                motor_out.rb += shift;
+            }
+        } else {
+            // 四个电机数值完全相同
+            int16_t val = (max_motor > MAX_PWM) ? MAX_PWM : ((min_motor < current_min_pwm) ? current_min_pwm : max_motor);
+            motor_out.lf = val;
+            motor_out.rf = val;
+            motor_out.lb = val;
+            motor_out.rb = val;
+        }
     }
 
-    // 下限保护 (电机不能反转)
-    if (motor_out.lf < MIN_PWM) motor_out.lf = MIN_PWM;
-    if (motor_out.rf < MIN_PWM) motor_out.rf = MIN_PWM;
-    if (motor_out.lb < MIN_PWM) motor_out.lb = MIN_PWM;
-    if (motor_out.rb < MIN_PWM) motor_out.rb = MIN_PWM;
+    // 最终边界保护 (确保绝对处于 [current_min_pwm, MAX_PWM])
+    if (motor_out.lf > MAX_PWM) motor_out.lf = MAX_PWM;
+    if (motor_out.lf < current_min_pwm) motor_out.lf = current_min_pwm;
+    if (motor_out.rf > MAX_PWM) motor_out.rf = MAX_PWM;
+    if (motor_out.rf < current_min_pwm) motor_out.rf = current_min_pwm;
+    if (motor_out.lb > MAX_PWM) motor_out.lb = MAX_PWM;
+    if (motor_out.lb < current_min_pwm) motor_out.lb = current_min_pwm;
+    if (motor_out.rb > MAX_PWM) motor_out.rb = MAX_PWM;
+    if (motor_out.rb < current_min_pwm) motor_out.rb = current_min_pwm;
 }
 
 // =================== 主控制循环 ===================
@@ -403,8 +468,8 @@ void Flight_Control_Loop(void) {
     // 3. 角速度环控制 (计算姿态修正量)
     Flight_Control_Rate(&motor_out.roll, &motor_out.pitch, &motor_out.yaw);
 
-    // 4. 锁定检查
-    if (flight_target.is_armed == 0) {
+    // 4. 锁定检查 (未解锁时锁定电机并退出)
+    if (flight_target.is_armed != ARM_STATE_ARMED) {
         Flight_Lock();
         return;
     }
@@ -422,9 +487,9 @@ void motor_pwm_set() {
         return;
     }
 
-    if (flight_target.is_armed == 1) {
+    if (flight_target.is_armed == ARM_STATE_ARMED) {
         // 注意：UART 驱动通常直接接受逻辑占空比（如 0-10000），不再需要 PWM 的 4000 偏置
-        small_driver_set_duty(motor_out.lf, motor_out.lb, motor_out.rb,motor_out.rf);
+        small_driver_set_duty(motor_out.lf, motor_out.lb, motor_out.rb, motor_out.rf);
         // small_driver_set_duty(2000, 2000, 2000, 2000);
     } else {
         motor_out.rf = 0;

@@ -1,6 +1,9 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
+// ================== 起飞模式配置 ==================
+#define AUTO_TAKEOFF_ENABLE     1       // 自动起飞使能开关 (1: 现有自动起飞高度缓升方式, 0: 关闭自动起飞, start_up_scale 直接缩放最终 PWM 输出)
+
 #define STRATEGY (2)
 
 #if STRATEGY == 1
