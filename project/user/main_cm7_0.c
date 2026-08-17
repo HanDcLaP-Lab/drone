@@ -45,45 +45,39 @@
 
 // **************************** 代码区域 ****************************
 
-#define PIT_NUM0 (PIT_CH0)
-#define PIT_NUM1 (PIT_CH1)
-#define PIT_NUM2 (PIT_CH2)
+// =================== 引脚与硬件宏定义 ===================
+#define LED1         (P19_0)
+#define UART_KEY     (P19_2)
+#define DEBUG_PROBE  (P02_3)  // 示波器探头: 高=主循环计算执行中 (P02_0 已分配给光流 UART5_RX)
 
-#define LED1 (P19_0)
-#define UART_KEY (P19_2)
-#define DEBUG_PROBE (P02_3)  // 示波器探头: 高=ISR执行中 (P02_0 已让给光流 UART5_RX)
-
+// =================== 全局与静态通信变量 ===================
 float float_buffer[UART_DATA_LENGTH] = {0};
-
-int vis_cnt = 0;
 
 extern volatile uint8_t emergency_stop_print_pending;
 extern volatile uint8_t periodic_print_pending;
-static uint8_t merge_print_pending = 0;
-static uint8_t last_vision_locked_state = 0;
 
-// int send_cnt = 0;
+// =================== 主程序入口 ===================
+
 int main(void) {
-    clock_init(SYSTEM_CLOCK_250M);  // 时钟配置及系统初始化<务必保留>
-    debug_init();                   // 调试串口信息初始化
+    clock_init(SYSTEM_CLOCK_250M);  // 系统时钟 250MHz 初始化
+    debug_init();                   // 调试串口初始化
 
-    // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(1500);
-    // 注意: DUPLEX_SWITCH=1 时 P19_2 由 Duplex_Comm_Init 接管为 RS485 方向引脚 (会重新
-    // 初始化为接收态低电平)。此处保持原有初始化不动, 供 DUPLEX_SWITCH=0 的单向模式使用。
-    gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL); //uart
-    gpio_init(DEBUG_PROBE, GPO, GPIO_LOW, GPO_PUSH_PULL); // 示波器探头
+
+    // GPIO 与调试引脚初始化
+    gpio_init(UART_KEY, GPO, GPIO_HIGH, GPO_PUSH_PULL);
+    gpio_init(DEBUG_PROBE, GPO, GPIO_LOW, GPO_PUSH_PULL);
 
     app_init();
     share_data_from_0[S0_DRONE_STATE] = (float)current_drone_state;
     SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
 
-    { //初始化
+    { // 初始化
         main_kalman_init();
         // 2. 初始化底层传感器与执行器
         imu_init();
         tof_init();
-        upixels_init();  // 光流模块 LC-302-3C (UART3 @19200)
+        upixels_init();  // 光流模块 LC-302-3C (UART5 @19200)
         wireless_uart_init_();
         seekfree_assistant_interface_init(SEEKFREE_ASSISTANT_WIRELESS_UART);
 #if DUPLEX_SWITCH
@@ -93,184 +87,102 @@ int main(void) {
         Board_Comm_Init();
 #endif
         small_driver_uart_init();
-        //small_driver_get_speed();
         Flight_Control_Init();
-        Calibration_Init(); // [新增] 起飞后悬停校准
+        Calibration_Init(); // 起飞后悬停校准模块
         dataC.camera_offset_x = CAM_OFFSET_X;
         dataC.camera_offset_y = CAM_OFFSET_Y;
 
+        system_delay_ms(1000);     // 等待传感器稳定
+
         // 3. 启动周期中断
         pit_ms_init(PIT_CH2, 500);  // 打印
-        system_delay_ms(1000);     // 等待传感器数据稳定
-
         pit_ms_init(PIT_CH0, 1);       // TOF + 1ms 计时
         pit_us_init(PIT_CH1, 1250);    // IMU + 飞控 (1.25ms, 800Hz)
     }
 
-    // 此处编写用户代码 例如外设初始化代码等
-
     while (true) {
         gpio_high(DEBUG_PROBE);
 
+        // =========================================================================
+        // 【阶段 1】系统时间戳更新与运行期状态机
+        // =========================================================================
 #if DUPLEX_SWITCH
-        // 双向模式: 时基必须在视觉分支(Duplex_Comm_Trigger)之前喂入, 否则请求时刻会戳成
-        // 上一轮的值, 使往返时延统计偏大一个主循环周期。
         Duplex_Comm_Set_Now_Ms(dataC.pit0_cnt);
 #endif
+        app_state_machine_update();         // 运行期拨码模式检测
+        Calibration_Update();                // 起飞后悬停自校准状态机 (非阻塞)
+        Flight_Nav_Mode_Update(imu_data.z); // 水平导航模式单点仲裁 (视觉 vs 光流)
 
-        app_state_machine_update(); // 拨码模式下检测运行期切换
-        Calibration_Update(); // [新增] 起飞后悬停校准状态机 (非阻塞)
+        // =========================================================================
+        // 【阶段 2】上位机调参处理与调试服务
+        // =========================================================================
         debug_data_notify_handler();
         debug_data_send_handler();
 
         seekfree_assistant_data_analysis();
-        // 2. 检查是否有参数更新 (遍历所有通道)
         for (int i = 0; i < SEEKFREE_ASSISTANT_SET_PARAMETR_COUNT; i++) {
-            // 如果第 i 个通道有数据更新标志
             if (seekfree_assistant_parameter_update_flag[i]) {
-                // 清除标志位
                 seekfree_assistant_parameter_update_flag[i] = 0;
-                
-                // 将参数应用到 PID (通道号 = 索引 + 1)
-                // seekfree_assistant_parameter[i] 是接收到的浮点数值
-                //Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]); 
                 Fly_Param_Update(i + 1, seekfree_assistant_parameter[i]);
-                
-                // 可选：通过无线串口回传确认，告诉上位机收到并更新了
-                // wireless_uart_send_string("Param Updated\r\n");
             }
         }
 
-        // 1. 读取视觉数据前，先无效化 Cache (从 RAM 拉取 Core 1 写入的最新数据)
-        SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
-        // 帧序号+一致性快照协议: Core1 先写全部数据、最后写递增序号 (S1_FRAME_SEQ) 并整区写回。
-        // 序号变化 → 整帧 80B 拷贝到 vision_snap → 复核序号(防拷贝期间被新帧写穿撕裂) → 消费快照。
-        // Core0 不再写回共享区，消除"清标志吞新帧"竞态与整块 cache clean 覆盖 Core1 新数据的风险。
-        static float last_vision_seq = 0.0f;    // 上一帧已消费序号
-        static uint32_t last_vision_ms = 0;     // 最后一帧消费时刻 (dataC.pit0_cnt, 1ms)
-        float frame_seq = share_data_from_1[S1_FRAME_SEQ];
-        if (frame_seq != last_vision_seq)
-        {
-            for (int i = 0; i < M7_x_DATA_LENGTH; i++) {
-                vision_snap[i] = share_data_from_1[i];
-            }
-            // 复核序号: 若拷贝期间 Core1 已写完新帧, 本快照可能新旧混合, 放弃本轮下一轮重试
-            SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1[S1_FRAME_SEQ], sizeof(float));
-            if (share_data_from_1[S1_FRAME_SEQ] == frame_seq)
-            {
-                last_vision_seq = frame_seq;
-                last_vision_ms = dataC.pit0_cnt;    // 喂狗: 以 1ms 物理时钟计
-
-                uint8_t locked_state = (uint8_t)vision_snap[S1_LOCKED_COUNT];
-                if (locked_state == 4 && last_vision_locked_state != 4) {
-                    merge_print_pending = 1;
-                }
-                last_vision_locked_state = locked_state;
-
-                Flight_Hover_Control_Task();
-                Float_Buffer_write(float_buffer, vision_snap);
-                //send_cnt++;
-                //if(send_cnt == 10){
-#if DUPLEX_SWITCH
-                // 双向模式: 视觉事件触发一次主从请求-应答 (每次触发只发一帧请求)
-                Duplex_Comm_Trigger(float_buffer);
-#else
-                Board_Comm_Send_Data(float_buffer);
-#endif
-                //   send_cnt = 0;
-                //}
-                static uint32_t last_visual_pos_print_ms = 0;
-                if ((uint32_t)(dataC.pit0_cnt - last_visual_pos_print_ms) >= 500U) {
-                    last_visual_pos_print_ms = dataC.pit0_cnt;
-                    // printf("%.2f,%.2f,%.2f,%.2f\r\n",
-                    //        vision_snap[S1_CAR_RAW_X],
-                    //        vision_snap[S1_CAR_RAW_Y],
-                    //        dataC.debug_body_track_x,
-                    //        dataC.debug_body_track_y);
-                }
-            }
-            // 序号复核不一致: 该帧视为撕裂丢弃, 下一轮循环处理最新帧
-        }
-        else
-        {
-            // 未收到新视觉帧: 按 1ms 物理时间判定失联 (与主循环负载解耦)
-            if ((uint32_t)(dataC.pit0_cnt - last_vision_ms) > VISION_LOST_TIMEOUT_MS) {
-                // 触发视觉失联保护：清理视觉 PID 积分
-                Nonline_PID_Reset(&pid_image_x);
-                Nonline_PID_Reset(&pid_image_y);
-                Car_Feedforward_Reset(); // [新增] 视觉失联回平同步清前馈偏移
-                if (imu_data.z >= VISION_POSITION_MIN_HEIGHT_CM) {
-                    // 高高度: 视觉失联时回平防止乱飞
-                    Set_Target_Attitude(0, 0, flight_target.target_yaw);
-                }
-                // 低高度: 由光流速度环独立接管, 不在这里强制回平
-                last_vision_locked_state = 0;
-            }
-        }
+        // =========================================================================
+        // 【阶段 3】水平导航与外环控制调度 (视觉位置环 / 光流速度环)
+        // =========================================================================
         
-        // 2. 刷入 RAM 供 Core 1 读取
+        // --- 3.1 跨核视觉数据拉取与一致性快照复核 ---
+        if (Data_Complex_Sync_Vision_Snapshot()) {
+            // 高高度执行视觉悬停位置与航向控制
+            if (Flight_Get_Nav_Mode() == NAV_MODE_VISION_HOVER) {
+                Flight_Hover_Control_Task();
+            }
+
+            // 打包下传数据并触发板间发送
+            Float_Buffer_write(float_buffer, vision_snap);
+#if DUPLEX_SWITCH
+            Duplex_Comm_Trigger(float_buffer);
+#else
+            Board_Comm_Send_Data(float_buffer);
+#endif
+        } else if (Data_Complex_Is_Vision_Lost()) {
+            // 视觉超时失联保护
+            Flight_Hover_Lost_Protection();
+        }
+
+        // --- 3.2 光流解析、速度解算与低高度定点任务 ---
+        uint8_t flow_frame_new = upixels_poll_and_calc(imu_data.z);
+        if (Flight_Get_Nav_Mode() == NAV_MODE_OPTICAL_FLOW) {
+            Flight_OpticalFlow_Control_Task(flow_frame_new);
+        }
+
+        // =========================================================================
+        // 【阶段 4】跨核数据同步、板间通讯与异步串口日志
+        // =========================================================================
+        
+        // 4.1 将 Core0 飞控与传感器数据刷回共享 RAM 供 Core1 读取
         M7_0_data_send(share_data_from_0);
         SCB_CleanDCache_by_Addr((void*)&share_data_from_0, sizeof(share_data_from_0));
 
 #if DUPLEX_SWITCH
-        // 双向模式: 排空接收 FIFO 处理应答与超时判定 (时基已在循环顶部喂入)。
-        // 主循环约 0.4ms/轮, 远快于视觉周期(约20ms), 保证应答及时处理。
+        // 4.2 双向通讯轮询处理接收 FIFO
         Duplex_Comm_Poll();
-
-        // [调试用] 启动 3 秒后清零一次统计, 避开上电瞬态便于观察稳态丢包率。
-        // 正常运行不需要, 保留供联调时取消注释。
-        // static uint8_t duplex_stats_reset_done = 0;
-        // if (!duplex_stats_reset_done && dataC.pit0_cnt >= 3000U) {
-        //     Duplex_Comm_Reset_Stats();
-        //     duplex_stats_reset_done = 1;
-        // }
 #endif
 
-/* 无线串口打印开始 */
+        // 4.3 异步打印服务
         if (emergency_stop_print_pending) {
             emergency_stop_print_pending = 0;
             wireless_uart_send_string("emergency stop\r\n");
         }
-        //wireless_uart_output_motor_average();
         if (periodic_print_pending) {
             periodic_print_pending = 0;
-            //wireless_uart_output_car_target_dist();
-            //wireless_uart_output_driver_status();
         }
-        if (merge_print_pending) {
-            merge_print_pending = 0;
-            //wireless_uart_send_string("merge\r\n");
-        }
-/* 无线串口打印结束 */
 
-        // [新增] 前馈角接收打印: 上行帧收到小车前馈角时经无线串口输出 (值变化才打印)。
-        // 仅供联调观察 (前馈本身已接入飞控, 见 image_ctrl.c Car_Position_Predict_Feedforward)。
+        // 前馈角接收打印
         wireless_uart_output_feedforward_rx();
 
-        // [调试用] 板间双向通讯质量观察: 有线 printf (UART_0 @115200), 内部按
-        // DUPLEX_PRINT_PERIOD_MS 限频, 见 duplex_comm.c。
-        // printf 阻塞式, 一行约占住主循环 6ms, 正常运行默认不开。
-        //Duplex_Comm_Print_Stats();
-
-        // ============ 光流接收解析 + 速度解算 + 低高度速度环 ============
-        uint8_t flow_frame_new = upixels_frame_ready;
-        upixels_poll_and_calc(imu_data.z);  // 检测中断标志位，有新数据时拉取解析并解算物理速度
-        Flight_OpticalFlow_Control_Task(flow_frame_new); // [新增] 低高度光流速度-角度-角速度定点
-
-        static uint32_t last_flow_print_ms = 0;
-        if ((uint32_t)(dataC.pit0_cnt - last_flow_print_ms) >= 1000U) {
-            last_flow_print_ms = dataC.pit0_cnt;
-            uint16_t count_1s = upixels_frame_count;
-            upixels_frame_count = 0; // 重置开始下一个 1s 统计周期
-            upixels_count_500ms = count_1s; // 同步更新供屏幕显示
-
-            //printf("%d\r\n", count_1s);
-        }
-        // ============ 光流接收解析 + 速度解算 + 1秒有线打印结束 ============
-
         gpio_low(DEBUG_PROBE);
-        system_delay_us(400); // 
+        system_delay_us(400);
     }
 }
 
-// **************************** 代码区域 ****************************

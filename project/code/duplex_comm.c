@@ -11,8 +11,7 @@
 
 // ================= 对外状态 / 统计 =================
 float duplex_uplink_data[DUPLEX_UPLINK_COUNT] = {-1.0f, 0.0f, 0.0f, -1.0f}; // [3]=-1: 无前馈/未收到, 0°为有效方向
-float duplex_ff_pending_deg = -1.0f;           // [新增] 最近收到但尚未被飞控采纳的有效前馈角 (-1=无)
-volatile uint8_t duplex_ff_deg_received = 0;   // [新增] 前馈采纳反馈 (见 duplex_comm.h)
+volatile uint8_t duplex_ff_deg_received = 0;   // 前馈采纳反馈 (由 image_ctrl 控制)
 volatile uint8_t  duplex_uplink_update_flag = 0;
 volatile uint32_t duplex_request_count      = 0;
 volatile uint32_t duplex_reply_ok_count     = 0;
@@ -202,19 +201,10 @@ static void Duplex_Process_Full_Frame(void)
         return;
     }
 
-    // 测试阶段只统计与缓存, 不接入飞控任何逻辑
+    // 缓存上行载荷
     for (uint8_t i = 0; i < DUPLEX_UPLINK_COUNT; i++) {
         duplex_uplink_data[i] = decoded.data[i];
     }
-    // [新增] 前馈采纳反馈: 只有“已被飞控采纳”的前馈角才算已采纳并回 ack,
-    // 避免小车在无人机尚未实际采纳时就被 ack 停发 (低高度光流/未看见小车时仍会重传)。
-    // 若上行值等于当前已采纳事件角, 说明是重复帧, 直接视为已采纳。
-    // 同时把最新有效前馈角锁存到 duplex_ff_pending_deg, 即使小车因超时停发,
-    // 无人机稍后进入可采纳状态时仍能补采纳。
-    if (decoded.data[3] >= 0.0f && decoded.data[3] != ff_event_deg) {
-        duplex_ff_pending_deg = decoded.data[3];
-    }
-    duplex_ff_deg_received = (decoded.data[3] >= 0.0f && decoded.data[3] == ff_event_deg) ? 1U : 0U;
     duplex_uplink_update_flag = 1;
 
     if (duplex_awaiting_reply) {

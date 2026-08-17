@@ -118,8 +118,7 @@ typedef struct {
 //   [3] ff_deg    — 小车前馈方向角 (deg, -1=无前馈, 0°为有效方向) [新增, 已接入飞控, 供无线串口打印观察]
 extern float duplex_uplink_data[DUPLEX_UPLINK_COUNT];
 // 前馈采纳反馈: 1 = 最近一次成功解码的应答载荷 [3] 已被飞控采纳, 0 = 未采纳 (含收到-1/无应答)。
-// 由 Duplex_Process_Full_Frame 与 Car_Position_Predict_Feedforward 协同刷新, 下传帧 [12] 反馈标志据此生成。
-extern float duplex_ff_pending_deg;             // [新增] 最近收到但尚未被飞控采纳的有效前馈角 (deg, -1=无)
+// 由 image_ctrl 中的 Car_Position_Predict_Feedforward 判定并刷新, 下传帧 [12] 反馈标志据此生成。
 extern volatile uint8_t duplex_ff_deg_received;
 extern volatile uint8_t  duplex_uplink_update_flag;   // 收到有效应答置 1 (由消费方清零)
 extern volatile uint32_t duplex_request_count;        // 已发起请求数

@@ -158,6 +158,39 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
     buffer[12] = (float)duplex_ff_deg_received;
 }
 
+// ================= 跨核视觉快照同步与看门狗查询 (CM7_0) =================
+static float    last_vision_seq = 0.0f;
+static uint32_t last_vision_ms  = 0;
+
+uint8_t Data_Complex_Sync_Vision_Snapshot(void)
+{
+    SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1, sizeof(share_data_from_1));
+    float frame_seq = share_data_from_1[S1_FRAME_SEQ];
+    if (frame_seq != last_vision_seq)
+    {
+        for (int i = 0; i < M7_x_DATA_LENGTH; i++) {
+            vision_snap[i] = share_data_from_1[i];
+        }
+        // 复核序号: 若拷贝期间 Core1 已写完新帧, 本快照可能新旧混合, 放弃本轮下一轮重试
+        SCB_InvalidateDCache_by_Addr((void*)&share_data_from_1[S1_FRAME_SEQ], sizeof(float));
+        if (share_data_from_1[S1_FRAME_SEQ] == frame_seq)
+        {
+            last_vision_seq = frame_seq;
+            last_vision_ms = dataC.pit0_cnt;
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+uint8_t Data_Complex_Is_Vision_Lost(void)
+{
+    if (last_vision_ms == 0U) {
+        return 0U;
+    }
+    return ((uint32_t)(dataC.pit0_cnt - last_vision_ms) > VISION_LOST_TIMEOUT_MS) ? 1U : 0U;
+}
+
 #elif defined(CY_CORE_CM7_1)
 void M7_1_data_send(volatile float* data_out) { //Core 1 调用，写入share_data_from_1
     static uint8_t vision_low_height_frame_cnt = 0;

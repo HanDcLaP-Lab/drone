@@ -81,9 +81,12 @@ Two `volatile float` arrays at fixed addresses:
 :: Open IDE
 start project/iar/cyt4bb7.eww              :: Master workspace (both cores)
 
-:: CLI build (IAR installed)
-iarbuild.exe "project/iar/project_config/cyt4bb7_cm_7_0.ewp" -build Debug
-iarbuild.exe "project/iar/project_config/cyt4bb7_cm_7_1.ewp" -build Debug
+:: CLI build (IAR installed, 增量编译 -make + 8核并行, 秒级完成)
+iarbuild.exe "project/iar/project_config/cyt4bb7_cm_7_0.ewp" -make Debug -parallel 8
+iarbuild.exe "project/iar/project_config/cyt4bb7_cm_7_1.ewp" -make Debug -parallel 8
+
+:: 全量重新编译 (仅在清理后或必要时使用 -build)
+:: iarbuild.exe "project/iar/project_config/cyt4bb7_cm_7_0.ewp" -build Debug -parallel 8
 ```
 
 **Clean**: Run `project/iar/删除临时文件IAR.bat` (Windows only)

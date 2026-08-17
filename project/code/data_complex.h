@@ -96,6 +96,10 @@ void M7_0_data_send(volatile float* data_out);
 void Float_Buffer_write(float* buffer, volatile float* share);
 void M7_1_data_send(volatile float* data_out);
 
+// 跨核视觉快照同步与看门狗查询 (CM7_0)
+uint8_t Data_Complex_Sync_Vision_Snapshot(void);
+uint8_t Data_Complex_Is_Vision_Lost(void);
+
 void Board_Comm_Init(void);
 void Board_Comm_Send_Data(volatile float *data_array);
 #endif

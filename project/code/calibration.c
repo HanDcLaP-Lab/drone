@@ -2,32 +2,41 @@
 
 #if CALIBRATION_ENABLE
 
-// =================== 校准状态 ===================
-// 0: 等待触发, 1: 到达高度后稳定等待, 2: 采样中, 3: 校准完成
-static uint8_t  calib_state = 0;
-static uint32_t state_start_ms = 0;
+// =================== 校准状态管理结构体 ===================
+typedef struct {
+    Calib_State_e state;
+    uint32_t      state_start_ms;
+    uint32_t      sample_cnt;
+    float         sum_roll;
+    float         sum_pitch;
+    int32_t       sum_motor[4];
+    
+    float         roll_offset;
+    float         pitch_offset;
+    int16_t       hover_pwm[4];
+    
+    uint8_t       buzzer_on;
+    uint32_t      buzzer_until_ms;
+} Calibration_Ctrl_t;
 
-// 采样累加
-static float    sum_roll = 0.0f;
-static float    sum_pitch = 0.0f;
-static int32_t  sum_motor[4] = {0, 0, 0, 0};
-static uint32_t sample_cnt = 0;
-
-// 校准结果
-static float    roll_offset = 0.0f;
-static float    pitch_offset = 0.0f;
-static int16_t  hover_pwm[4] = {
-    HOVER_THROTTLE, HOVER_THROTTLE, HOVER_THROTTLE, HOVER_THROTTLE
+static Calibration_Ctrl_t calib_ctrl = {
+    .state = CALIB_STATE_WAIT_TRIGGER,
+    .state_start_ms = 0,
+    .sample_cnt = 0,
+    .sum_roll = 0.0f,
+    .sum_pitch = 0.0f,
+    .sum_motor = {0, 0, 0, 0},
+    .roll_offset = 0.0f,
+    .pitch_offset = 0.0f,
+    .hover_pwm = {HOVER_THROTTLE, HOVER_THROTTLE, HOVER_THROTTLE, HOVER_THROTTLE},
+    .buzzer_on = 0,
+    .buzzer_until_ms = 0
 };
-
-// 蜂鸣器非阻塞控制
-static uint8_t  buzzer_on = 0;
-static uint32_t buzzer_until_ms = 0;
 
 static void Buzzer_Start(void) {
     gpio_high(BUZZER_PIN);
-    buzzer_on = 1;
-    buzzer_until_ms = dataC.pit0_cnt + 200U;
+    calib_ctrl.buzzer_on = 1;
+    calib_ctrl.buzzer_until_ms = dataC.pit0_cnt + CALIB_BUZZER_DURATION_MS;
 }
 
 #endif // CALIBRATION_ENABLE
@@ -35,79 +44,97 @@ static void Buzzer_Start(void) {
 void Calibration_Init(void) {
 #if CALIBRATION_ENABLE
     gpio_init(BUZZER_PIN, GPO, GPIO_LOW, GPO_PUSH_PULL);
-    calib_state = 0;
-    state_start_ms = 0;
-    sum_roll = 0.0f;
-    sum_pitch = 0.0f;
-    sum_motor[0] = 0; sum_motor[1] = 0; sum_motor[2] = 0; sum_motor[3] = 0;
-    sample_cnt = 0;
-    roll_offset = 0.0f;
-    pitch_offset = 0.0f;
-    hover_pwm[0] = HOVER_THROTTLE;
-    hover_pwm[1] = HOVER_THROTTLE;
-    hover_pwm[2] = HOVER_THROTTLE;
-    hover_pwm[3] = HOVER_THROTTLE;
-    buzzer_on = 0;
-    buzzer_until_ms = 0;
+    calib_ctrl.state = CALIB_STATE_WAIT_TRIGGER;
+    calib_ctrl.state_start_ms = 0;
+    calib_ctrl.sum_roll = 0.0f;
+    calib_ctrl.sum_pitch = 0.0f;
+    calib_ctrl.sum_motor[0] = 0; calib_ctrl.sum_motor[1] = 0; calib_ctrl.sum_motor[2] = 0; calib_ctrl.sum_motor[3] = 0;
+    calib_ctrl.sample_cnt = 0;
+    calib_ctrl.roll_offset = 0.0f;
+    calib_ctrl.pitch_offset = 0.0f;
+    calib_ctrl.hover_pwm[0] = HOVER_THROTTLE;
+    calib_ctrl.hover_pwm[1] = HOVER_THROTTLE;
+    calib_ctrl.hover_pwm[2] = HOVER_THROTTLE;
+    calib_ctrl.hover_pwm[3] = HOVER_THROTTLE;
+    calib_ctrl.buzzer_on = 0;
+    calib_ctrl.buzzer_until_ms = 0;
+#endif
+}
+
+/**
+ * @brief 在无人机重新解锁/起飞时重置校准状态机
+ */
+void Calibration_Reset(void) {
+#if CALIBRATION_ENABLE
+    calib_ctrl.state = CALIB_STATE_WAIT_TRIGGER;
+    calib_ctrl.state_start_ms = 0;
+    calib_ctrl.sum_roll = 0.0f;
+    calib_ctrl.sum_pitch = 0.0f;
+    calib_ctrl.sum_motor[0] = 0; calib_ctrl.sum_motor[1] = 0; calib_ctrl.sum_motor[2] = 0; calib_ctrl.sum_motor[3] = 0;
+    calib_ctrl.sample_cnt = 0;
+    calib_ctrl.buzzer_on = 0;
+    calib_ctrl.buzzer_until_ms = 0;
+    gpio_low(BUZZER_PIN);
 #endif
 }
 
 void Calibration_Update(void) {
 #if CALIBRATION_ENABLE
     // 蜂鸣器 100ms 非阻塞关闭
-    if (buzzer_on && dataC.pit0_cnt >= buzzer_until_ms) {
+    if (calib_ctrl.buzzer_on && dataC.pit0_cnt >= calib_ctrl.buzzer_until_ms) {
         gpio_low(BUZZER_PIN);
-        buzzer_on = 0;
+        calib_ctrl.buzzer_on = 0;
     }
 
-    switch (calib_state) {
-        case 0: // 等待起飞到达校准高度
+    switch (calib_ctrl.state) {
+        case CALIB_STATE_WAIT_TRIGGER: // 等待起飞到达校准高度
             if (current_drone_state == DRONE_STATE_NORMAL_FLIGHT &&
-                flight_target.is_armed == 1 &&
+                flight_target.is_armed == ARM_STATE_ARMED &&
                 imu_data.z >= TARGET_HEIGHT_CM - CALIB_START_HEIGHT_OFFSET_CM) {
-                calib_state = 1;
-                state_start_ms = dataC.pit0_cnt;
+                calib_ctrl.state = CALIB_STATE_STABILIZING;
+                calib_ctrl.state_start_ms = dataC.pit0_cnt;
             }
             break;
 
-        case 1: // 非阻塞等待 3s, 让无人机稳定平飞定点
-            if (dataC.pit0_cnt - state_start_ms >= CALIB_STABLE_WAIT_MS) {
-                calib_state = 2;
-                state_start_ms = dataC.pit0_cnt;
-                sum_roll = 0.0f;
-                sum_pitch = 0.0f;
-                sum_motor[0] = 0; sum_motor[1] = 0; sum_motor[2] = 0; sum_motor[3] = 0;
-                sample_cnt = 0;
-                Buzzer_Start(); // 进入校准
+        case CALIB_STATE_STABILIZING: // 非阻塞等待 3s, 让无人机稳定平飞定点
+            if (dataC.pit0_cnt - calib_ctrl.state_start_ms >= CALIB_STABLE_WAIT_MS) {
+                calib_ctrl.state = CALIB_STATE_SAMPLING;
+                calib_ctrl.state_start_ms = dataC.pit0_cnt;
+                calib_ctrl.sum_roll = 0.0f;
+                calib_ctrl.sum_pitch = 0.0f;
+                calib_ctrl.sum_motor[0] = 0; calib_ctrl.sum_motor[1] = 0; calib_ctrl.sum_motor[2] = 0; calib_ctrl.sum_motor[3] = 0;
+                calib_ctrl.sample_cnt = 0;
+                Buzzer_Start(); // 进入校准提示音
             }
             break;
 
-        case 2: // 1s 采样, 期间其它功能正常
-            sum_roll += imu_data.roll;
-            sum_pitch += imu_data.pitch;
-            sum_motor[0] += motor_out.lf;
-            sum_motor[1] += motor_out.rf;
-            sum_motor[2] += motor_out.lb;
-            sum_motor[3] += motor_out.rb;
-            sample_cnt++;
+        case CALIB_STATE_SAMPLING: // 1s 采样, 期间其它功能正常
+            calib_ctrl.sum_roll += imu_data.roll;
+            calib_ctrl.sum_pitch += imu_data.pitch;
+            calib_ctrl.sum_motor[0] += motor_out.lf;
+            calib_ctrl.sum_motor[1] += motor_out.rf;
+            calib_ctrl.sum_motor[2] += motor_out.lb;
+            calib_ctrl.sum_motor[3] += motor_out.rb;
+            calib_ctrl.sample_cnt++;
 
-            if (dataC.pit0_cnt - state_start_ms >= CALIB_SAMPLE_MS && sample_cnt > 0U) {
-                roll_offset = sum_roll / (float)sample_cnt;
-                pitch_offset = sum_pitch / (float)sample_cnt;
-                hover_pwm[0] = (int16_t)(sum_motor[0] / (int32_t)sample_cnt);
-                hover_pwm[1] = (int16_t)(sum_motor[1] / (int32_t)sample_cnt);
-                hover_pwm[2] = (int16_t)(sum_motor[2] / (int32_t)sample_cnt);
-                hover_pwm[3] = (int16_t)(sum_motor[3] / (int32_t)sample_cnt);
+            if (dataC.pit0_cnt - calib_ctrl.state_start_ms >= CALIB_SAMPLE_MS && calib_ctrl.sample_cnt > 0U) {
+                calib_ctrl.roll_offset = calib_ctrl.sum_roll / (float)calib_ctrl.sample_cnt;
+                calib_ctrl.pitch_offset = calib_ctrl.sum_pitch / (float)calib_ctrl.sample_cnt;
+                calib_ctrl.hover_pwm[0] = (int16_t)(calib_ctrl.sum_motor[0] / (int32_t)calib_ctrl.sample_cnt);
+                calib_ctrl.hover_pwm[1] = (int16_t)(calib_ctrl.sum_motor[1] / (int32_t)calib_ctrl.sample_cnt);
+                calib_ctrl.hover_pwm[2] = (int16_t)(calib_ctrl.sum_motor[2] / (int32_t)calib_ctrl.sample_cnt);
+                calib_ctrl.hover_pwm[3] = (int16_t)(calib_ctrl.sum_motor[3] / (int32_t)calib_ctrl.sample_cnt);
 
                 // 零点变化后清除角度环积分, 避免旧积分在新零点下造成偏置
                 Nonline_PID_Reset(&pid_roll);
                 Nonline_PID_Reset(&pid_pitch);
-                calib_state = 3;
-                Buzzer_Start(); // 校准完成
+                calib_ctrl.state = CALIB_STATE_DONE;
+                Buzzer_Start(); // 校准完成提示音
             }
             break;
 
-        default: // 3: 已完成, 不再动作
+        case CALIB_STATE_DONE:
+        default: // 已完成, 不再动作
             break;
     }
 #endif
@@ -115,7 +142,7 @@ void Calibration_Update(void) {
 
 float Calibration_Get_Roll_Offset(void) {
 #if CALIBRATION_ENABLE
-    return roll_offset;
+    return calib_ctrl.roll_offset;
 #else
     return 0.0f;
 #endif
@@ -123,7 +150,7 @@ float Calibration_Get_Roll_Offset(void) {
 
 float Calibration_Get_Pitch_Offset(void) {
 #if CALIBRATION_ENABLE
-    return pitch_offset;
+    return calib_ctrl.pitch_offset;
 #else
     return 0.0f;
 #endif
@@ -140,7 +167,7 @@ float Calibration_Get_Corrected_Pitch(void) {
 int16_t Calibration_Get_Hover_PWM(uint8_t motor_index) {
 #if CALIBRATION_ENABLE
     if (motor_index < 4U) {
-        return hover_pwm[motor_index];
+        return calib_ctrl.hover_pwm[motor_index];
     }
     return HOVER_THROTTLE;
 #else
@@ -150,7 +177,7 @@ int16_t Calibration_Get_Hover_PWM(uint8_t motor_index) {
 
 uint8_t Calibration_Is_Complete(void) {
 #if CALIBRATION_ENABLE
-    return (calib_state == 3U) ? 1U : 0U;
+    return (calib_ctrl.state == CALIB_STATE_DONE) ? 1U : 0U;
 #else
     return 0U;
 #endif

@@ -61,9 +61,12 @@ The drone uses a triple-cascade PID structure:
   - `project/iar/project_config/cyt4bb7_cm_7_1.ewp` (CM7_1)
 
 ### Build Commands
-- Open `project/iar/cyt4bb7.eww` in IAR IDE
-- Select workspace target (CM7_0 or CM7_1)
-- Use project→build or F7 key
+- Open `project/iar/cyt4bb7.eww` in IAR IDE (or use project→build / F7 key)
+- **CLI Incremental Build** (Fast, recommended):
+  ```cmd
+  iarbuild.exe "project/iar/project_config/cyt4bb7_cm_7_0.ewp" -make Debug -parallel 8
+  iarbuild.exe "project/iar/project_config/cyt4bb7_cm_7_1.ewp" -make Debug -parallel 8
+  ```
 - Clean temporary files: `project/iar/删除临时文件IAR.bat`
 
 ### Debug Configuration

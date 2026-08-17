@@ -154,17 +154,28 @@ void upixels_calc_velocity(float current_height_cm)
     upixels_data.filt_vel_y += FLOW_LPF_ALPHA * (upixels_data.opt_vel_y - upixels_data.filt_vel_y);
 }
 /**
- * @brief 主循环中调用的光流速度计算消费函数
+ * @brief 主循环中调用的光流速度计算消费与统计函数
  * @param current_height_cm 当前高度
+ * @return 1 表示有新帧并完成速度解算, 0 表示无新帧
  */
-void upixels_poll_and_calc(float current_height_cm)
+uint8 upixels_poll_and_calc(float current_height_cm)
 {
+    // 1 秒周期统计与屏幕刷新同步
+    static uint32_t last_flow_stats_ms = 0;
+    if ((uint32_t)(dataC.pit0_cnt - last_flow_stats_ms) >= 1000U) {
+        last_flow_stats_ms = dataC.pit0_cnt;
+        upixels_count_500ms = upixels_frame_count; // 同步供屏幕显示
+        upixels_frame_count = 0;                   // 重置开始下一个统计周期
+    }
+
     // 当中断完成一整帧的流式解析后置位，主循环消费并解算速度
     if (upixels_frame_ready)
     {
         upixels_frame_ready = 0; // 清除新帧标志位
         upixels_calc_velocity(current_height_cm);
+        return 1;
     }
+    return 0;
 }
 
 /**

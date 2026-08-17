@@ -41,13 +41,32 @@
 #define VISION_POSITION_HYSTERESIS_CM       5.0f  // [新增] 视觉/光流模式切换滞回，防止阈值附近反复切换
 #define VISION_LOW_HEIGHT_HOLD_FRAMES       10U   // 图像约100Hz，10帧约100ms
 #define CAR_ENABLE_MIN_HEIGHT_CM            70.0f // 低于此高度下传car_en=0
+#define MODE_SWITCH_SMOOTH_MS               150U  // 视觉/光流模式切换时目标倾角平滑时间 (ms)
 
-//--------------------飞行状态----------------------//
+// =================== 飞行状态与模式定义 ===================
 typedef enum {
-    normal,       // 正常飞行
-    pre_landing,  // 准备降落
-    landing,      // 降落中
-} STATE;
+    FLIGHT_STATE_NORMAL = 0, // 正常飞行
+    FLIGHT_STATE_PRE_LANDING,// 准备降落
+    FLIGHT_STATE_LANDING     // 降落中
+} Flight_State_e;
+
+// 兼容旧枚举命名
+typedef Flight_State_e STATE;
+#define normal       FLIGHT_STATE_NORMAL
+#define pre_landing  FLIGHT_STATE_PRE_LANDING
+#define landing      FLIGHT_STATE_LANDING
+
+typedef enum {
+    ARM_STATE_DISARMED = 0,         // 锁定
+    ARM_STATE_ARMED = 1,            // 已解锁
+    ARM_STATE_WAITING_IMU_CALIB = 2 // 等待IMU校准后自动解锁
+} Arm_State_e;
+
+typedef enum {
+    NAV_MODE_ATTITUDE_HOLD = 0, // 基础姿态/回平自稳 (无有效外环或失联)
+    NAV_MODE_OPTICAL_FLOW,      // 低高度光流速度定点外环
+    NAV_MODE_VISION_HOVER       // 高高度视觉位置/小车站位外环
+} Nav_Mode_e;
 
 // =================== 控制目标结构体 ===================
 typedef struct {
@@ -65,7 +84,7 @@ typedef struct {
     float target_height;  // 最终期望高度
 
     uint8_t is_armed;
-    STATE cur_state;
+    Flight_State_e cur_state;
     float start_up_scale;
     float output_scale;
 } Flight_Target_t;
@@ -97,8 +116,14 @@ extern Motor_Offsset_t motor_offset;
 void Flight_Control_Init(void);
 void Flight_Control_Angle(void);
 void Flight_Control_Loop(void);
-// 新的控制接口：直接设定目标姿态
+// 导航模式更新与查询
+Nav_Mode_e Flight_Nav_Mode_Update(float height_cm);
+Nav_Mode_e Flight_Get_Nav_Mode(void);
+
+// 控制接口：直接设定目标姿态与带平滑的目标姿态
 void Set_Target_Attitude(float roll, float pitch, float yaw);
+void Flight_Set_Target_Attitude_Smoothed(float roll, float pitch, float yaw, float dt_sec);
+void Flight_Attitude_Smoother_Reset(void);
 void Flight_Request_Landing(void);
 void Flight_Unlock(void);
 void Flight_Lock(void);

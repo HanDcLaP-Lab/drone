@@ -31,6 +31,7 @@
  * @note 内部处理视觉补偿、姿态设定及 PID 计算
  */
 void Flight_Hover_Control_Task(void);
+void Flight_Hover_Lost_Protection(void);
 
 // [新增] 进入光流速度环时由 opticalflow_ctrl 调用, 复位视觉侧状态
 void Image_Hover_Reset_For_OpticalFlow(void);

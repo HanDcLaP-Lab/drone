@@ -41,6 +41,12 @@ static volatile uint32_t landing_start_ms = 0;
 static volatile uint32_t landing_tof_seq = 0;
 static volatile float landing_start_height = 0.0f;
 static uint32_t flight_start_ms = 0; // [新增] 解锁时刻 (pit0_cnt)，用于全局飞行超时
+static float mode_smooth_roll = 0.0f;      // 模式切换平滑中的目标横滚
+static float mode_smooth_pitch = 0.0f;     // 模式切换平滑中的目标俯仰
+static uint32_t mode_switch_start_ms = 0;  // 模式切换平滑起始时刻 (ms)
+static uint32_t last_smooth_ms = 0;        // 模式切换平滑上次执行时刻 (ms)
+static uint8_t mode_switch_pending = 0;    // 模式切换平滑进行中标志
+
 // =================== 内部辅助函数 ===================
 static float Constrain_Float(float val, float min, float max) {
     if (val > max) return max;
@@ -51,8 +57,8 @@ static float Constrain_Float(float val, float min, float max) {
 // =================== 核心控制逻辑 ===================
 
 void Flight_Control_Init(void) {
-    flight_target.cur_state = normal;
-    flight_target.is_armed = 2;  // 0: 锁定, 1: 解锁, 2: 等待校准后解锁
+    flight_target.cur_state = FLIGHT_STATE_NORMAL;
+    flight_target.is_armed = ARM_STATE_WAITING_IMU_CALIB;  // 0: 锁定, 1: 解锁, 2: 等待校准后解锁
     flight_target.height = 0;
     flight_target.start_up_scale = 0.0f;
     flight_target.output_scale = 1.0f; // 默认缩放比例设为1
@@ -79,11 +85,12 @@ void Flight_Control_Init(void) {
     PID_Init(&pid_opt_vel_x, 0.10f, 0.02f, 0.0f, 100, MAX_TILT_ANGLE, 7.0f);
     PID_Init(&pid_opt_vel_y, 0.10f, 0.02f, 0.0f, 100, MAX_TILT_ANGLE, 7.0f);
 
+    Flight_Attitude_Smoother_Reset();
 }
 
 void Flight_Unlock(void) {
-    flight_target.is_armed = 1;
-    flight_target.cur_state = normal;
+    flight_target.is_armed = ARM_STATE_ARMED;
+    flight_target.cur_state = FLIGHT_STATE_NORMAL;
     car_en = 1;
     flight_target.start_up_scale = 0.0f;
     dataC.camera_offset_y = CAM_OFFSET_Y;
@@ -102,6 +109,9 @@ void Flight_Unlock(void) {
     PID_Reset(&pid_opt_vel_x); // [新增] 重置光流速度环PID
     PID_Reset(&pid_opt_vel_y);
 
+    Calibration_Reset(); // [优化] 解锁/起飞时重置悬停校准状态机，允许执行新一轮校准
+    Flight_Attitude_Smoother_Reset(); // 重置姿态平滑器
+
     // 锁定当前航向为目标航向，防止解锁即转圈
     flight_target.target_yaw = imu_data.yaw;
     flight_target.height = imu_data.z;
@@ -109,18 +119,18 @@ void Flight_Unlock(void) {
 }
 
 void Flight_Request_Landing(void) {
-    if (flight_target.is_armed != 1 || flight_target.cur_state != normal) return;
+    if (flight_target.is_armed != ARM_STATE_ARMED || flight_target.cur_state != FLIGHT_STATE_NORMAL) return;
 
     car_en = 0;
     dataC.camera_offset_y = CAM_OFFSET_Y + LANDING_CAM_OFFSET_Y_DELTA;
     landing_start_height = flight_target.height;
     landing_start_ms = dataC.pit0_cnt;
     landing_tof_seq = tof_update_seq;
-    flight_target.cur_state = pre_landing;
+    flight_target.cur_state = FLIGHT_STATE_PRE_LANDING;
 }
 
 void Flight_Lock(void) {
-    flight_target.is_armed = 0;
+    flight_target.is_armed = ARM_STATE_DISARMED;
     motor_out.rf = 0;
     motor_out.rb = 0;
     motor_out.lb = 0;
@@ -134,6 +144,79 @@ void Set_Target_Attitude(float roll, float pitch, float yaw) {
     flight_target.target_yaw = yaw;
 }
 
+// =================== 导航外环模式管理 (单点仲裁) ===================
+static Nav_Mode_e current_nav_mode = NAV_MODE_ATTITUDE_HOLD;
+
+Nav_Mode_e Flight_Nav_Mode_Update(float height_cm) {
+    if (current_nav_mode == NAV_MODE_OPTICAL_FLOW) {
+        // 已处于光流模式: 只有明显高于滞回上限才切回视觉
+        if (height_cm >= (VISION_POSITION_MIN_HEIGHT_CM + VISION_POSITION_HYSTERESIS_CM)) {
+            current_nav_mode = NAV_MODE_VISION_HOVER;
+            OpticalFlow_Mode_Exit();
+        }
+    } else {
+        // 未处于光流模式: 低于阈值立即切入光流
+        if (height_cm < VISION_POSITION_MIN_HEIGHT_CM) {
+            current_nav_mode = NAV_MODE_OPTICAL_FLOW;
+            Image_Hover_Reset_For_OpticalFlow();
+            OpticalFlow_Mode_Enter();
+        } else {
+            current_nav_mode = NAV_MODE_VISION_HOVER;
+        }
+    }
+    return current_nav_mode;
+}
+
+Nav_Mode_e Flight_Get_Nav_Mode(void) {
+    return current_nav_mode;
+}
+
+/**
+ * @brief 重置模式切换姿态平滑器
+ */
+void Flight_Attitude_Smoother_Reset(void) {
+    mode_smooth_roll = flight_target.target_roll;
+    mode_smooth_pitch = flight_target.target_pitch;
+    mode_switch_start_ms = dataC.pit0_cnt;
+    last_smooth_ms = 0;
+    mode_switch_pending = 1;
+}
+
+/**
+ * @brief 带模式切换平滑的目标姿态设置
+ */
+void Flight_Set_Target_Attitude_Smoothed(float roll, float pitch, float yaw, float dt_sec) {
+    (void)dt_sec; // 平滑步长按实际时钟间隔计算
+    if (mode_switch_pending) {
+        uint32_t now_ms = dataC.pit0_cnt;
+        uint32_t step_ms = (last_smooth_ms == 0) ? 10U : (now_ms - last_smooth_ms);
+        last_smooth_ms = now_ms;
+        float step_dt = step_ms * 0.001f;
+        if (step_dt < 0.001f) step_dt = 0.001f;
+        if (step_dt > 0.05f) step_dt = 0.05f;
+        uint32_t elapsed = now_ms - mode_switch_start_ms;
+        float diff_roll = roll - mode_smooth_roll;
+        float diff_pitch = pitch - mode_smooth_pitch;
+        // 已平滑到位且超过最短平滑时间后退出平滑
+        if (elapsed >= MODE_SWITCH_SMOOTH_MS && fabsf(diff_roll) < 0.5f && fabsf(diff_pitch) < 0.5f) {
+            mode_switch_pending = 0;
+            last_smooth_ms = 0;
+        } else {
+            // 速率限制: 全量程倾角在 MODE_SWITCH_SMOOTH_MS 内线性过渡, 避免切换阶跃
+            float max_step = (MAX_TILT_ANGLE * step_dt) / ((float)MODE_SWITCH_SMOOTH_MS * 0.001f);
+            if (diff_roll > max_step) diff_roll = max_step;
+            else if (diff_roll < -max_step) diff_roll = -max_step;
+            if (diff_pitch > max_step) diff_pitch = max_step;
+            else if (diff_pitch < -max_step) diff_pitch = -max_step;
+            mode_smooth_roll += diff_roll;
+            mode_smooth_pitch += diff_pitch;
+            Set_Target_Attitude(mode_smooth_roll, mode_smooth_pitch, yaw);
+            return;
+        }
+    }
+    Set_Target_Attitude(roll, pitch, yaw);
+}
+
 // =================== 内部功能模块 (Static) ===================
 
 /**
@@ -142,29 +225,29 @@ void Set_Target_Attitude(float roll, float pitch, float yaw) {
  */
 static void Flight_State_Update(void) {
     // 1. 自动解锁逻辑 (等待IMU校准完成后自动解锁)
-    if (flight_target.is_armed == 2) {
+    if (flight_target.is_armed == ARM_STATE_WAITING_IMU_CALIB) {
         if (imu_data.is_calibrated) {
             Flight_Unlock();
         }
-        // 若未校准，保持 is_armed=2，电机输出为0
+        // 若未校准，保持 is_armed=ARM_STATE_WAITING_IMU_CALIB，电机输出为0
     }
 
     // 2. 仅用降落请求之后的新ToF数据判断触地关停
-    if (flight_target.cur_state == pre_landing && tof_update_seq != landing_tof_seq) {
+    if (flight_target.cur_state == FLIGHT_STATE_PRE_LANDING && tof_update_seq != landing_tof_seq) {
         landing_tof_seq = tof_update_seq;
         if (imu_data.z < LANDING_CUTOFF_HEIGHT_CM) {
-            flight_target.cur_state = landing;
+            flight_target.cur_state = FLIGHT_STATE_LANDING;
         }
     }
 
     // 3. 根据状态设定目标高度及特殊行为
     switch (flight_target.cur_state) {
-        case normal:
+        case FLIGHT_STATE_NORMAL:
             // 起飞缓启动改为对目标高度缩放, 不再直接缩放 PWM 输出
             flight_target.target_height = TARGET_HEIGHT_CM * flight_target.start_up_scale;
-            if (flight_target.is_armed == 1) {
+            if (flight_target.is_armed == ARM_STATE_ARMED) {
                 if (flight_target.start_up_scale < 1.0f) {
-                    flight_target.start_up_scale += CTRL_DT_CTLOOP * 0.4f;  // 约5秒加满
+                    flight_target.start_up_scale += CTRL_DT_CTLOOP * 0.4f;  // 约2.5秒加满
                     if (flight_target.start_up_scale > 1.0f) {
                         flight_target.start_up_scale = 1.0f;
                     }
@@ -175,7 +258,7 @@ static void Flight_State_Update(void) {
                 }
             }
             break;
-        case pre_landing:
+        case FLIGHT_STATE_PRE_LANDING:
         {
             uint32_t elapsed_ms = dataC.pit0_cnt - landing_start_ms;
             flight_target.target_height = 0.0f;
@@ -187,7 +270,7 @@ static void Flight_State_Update(void) {
             }
             break;
         }
-        case landing:
+        case FLIGHT_STATE_LANDING:
             flight_target.target_height = 0.0f;
             flight_target.height = 0.0f;
             flight_target.start_up_scale = 0.0f;
@@ -199,7 +282,7 @@ static void Flight_State_Update(void) {
     }
 
     // 高度目标平滑 (时间常数约 1s, 独立于 TOF 数据速率)
-    if (flight_target.cur_state == normal) {
+    if (flight_target.cur_state == FLIGHT_STATE_NORMAL) {
         const float height_alpha = CTRL_DT_CTLOOP;
         flight_target.height = flight_target.height * (1.0f - height_alpha) + flight_target.target_height * height_alpha;
     }

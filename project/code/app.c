@@ -110,9 +110,9 @@ void Fly_Param_Update(uint8_t ch, float val) {
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
                 } else {
-                    flight_target.is_armed = 2;
+                    flight_target.is_armed = ARM_STATE_WAITING_IMU_CALIB;
                 }
-                flight_target.cur_state = normal;
+                flight_target.cur_state = FLIGHT_STATE_NORMAL;
                 flight_target.start_up_scale = 0;
             }
             break;
@@ -163,9 +163,9 @@ void Fly_Param_Update_Debug(uint8_t ch, float val) {
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
                 } else {
-                    flight_target.is_armed = 2;
+                    flight_target.is_armed = ARM_STATE_WAITING_IMU_CALIB;
                 }
-                flight_target.cur_state = normal;
+                flight_target.cur_state = FLIGHT_STATE_NORMAL;
                 flight_target.start_up_scale = 0;
             }
             break;
@@ -217,9 +217,9 @@ void Fly_Param_Update_Visual(uint8_t ch, float val) {
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
                 } else {
-                    flight_target.is_armed = 2; 
+                    flight_target.is_armed = ARM_STATE_WAITING_IMU_CALIB; 
                 }
-                flight_target.cur_state = normal;
+                flight_target.cur_state = FLIGHT_STATE_NORMAL;
                 flight_target.start_up_scale = 0;
             }
             break;
@@ -266,9 +266,9 @@ void Fly_Param_Update_yaw(uint8_t ch, float val) {
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
                 } else {
-                    flight_target.is_armed = 2; 
+                    flight_target.is_armed = ARM_STATE_WAITING_IMU_CALIB; 
                 }
-                flight_target.cur_state = normal;
+                flight_target.cur_state = FLIGHT_STATE_NORMAL;
                 flight_target.start_up_scale = 0;
             }
             break;
@@ -316,9 +316,9 @@ void Fly_Param_Update_height(uint8_t ch, float val) {
                 if (imu_data.is_calibrated) {
                     Flight_Unlock();
                 } else {
-                    flight_target.is_armed = 2; 
+                    flight_target.is_armed = ARM_STATE_WAITING_IMU_CALIB; 
                 }
-                flight_target.cur_state = normal;
+                flight_target.cur_state = FLIGHT_STATE_NORMAL;
                 flight_target.start_up_scale = 0;
             }
             break;

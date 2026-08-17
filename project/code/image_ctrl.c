@@ -36,33 +36,32 @@ float ff_disp_remain_cm = 0.0f;     // 当前前馈剩余偏移量 (cm, 0=无前
  */
 static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y, float snapshot_yaw) {
 #if defined(CY_CORE_CM7_0) && CAR_FF_ENABLE
-    // 注: duplex_comm.c 仅编入 CM7_0 构建, CM7_1 无 duplex_uplink_data 可链, 故函数体限制在 CM7_0。
-    // ff_deg 为无人机地面系方向角 (X前Y右, 0°=上电机头, 顺时针正): 小车端按 (小车yaw-α) 换算上发,
-    // 本帧按快照偏航旋入机体系后叠加到 car_pos (机体系), 与位置环的帧处理一致。
-    float ff_deg = duplex_ff_pending_deg;   // 最近收到且尚未采纳的前馈角 (deg, -1=无前馈, 0°为有效方向)
-    if (ff_deg >= 0.0f && ff_deg != ff_event_deg) {
-        // 新前馈事件: 仅在此时抛一次偏移 (小车确认前重传的相同角度不重复触发)
-        ff_event_deg = ff_deg;
-        ff_event_ms = dataC.pit0_cnt;
-        duplex_ff_pending_deg = -1.0f;   // [新增] 已采纳, 清除待采纳锁存
-        duplex_ff_deg_received = 1U;     // [新增] 只有实际采纳后才回 ack, 避免未采纳就被小车停发
-        float rad = ff_deg * 3.14159265f / 180.0f;
-        float base_off_x = cosf(rad) * FF_THROW_DIST_CM;   // 地面系偏移向量 (事件方向, 世界固定)
-        float base_off_y = sinf(rad) * FF_THROW_DIST_CM;
+    // 1. 从双向通信上行数据 (duplex_uplink_data[3]) 提取最新前馈角 (X前Y右, 0°=上电机头, 顺时针正)
+    float raw_ff = duplex_uplink_data[3];
 
-        // [新增] 光流速度修正: kick 事件瞬间, 把无人机当前实际速度(光流)按时间常数折算成位移,
-        // 从抛向量中扣除, 作为"实际采纳"的 kick 方向与幅值; 随后整体随 throw_scale 衰减。
-        // 坐标系统一: 光流原始轴系为"右X后Y", upixel.c 已映射为机体系 (opt_vel_x=前向, opt_vel_y=右向,
-        // 单位 cm/s); 而抛向量位于地面系(X前Y右), 故先把机体系速度按偏航旋入地面系再相减。
-        // 光流失效(valid=0 或高度<80cm)时 filt_vel 已归零, 本修正项自动消失, 退化为纯方向抛出。
-        float ev_yaw_rad = VISION_EARTH_YAW_DEG(snapshot_yaw) * 3.14159265f / 180.0f;
-        float ev_cos = cosf(ev_yaw_rad);
-        float ev_sin = sinf(ev_yaw_rad);
-        float flow_earth_x = upixels_data.filt_vel_x * ev_cos - upixels_data.filt_vel_y * ev_sin;
-        float flow_earth_y = upixels_data.filt_vel_x * ev_sin + upixels_data.filt_vel_y * ev_cos;
-        ff_off_x = base_off_x - FF_FLOW_CORRECTION_S * flow_earth_x;
-        ff_off_y = base_off_y - FF_FLOW_CORRECTION_S * flow_earth_y;
+    if (raw_ff >= 0.0f) {
+        if (raw_ff != ff_event_deg) {
+            // 新前馈事件: 抛一次偏移并记录事件时刻 (小车确认前重传的相同角度不重复触发)
+            ff_event_deg = raw_ff;
+            ff_event_ms  = dataC.pit0_cnt;
+            float rad = raw_ff * 3.14159265f / 180.0f;
+            float base_off_x = cosf(rad) * FF_THROW_DIST_CM;   // 地面系偏移向量 (事件方向, 世界固定)
+            float base_off_y = sinf(rad) * FF_THROW_DIST_CM;
+
+            // 光流速度修正: kick 事件瞬间扣除当前实际速度折算位移
+            float ev_yaw_rad = VISION_EARTH_YAW_DEG(snapshot_yaw) * 3.14159265f / 180.0f;
+            float ev_cos = cosf(ev_yaw_rad);
+            float ev_sin = sinf(ev_yaw_rad);
+            float flow_earth_x = upixels_data.filt_vel_x * ev_cos - upixels_data.filt_vel_y * ev_sin;
+            float flow_earth_y = upixels_data.filt_vel_x * ev_sin + upixels_data.filt_vel_y * ev_cos;
+            ff_off_x = base_off_x - FF_FLOW_CORRECTION_S * flow_earth_x;
+            ff_off_y = base_off_y - FF_FLOW_CORRECTION_S * flow_earth_y;
+        }
+        duplex_ff_deg_received = 1U; // 收到有效前馈角且已采纳: 向小车回发 ACK
+    } else {
+        duplex_ff_deg_received = 0U; // 小车处于空闲态 (-1): 清除 ACK, 防止下一次前馈触发时误读旧 ACK
     }
+
     // 收敛: 事件后 FF_CONVERGE_MS 内衰减到 0 (世界方向恒定, 每帧旋入当前机体系);
     // 抛出量先经 FF_THROW_RAMP_MS 斜坡升至峰值, 消除阶跃对位置环/姿态链的冲击 (原地下坠源)
     uint32_t elapsed = dataC.pit0_cnt - ff_event_ms;
@@ -99,9 +98,7 @@ void Car_Feedforward_Reset(void) {
     ff_disp_dir_deg = 0.0f;
     ff_disp_remain_cm = 0.0f;
 #if defined(CY_CORE_CM7_0)
-    // [新增] 注意: 不在这里清 duplex_ff_pending_deg, 否则短暂丢失小车/低高度光流期间
-    // 收到但未采纳的前馈会被丢弃; 保留待采纳锁存, 等进入可采纳状态后补采纳。
-    duplex_ff_deg_received = 0;      // [新增] 复位后不再对旧前馈回 ack, 让小车在可采纳时重传
+    duplex_ff_deg_received = 0;      // 复位后不再对旧前馈回 ack, 让小车在可采纳时重传
 #endif
 }
 
@@ -136,6 +133,25 @@ void Image_Hover_Reset_For_OpticalFlow(void) {
     search_wait_timer = 0;
     is_turning = 0;
     was_aligning = 0;
+}
+
+/**
+ * @brief 视觉长时间失联时的安全保护处理 (清理积分、复位前馈、高高度平滑回平)
+ */
+void Flight_Hover_Lost_Protection(void) {
+    Nonline_PID_Reset(&pid_image_x);
+    Nonline_PID_Reset(&pid_image_y);
+    Car_Feedforward_Reset();
+    if (Flight_Get_Nav_Mode() == NAV_MODE_VISION_HOVER) {
+        Flight_Set_Target_Attitude_Smoothed(0.0f, 0.0f, flight_target.target_yaw, 0.01f);
+    }
+    last_locked_lights = 0;
+    has_seen_beacon = 0;
+    search_seq_idx = 0;
+    search_wait_timer = 0;
+    is_turning = 0;
+    was_aligning = 0;
+    lost_frames = LOST_TOLERANCE_FRAMES;
 }
 
 /**
@@ -342,13 +358,6 @@ void Flight_Hover_Control_Task(void) {
     if (last_ang_cnt != 0) real_dt_ang = dataC.pit0_cnt - last_ang_cnt;
     last_ang_cnt = dataC.pit0_cnt;
 
-    // ================== 模式切换: 带滞回 ==================
-    if (OpticalFlow_Mode_Should_Be_Active()) {
-        OpticalFlow_Mode_Enter();
-        return;
-    }
-    OpticalFlow_Mode_Exit();
-
     // 视觉环使用真实帧间隔作为平滑/控制 dt
     float dt_sec = real_dt_ang / 1000.0f;
     if (dt_sec < 0.005f) dt_sec = 0.005f;
@@ -385,7 +394,7 @@ void Flight_Hover_Control_Task(void) {
 
         last_locked_lights = locked_lights;
         lost_frames = 0; // 有目标，清零丢失计数器
-        OpticalFlow_Set_Target_Attitude_Smoothed(target_roll_val, target_pitch_val, flight_target.target_yaw, dt_sec);
+        Flight_Set_Target_Attitude_Smoothed(target_roll_val, target_pitch_val, flight_target.target_yaw, dt_sec);
 
     } 
     // ================== 完全丢失目标逻辑 ==================
@@ -397,7 +406,7 @@ void Flight_Hover_Control_Task(void) {
             hover_car_filter_initialized = 0;
             Car_Feedforward_Reset(); // [新增] 丢失回平同步清前馈偏移
 
-            OpticalFlow_Set_Target_Attitude_Smoothed(0.0f, 0.0f, flight_target.target_yaw, dt_sec);
+            Flight_Set_Target_Attitude_Smoothed(0.0f, 0.0f, flight_target.target_yaw, dt_sec);
 
             // 清理所有扫描与防抖状态
             last_locked_lights = 0;

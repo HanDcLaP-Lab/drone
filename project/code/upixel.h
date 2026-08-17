@@ -48,7 +48,7 @@ extern volatile uint16_t upixels_count_500ms; // 过去 500ms 内的更新次数
 void    upixels_init(void);
 uint8   upixels_parse_byte(uint8 data);
 void    upixels_calc_velocity(float current_height_cm);
-void    upixels_poll_and_calc(float current_height_cm);
+uint8   upixels_poll_and_calc(float current_height_cm);
 void    upixels_get_data_loop(void);
 
 #endif
