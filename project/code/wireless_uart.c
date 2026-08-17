@@ -187,25 +187,28 @@ void wireless_uart_motor_average_sample(void){
     motor_avg_sample_count++;
 }
 
-// [新增] 前馈事件打印 (无线): 前馈事件角变化时输出一行, 供联调观察。
-// 格式: FFD_RX,<事件前馈角>,<光流修正后角>,fb:<0=未收到 1=已收到>
-//   两个角度均为地面系 (0°=车头, 顺时针正, [0,360))。
-//   事件角取自 ff_event_deg, 修正后角 = atan2(ff_off_y, ff_off_x), 二者同一次事件、严格配对;
-//   换算在打印函数内完成, 不影响主流程。
+// [优化] 前馈采纳打印 (无线): 仅在飞控确认采纳前馈事件后输出一行, 供联调观察。
+// 格式: FFD_RX,<已采纳前馈角>,<光流修正后角>,fb:<0=未采纳 1=已采纳>
+//   第一个角度为飞控已采纳的前馈角 (地面系, 0°=车头, 顺时针正, [0,360))。
+//   第二个角度为同一次事件的修正后角 (取自 ff_off_x/ff_off_y)。
 // 仅在 CM7_0 构建引用 duplex 符号 (duplex_comm.c 只编入 CM7_0, CM7_1 无该符号可链)。
 void wireless_uart_output_feedforward_rx(void){
 #if DUPLEX_SWITCH && defined(CY_CORE_CM7_0)
-    static float last_printed_event_deg = -1.0f;   // 初始 -1 与 ff_event_deg 一致, 避免上电误打印
-    float event_deg = ff_event_deg;                // 事件前馈角 (deg, -1=无事件)
+    static float last_printed_event_deg = -1.0f;   // 上一次打印过的已采纳前馈角 (-1=无事件)
+    float event_deg = ff_event_deg;                // 飞控已采纳的前馈事件角 (deg, -1=无事件)
     uint8_t fb = duplex_ff_deg_received;
 
-    // 仅在前馈事件角变化时打印 (与 ff_off_x/y 同一事件, 严格配对)
+    // 只打印已采纳事件; 复位到 -1 时不打印, 只重置记忆以便下次同角度可再次打印
+    if (event_deg < 0.0f) {
+        last_printed_event_deg = -1.0f;
+        return;
+    }
     if (event_deg == last_printed_event_deg) return;
     last_printed_event_deg = event_deg;
 
-    // 修正后角度: 读取同一次事件的修正后偏移向量, 在此换算为角度
+    // 修正后角度: 同一次事件的修正后偏移向量换算
     float ff_corrected_deg = 0.0f;
-    if (event_deg > 0.0f)
+    if (event_deg >= 0.0f)
     {
         ff_corrected_deg = atan2f(ff_off_y, ff_off_x) * 180.0f / 3.14159265f;   // 向量 → 角度 (地面系)
         if (ff_corrected_deg < 0.0f) ff_corrected_deg += 360.0f;                // 归一化到 [0,360)

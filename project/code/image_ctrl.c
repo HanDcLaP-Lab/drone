@@ -20,12 +20,12 @@
 // ******************************************************************************
 
 // =================== 前馈偏移状态 (见 Car_Position_Predict_Feedforward) ===================
-float ff_event_deg = -1.0f;          // 已应用前馈事件的角度 (deg, -1=尚未收到过, 供打印函数触发)
+float ff_event_deg = -1.0f;          // 已应用前馈事件的角度 (deg, -1=尚未收到过, 供打印函数换算修正角)
 float ff_off_x = 0.0f;              // 事件时刻的修正后地面系偏移向量X (cm, 供打印函数换算角度)
 float ff_off_y = 0.0f;              // 事件时刻的修正后地面系偏移向量Y (cm, 供打印函数换算角度)
 static uint32_t ff_event_ms = 0;    // 事件时刻 (dataC.pit0_cnt, ms)
 float ff_disp_dir_deg = 0.0f;       // 当前前馈方向 (deg, 机体系 0°=机头), 供 CM7_1 屏幕显示
-float ff_disp_remain_cm = 0.0f;     // 当前前馈剩余偏移量 (cm, 0=无前馈), 供 CM7_1 屏幕显示
+float ff_disp_remain_cm = 0.0f;     // 当前前馈剩余偏移量 (cm, 0=无前馈; >0 时方向有效), 供 CM7_1 屏幕显示
 
 /**
  * @brief 小车方向前馈: 收到小车前馈角 (上行 ff_deg) 时, 将小车位置向该方向抛出
@@ -39,11 +39,13 @@ static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y,
     // 注: duplex_comm.c 仅编入 CM7_0 构建, CM7_1 无 duplex_uplink_data 可链, 故函数体限制在 CM7_0。
     // ff_deg 为无人机地面系方向角 (X前Y右, 0°=上电机头, 顺时针正): 小车端按 (小车yaw-α) 换算上发,
     // 本帧按快照偏航旋入机体系后叠加到 car_pos (机体系), 与位置环的帧处理一致。
-    float ff_deg = duplex_uplink_data[3];   // 上行前馈角 (deg, 0=无前馈)
-    if (ff_deg != 0.0f && ff_deg != ff_event_deg) {
+    float ff_deg = duplex_ff_pending_deg;   // 最近收到且尚未采纳的前馈角 (deg, -1=无前馈, 0°为有效方向)
+    if (ff_deg >= 0.0f && ff_deg != ff_event_deg) {
         // 新前馈事件: 仅在此时抛一次偏移 (小车确认前重传的相同角度不重复触发)
         ff_event_deg = ff_deg;
         ff_event_ms = dataC.pit0_cnt;
+        duplex_ff_pending_deg = -1.0f;   // [新增] 已采纳, 清除待采纳锁存
+        duplex_ff_deg_received = 1U;     // [新增] 只有实际采纳后才回 ack, 避免未采纳就被小车停发
         float rad = ff_deg * 3.14159265f / 180.0f;
         float base_off_x = cosf(rad) * FF_THROW_DIST_CM;   // 地面系偏移向量 (事件方向, 世界固定)
         float base_off_y = sinf(rad) * FF_THROW_DIST_CM;
@@ -80,7 +82,7 @@ static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y,
     *car_pos_y += -earth_off_x * sin_yaw + earth_off_y * cos_yaw;
 
     // 供 CM7_1 屏幕绘制: 方向 = 事件地面系方向旋入机体系 (= 飞行实际施加方向, 屏幕映射为机体系);
-    // 上行值仅在车端发送期非零, 若取上行值, 整个 1s 收敛期几乎都读到 0=无前馈,
+    // 上行值仅在车端发送期有效(≥0), 若取上行值, 整个 1s 收敛期几乎都读到 -1=无前馈,
     // 短线会被画成固定 0° 机头方向。
     ff_disp_dir_deg = (k > 0.0f) ? (ff_event_deg - VISION_EARTH_YAW_DEG(snapshot_yaw)) : 0.0f;
     ff_disp_remain_cm = sqrtf(earth_off_x * earth_off_x + earth_off_y * earth_off_y);
@@ -96,6 +98,11 @@ void Car_Feedforward_Reset(void) {
     ff_off_y = 0.0f;
     ff_disp_dir_deg = 0.0f;
     ff_disp_remain_cm = 0.0f;
+#if defined(CY_CORE_CM7_0)
+    // [新增] 注意: 不在这里清 duplex_ff_pending_deg, 否则短暂丢失小车/低高度光流期间
+    // 收到但未采纳的前馈会被丢弃; 保留待采纳锁存, 等进入可采纳状态后补采纳。
+    duplex_ff_deg_received = 0;      // [新增] 复位后不再对旧前馈回 ack, 让小车在可采纳时重传
+#endif
 }
 
 // =================== 内部静态状态变量 ===================
@@ -351,6 +358,10 @@ void Flight_Hover_Control_Task(void) {
         Hover_Car_Position_Filter(car_pos_x, car_pos_y, snapshot_yaw, &car_pos_x, &car_pos_y);
 
         // 3. 小车方向前馈: 条件放松, 仅小车可见即可 (未触发丢失回平), 叠加于实时小车坐标之上
+        Car_Position_Predict_Feedforward(&car_pos_x, &car_pos_y, snapshot_yaw);
+    } else if (lost_frames < LOST_TOLERANCE_FRAMES) {
+        // [新增] 丢失容忍期内仍维持飞行: 即使 locked_lights 不为 1/3,
+        // 只要还没进入丢失回平, 也尝试采纳前馈, 避免短暂丢失期间把前馈丢掉。
         Car_Position_Predict_Feedforward(&car_pos_x, &car_pos_y, snapshot_yaw);
     }
 

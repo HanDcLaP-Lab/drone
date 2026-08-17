@@ -38,9 +38,9 @@ void Image_Hover_Reset_For_OpticalFlow(void);
 // =================== 前馈偏移对外接口 ===================
 // 显示方向: 机体系 (0°=当前机头, 顺时针正, 已按快照偏航旋入, 与飞行实际施加一致)
 void Car_Feedforward_Reset(void);         // 复位前馈偏移状态 (丢失回平/视觉失联时调用)
-extern float ff_disp_dir_deg;             // 当前前馈方向角 (deg, 机体系 0°=机头, 0=无前馈) → M7_0_data_send 下传 CM7_1 屏幕绘制
-extern float ff_disp_remain_cm;           // 当前前馈剩余偏移量 (cm, 0=无前馈) → 同上
+extern float ff_disp_dir_deg;             // 当前前馈方向角 (deg, 机体系 0°=机头; 仅 ff_disp_remain_cm>0 时有效) → M7_0_data_send 下传 CM7_1 屏幕绘制
+extern float ff_disp_remain_cm;           // 当前前馈剩余偏移量 (cm, 0=无前馈; >0 时方向有效) → 同上
 extern float ff_off_x;                    // [新增] 事件时刻修正后前馈偏移向量X (cm, 地面系) → 打印函数换算角度
 extern float ff_off_y;                    // [新增] 事件时刻修正后前馈偏移向量Y (cm, 地面系) → 打印函数换算角度
-extern float ff_event_deg;                // [新增] 已应用前馈事件的角度 (deg, 地面系, -1=无事件) → 打印函数触发源
+extern float ff_event_deg;                // [新增] 已应用前馈事件的角度 (deg, 地面系, -1=无事件) → 打印函数换算修正角
 #endif

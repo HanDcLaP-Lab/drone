@@ -17,7 +17,7 @@
 #define BOARD_BAUDRATE   1000000
 #define BOARD_TX_PIN     UART4_TX_P14_1  
 #define BOARD_RX_PIN     UART4_RX_P14_0  
-#define UART_DATA_LENGTH 13 // 下传数组长度 (13个float, [12]=前馈接收反馈标志, 见 Float_Buffer_write)
+#define UART_DATA_LENGTH 13 // 下传数组长度 (13个float, [12]=前馈采纳反馈标志, 见 Float_Buffer_write)
 // 协议帧格式: 0xAA 0x55 + 52字节(13×float) + 1字节累加校验和 + 0x7F
 // 数组索引映射详见 data_complex.c 中 Float_Buffer_write()，小车端对应 car_board_comm.h
 //============================================================
@@ -40,7 +40,7 @@
 #define S0_OPT_COUNT_500MS 12 // upixels_count_500ms     500ms内光流更新次数
 #define S0_DEBUG_ERR_Y    13  // dataC.debug_earth_err_y    调试: 地面误差Y
 #define S0_FF_DIR         14  // 前馈方向角 (deg, 机体系 0°=机头顺时针正; 剩余量为0时无效) ← ff_disp_dir_deg
-#define S0_FF_REMAIN      15  // 前馈剩余偏移量 (cm, 0=无前馈) ← ff_disp_remain_cm
+#define S0_FF_REMAIN      15  // 前馈剩余偏移量 (cm, 0=无前馈; >0 时方向有效) ← ff_disp_remain_cm
 #define S0_OPT_VEL_X      16  // upixels_data.opt_vel_x     光流原始速度X (cm/s)
 #define S0_OPT_VEL_Y      17  // upixels_data.opt_vel_y     光流原始速度Y (cm/s)
 #define S0_OPT_FILT_X     18  // upixels_data.filt_vel_x    光流滤波速度X (cm/s)

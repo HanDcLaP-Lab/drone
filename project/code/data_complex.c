@@ -134,7 +134,7 @@ void M7_0_data_send(volatile float* data_out) { // Core 0 调用，写入share_d
 //   [9] target2_raw_y       — 第二信标机体系Y (cm, 未滤波)    ← S1_RAW_TARGET2_Y
 //   [10] target3_raw_x      — 第三信标机体系X (cm, 未滤波)    ← S1_RAW_TARGET3_X
 //   [11] target3_raw_y      — 第三信标机体系Y (cm, 未滤波)    ← S1_RAW_TARGET3_Y
-//   [12] ff_ack             — 前馈接收反馈 (0=未收到, 1=已收到非零前馈角) ← duplex_ff_deg_received
+//   [12] ff_ack             — 前馈采纳反馈 (0=未采纳, 1=已采纳有效前馈角, 含0°) ← duplex_ff_deg_received
 // ******************************************************************************
 extern volatile uint8_t duplex_ff_deg_received;   // 定义于 duplex_comm.c (仅 CM7_0 构建)
 
@@ -154,7 +154,7 @@ void Float_Buffer_write(float* buffer, volatile float* share_data) //此处share
     buffer[9] = share_data[S1_RAW_TARGET2_Y];
     buffer[10] = share_data[S1_RAW_TARGET3_X];
     buffer[11] = share_data[S1_RAW_TARGET3_Y];
-    // [新增] 前馈接收反馈: 由 duplex_comm 最近一次解码的应答前馈角刷新 (0=未收到, 1=已收到)
+    // [新增] 前馈采纳反馈: 由 duplex_comm 与 image_ctrl 协同刷新 (0=未采纳, 1=已采纳)
     buffer[12] = (float)duplex_ff_deg_received;
 }
 
