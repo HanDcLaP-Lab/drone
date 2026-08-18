@@ -36,30 +36,52 @@ float ff_disp_remain_cm = 0.0f;     // 当前前馈剩余偏移量 (cm, 0=无前
  */
 static void Car_Position_Predict_Feedforward(float *car_pos_x, float *car_pos_y, float snapshot_yaw) {
 #if defined(CY_CORE_CM7_0) && CAR_FF_ENABLE
-    // 1. 从双向通信上行数据 (duplex_uplink_data[3]) 提取最新前馈角 (X前Y右, 0°=上电机头, 顺时针正)
-    float raw_ff = duplex_uplink_data[3];
+    // 1. 从双向通信提取最新待处理前馈角 (支持 100ms 保留窗口)
+    float raw_ff = Duplex_Get_Pending_Feedforward();
 
     if (raw_ff >= 0.0f) {
         if (raw_ff != ff_event_deg) {
             // 新前馈事件: 抛一次偏移并记录事件时刻 (小车确认前重传的相同角度不重复触发)
             ff_event_deg = raw_ff;
             ff_event_ms  = dataC.pit0_cnt;
-            float rad = raw_ff * 3.14159265f / 180.0f;
-            float base_off_x = cosf(rad) * FF_THROW_DIST_CM;   // 地面系偏移向量 (事件方向, 世界固定)
-            float base_off_y = sinf(rad) * FF_THROW_DIST_CM;
 
-            // 光流速度修正: kick 事件瞬间扣除当前实际速度折算位移
+            // 1. 光流速度转地面系 (世界坐标)
             float ev_yaw_rad = VISION_EARTH_YAW_DEG(snapshot_yaw) * 3.14159265f / 180.0f;
             float ev_cos = cosf(ev_yaw_rad);
             float ev_sin = sinf(ev_yaw_rad);
             float flow_earth_x = upixels_data.filt_vel_x * ev_cos - upixels_data.filt_vel_y * ev_sin;
             float flow_earth_y = upixels_data.filt_vel_x * ev_sin + upixels_data.filt_vel_y * ev_cos;
+
+            // 2. 计算当前飞行速度方向与预期前馈方向的夹角 [0, 180度]
+            float angle_scale = 1.0f;
+            float v_speed = sqrtf(flow_earth_x * flow_earth_x + flow_earth_y * flow_earth_y);
+#if defined(FF_REVERSE_GAIN)
+            if (FF_REVERSE_GAIN != 1.0f && v_speed > 5.0f) {
+                float vel_deg = atan2f(flow_earth_y, flow_earth_x) * (180.0f / 3.14159265f);
+                if (vel_deg < 0.0f) vel_deg += 360.0f;
+                float angle_diff = fabsf(raw_ff - vel_deg);
+                if (angle_diff > 180.0f) angle_diff = 360.0f - angle_diff;
+
+                // 在 90~180 度区间线性增大响应幅值 (90°对应1.0, 180°对应FF_REVERSE_GAIN)
+                if (angle_diff > 90.0f) {
+                    angle_scale = 1.0f + (FF_REVERSE_GAIN - 1.0f) * ((angle_diff - 90.0f) / 90.0f);
+                }
+            }
+#endif
+
+            // 3. 基础抛出量计算 (含大角度/掉头增益缩放)
+            float rad = raw_ff * 3.14159265f / 180.0f;
+            float throw_dist = FF_THROW_DIST_CM * angle_scale;
+            float base_off_x = cosf(rad) * throw_dist;   // 地面系偏移向量 (事件方向, 世界固定)
+            float base_off_y = sinf(rad) * throw_dist;
+
+            // 4. 光流速度修正: kick 事件瞬间扣除当前实际速度折算位移
             ff_off_x = base_off_x - FF_FLOW_CORRECTION_S * flow_earth_x;
             ff_off_y = base_off_y - FF_FLOW_CORRECTION_S * flow_earth_y;
         }
         duplex_ff_deg_received = 1U; // 收到有效前馈角且已采纳: 向小车回发 ACK
     } else {
-        duplex_ff_deg_received = 0U; // 小车处于空闲态 (-1): 清除 ACK, 防止下一次前馈触发时误读旧 ACK
+        duplex_ff_deg_received = 0U; // 无待处理前馈或已过期 (-1): 清除 ACK, 防止下一次前馈触发时误读旧 ACK
     }
 
     // 收敛: 事件后 FF_CONVERGE_MS 内衰减到 0 (世界方向恒定, 每帧旋入当前机体系);
@@ -98,6 +120,7 @@ void Car_Feedforward_Reset(void) {
     ff_disp_dir_deg = 0.0f;
     ff_disp_remain_cm = 0.0f;
 #if defined(CY_CORE_CM7_0)
+    Duplex_Clear_Pending_Feedforward();
     duplex_ff_deg_received = 0;      // 复位后不再对旧前馈回 ack, 让小车在可采纳时重传
 #endif
 }

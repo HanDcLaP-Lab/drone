@@ -187,8 +187,30 @@ void wireless_uart_motor_average_sample(void){
     motor_avg_sample_count++;
 }
 
-// [优化] 前馈采纳打印 (无线): 仅在飞控确认采纳前馈事件后输出一行, 供联调观察。
-// 格式: FFD_RX,<已采纳前馈角>,<光流修正后角>,fb:<0=未采纳 1=已采纳>
+// [新增] 1. 前馈刚收到时刻打印 (无线): 收到小车上行有效前馈角时立刻输出一行。
+// 格式: FFD_RECV,<原始前馈角>\r\n
+void wireless_uart_output_feedforward_recv(void){
+#if DUPLEX_SWITCH && defined(CY_CORE_CM7_0)
+    static float last_printed_raw_ff = -1.0f;
+    float raw_ff = duplex_uplink_data[3];
+
+    if (raw_ff < 0.0f) {
+        last_printed_raw_ff = -1.0f;
+        return;
+    }
+    if (raw_ff == last_printed_raw_ff) return;
+    last_printed_raw_ff = raw_ff;
+
+    wireless_uart_send_string("FFD_RECV,");
+    wireless_uart_send_float(raw_ff);
+    wireless_uart_send_string("\r\n");
+#else
+    return;
+#endif
+}
+
+// [优化] 2. 前馈确认采纳时刻打印 (无线): 仅在飞控确认采纳前馈事件并结合光流修正后输出一行。
+// 格式: FFD_ACK,<已采纳前馈角>,<光流修正后角>,fb:<0=未采纳 1=已采纳>\r\n
 //   第一个角度为飞控已采纳的前馈角 (地面系, 0°=车头, 顺时针正, [0,360))。
 //   第二个角度为同一次事件的修正后角 (取自 ff_off_x/ff_off_y)。
 // 仅在 CM7_0 构建引用 duplex 符号 (duplex_comm.c 只编入 CM7_0, CM7_1 无该符号可链)。
@@ -214,7 +236,7 @@ void wireless_uart_output_feedforward_rx(void){
         if (ff_corrected_deg < 0.0f) ff_corrected_deg += 360.0f;                // 归一化到 [0,360)
     }
 
-    wireless_uart_send_string("FFD_RX,");
+    wireless_uart_send_string("FFD_ACK,");
     wireless_uart_send_float(event_deg);
     wireless_uart_send_string(",");
     wireless_uart_send_float(ff_corrected_deg);

@@ -26,9 +26,9 @@ static Calibration_Ctrl_t calib_ctrl = {
     .sum_roll = 0.0f,
     .sum_pitch = 0.0f,
     .sum_motor = {0, 0, 0, 0},
-    .roll_offset = 0.0f,
-    .pitch_offset = 0.0f,
-    .hover_pwm = {HOVER_THROTTLE, HOVER_THROTTLE, HOVER_THROTTLE, HOVER_THROTTLE},
+    .roll_offset = INIT_ROLL_OFFSET_DEG,
+    .pitch_offset = INIT_PITCH_OFFSET_DEG,
+    .hover_pwm = {INIT_HOVER_PWM_LF, INIT_HOVER_PWM_RF, INIT_HOVER_PWM_LB, INIT_HOVER_PWM_RB},
     .buzzer_on = 0,
     .buzzer_until_ms = 0
 };
@@ -50,12 +50,12 @@ void Calibration_Init(void) {
     calib_ctrl.sum_pitch = 0.0f;
     calib_ctrl.sum_motor[0] = 0; calib_ctrl.sum_motor[1] = 0; calib_ctrl.sum_motor[2] = 0; calib_ctrl.sum_motor[3] = 0;
     calib_ctrl.sample_cnt = 0;
-    calib_ctrl.roll_offset = 0.0f;
-    calib_ctrl.pitch_offset = 0.0f;
-    calib_ctrl.hover_pwm[0] = HOVER_THROTTLE;
-    calib_ctrl.hover_pwm[1] = HOVER_THROTTLE;
-    calib_ctrl.hover_pwm[2] = HOVER_THROTTLE;
-    calib_ctrl.hover_pwm[3] = HOVER_THROTTLE;
+    calib_ctrl.roll_offset = INIT_ROLL_OFFSET_DEG;
+    calib_ctrl.pitch_offset = INIT_PITCH_OFFSET_DEG;
+    calib_ctrl.hover_pwm[0] = INIT_HOVER_PWM_LF;
+    calib_ctrl.hover_pwm[1] = INIT_HOVER_PWM_RF;
+    calib_ctrl.hover_pwm[2] = INIT_HOVER_PWM_LB;
+    calib_ctrl.hover_pwm[3] = INIT_HOVER_PWM_RB;
     calib_ctrl.buzzer_on = 0;
     calib_ctrl.buzzer_until_ms = 0;
 
@@ -79,6 +79,12 @@ void Calibration_Reset(void) {
     calib_ctrl.sum_pitch = 0.0f;
     calib_ctrl.sum_motor[0] = 0; calib_ctrl.sum_motor[1] = 0; calib_ctrl.sum_motor[2] = 0; calib_ctrl.sum_motor[3] = 0;
     calib_ctrl.sample_cnt = 0;
+    calib_ctrl.roll_offset = INIT_ROLL_OFFSET_DEG;
+    calib_ctrl.pitch_offset = INIT_PITCH_OFFSET_DEG;
+    calib_ctrl.hover_pwm[0] = INIT_HOVER_PWM_LF;
+    calib_ctrl.hover_pwm[1] = INIT_HOVER_PWM_RF;
+    calib_ctrl.hover_pwm[2] = INIT_HOVER_PWM_LB;
+    calib_ctrl.hover_pwm[3] = INIT_HOVER_PWM_RB;
     calib_ctrl.buzzer_on = 0;
     calib_ctrl.buzzer_until_ms = 0;
     gpio_low(BUZZER_PIN);
@@ -146,6 +152,16 @@ void Calibration_Update(void) {
 
                 calib_ctrl.state = CALIB_STATE_DONE;
                 Buzzer_Start(); // 校准完成提示音
+
+#if defined(CY_CORE_CM7_0)
+                char calib_msg[128];
+                sprintf(calib_msg, "[CALIB] roll_offset=%.2f, pitch_offset=%.2f, hover=[%d,%d,%d,%d]\r\n",
+                        calib_ctrl.roll_offset, calib_ctrl.pitch_offset,
+                        calib_ctrl.hover_pwm[0], calib_ctrl.hover_pwm[1],
+                        calib_ctrl.hover_pwm[2], calib_ctrl.hover_pwm[3]);
+                wireless_uart_send_string(calib_msg);
+                printf("%s", calib_msg);
+#endif
             }
             break;
 
@@ -160,7 +176,7 @@ float Calibration_Get_Roll_Offset(void) {
 #if CALIBRATION_ENABLE
     return calib_ctrl.roll_offset;
 #else
-    return 0.0f;
+    return INIT_ROLL_OFFSET_DEG;
 #endif
 }
 
@@ -168,7 +184,7 @@ float Calibration_Get_Pitch_Offset(void) {
 #if CALIBRATION_ENABLE
     return calib_ctrl.pitch_offset;
 #else
-    return 0.0f;
+    return INIT_PITCH_OFFSET_DEG;
 #endif
 }
 
@@ -185,9 +201,15 @@ int16_t Calibration_Get_Hover_PWM(uint8_t motor_index) {
     if (motor_index < 4U) {
         return calib_ctrl.hover_pwm[motor_index];
     }
-    return HOVER_THROTTLE;
+    return INIT_HOVER_PWM_LF;
 #else
-    return HOVER_THROTTLE;
+    switch (motor_index) {
+        case 0: return INIT_HOVER_PWM_LF;
+        case 1: return INIT_HOVER_PWM_RF;
+        case 2: return INIT_HOVER_PWM_LB;
+        case 3: return INIT_HOVER_PWM_RB;
+        default: return INIT_HOVER_PWM_LF;
+    }
 #endif
 }
 

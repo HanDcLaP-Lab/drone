@@ -21,7 +21,6 @@
 // =================== 全局变量定义 ===================
 Flight_Target_t flight_target = {0};
 Motor_Output_t motor_out = {0};
-Motor_Offsset_t motor_offset = {0};
 // 定义 PID 对象
 PID_t pid_height_vel;
 PID_t pid_height_pos;
@@ -66,7 +65,7 @@ void Flight_Control_Init(void) {
 
     // ----------- 初始化 PID 参数 -----------
     // 高度环
-    PID_Init(&pid_height_pos, 0.7f, 0.4f, 0.0f, 30, 20, 40.0f);
+    PID_Init(&pid_height_pos, 0.7f, 0.4f, 0.0f, 30, 50, 40.0f);
     PID_Init(&pid_height_vel, 16.031f, 0.0f, 0.15f, 80, 2500, 15.0f);
     // 角度环a
     Nonline_PID_Init(&pid_roll, 9.328f, 0.239f, 0.0f, 0.05f, 20, 300, 40.0f);
@@ -247,13 +246,8 @@ static void Flight_State_Update(void) {
     // 3. 根据状态设定目标高度及特殊行为
     switch (flight_target.cur_state) {
         case FLIGHT_STATE_NORMAL:
-#if AUTO_TAKEOFF_ENABLE
-            // 自动起飞开启: 起飞缓启动对目标高度缩放, 不直接缩放 PWM 输出
+            // 目标高度随 start_up_scale 缓升，保证高度环闭环无阶跃
             flight_target.target_height = TARGET_HEIGHT_CM * flight_target.start_up_scale;
-#else
-            // 自动起飞关闭: 目标高度直接设定为期望高度, start_up_scale 叠加乘在 PWM 最终输出上
-            flight_target.target_height = TARGET_HEIGHT_CM;
-#endif
             if (flight_target.is_armed == ARM_STATE_ARMED) {
                 if (flight_target.start_up_scale < 1.0f) {
                     flight_target.start_up_scale += CTRL_DT_CTLOOP * 0.4f;  // 约2.5秒加满
@@ -362,39 +356,32 @@ static void Flight_Control_Rate(float *out_roll, float *out_pitch, float *out_ya
  * @param out_roll/pitch/yaw 三轴控制量
  */
 static void Flight_Motor_Mix(int16_t base_throttle, float out_roll, float out_pitch, float out_yaw) {
+    // 基础悬停油门随 start_up_scale 从怠速 (MIN_PWM) 平滑上升至悬停油门，消除电调起转阶跃
+    float startup = flight_target.start_up_scale;
+    int16_t hover_lf = Calibration_Get_Hover_PWM(0);
+    int16_t hover_rf = Calibration_Get_Hover_PWM(1);
+    int16_t hover_lb = Calibration_Get_Hover_PWM(2);
+    int16_t hover_rb = Calibration_Get_Hover_PWM(3);
 
-    // 根据机架前后/左右静态偏差叠加电机补偿。
-    motor_offset.lf = (int16_t)( PITCH_OFFSET + ROLL_OFFSET);
-    motor_offset.rf = (int16_t)( PITCH_OFFSET - ROLL_OFFSET);
-    motor_offset.lb = (int16_t)(-PITCH_OFFSET + ROLL_OFFSET);
-    motor_offset.rb = (int16_t)(-PITCH_OFFSET - ROLL_OFFSET);
+    int16_t base_lf = (int16_t)(MIN_PWM + (hover_lf - MIN_PWM) * startup + base_throttle);
+    int16_t base_rf = (int16_t)(MIN_PWM + (hover_rf - MIN_PWM) * startup + base_throttle);
+    int16_t base_lb = (int16_t)(MIN_PWM + (hover_lb - MIN_PWM) * startup + base_throttle);
+    int16_t base_rb = (int16_t)(MIN_PWM + (hover_rb - MIN_PWM) * startup + base_throttle);
 
-    // 校准完成后直接用各电机平均 PWM 作为基准, 再叠加高度环修正量;
-    // 未完成时 Calibration_Get_Hover_PWM()==HOVER_THROTTLE, 故与当前逻辑完全一致
-    int16_t base_lf = (int16_t)(Calibration_Get_Hover_PWM(0) + base_throttle);
-    int16_t base_rf = (int16_t)(Calibration_Get_Hover_PWM(1) + base_throttle);
-    int16_t base_lb = (int16_t)(Calibration_Get_Hover_PWM(2) + base_throttle);
-    int16_t base_rb = (int16_t)(Calibration_Get_Hover_PWM(3) + base_throttle);
-
-    // 综合缩放因子: output_scale 与 start_up_scale (当自动起飞关闭时叠加)
-#if AUTO_TAKEOFF_ENABLE
     float total_scale = flight_target.output_scale;
-#else
-    float total_scale = flight_target.output_scale * flight_target.start_up_scale;
-#endif
 
     // 混控算法 (X型四旋翼)
     // LF (左前, CW): Base + Pitch + Roll - Yaw
-    motor_out.lf = (int16_t)((base_lf + out_pitch + out_roll + out_yaw + motor_offset.lf) * total_scale);
+    motor_out.lf = (int16_t)((base_lf + out_pitch + out_roll + out_yaw) * total_scale);
 
     // RF (右前, CCW): Base + Pitch - Roll + Yaw
-    motor_out.rf = (int16_t)((base_rf + out_pitch - out_roll - out_yaw + motor_offset.rf) * total_scale);
+    motor_out.rf = (int16_t)((base_rf + out_pitch - out_roll - out_yaw) * total_scale);
 
     // LB (左后, CCW): Base - Pitch + Roll + Yaw
-    motor_out.lb = (int16_t)((base_lb - out_pitch + out_roll - out_yaw + motor_offset.lb) * total_scale);
+    motor_out.lb = (int16_t)((base_lb - out_pitch + out_roll - out_yaw) * total_scale);
 
     // RB (右后, CW): Base - Pitch - Roll - Yaw
-    motor_out.rb = (int16_t)((base_rb - out_pitch - out_roll + out_yaw + motor_offset.rb) * total_scale);
+    motor_out.rb = (int16_t)((base_rb - out_pitch - out_roll + out_yaw) * total_scale);
 
     // 输出限幅与映射: 查找最大值与最小值，若越界则映射到 [current_min_pwm, MAX_PWM]，保持推力矢量方向大致不变
     int16_t current_min_pwm = (flight_target.cur_state == FLIGHT_STATE_LANDING) ?
@@ -468,9 +455,12 @@ void Flight_Control_Loop(void) {
     // 3. 角速度环控制 (计算姿态修正量)
     Flight_Control_Rate(&motor_out.roll, &motor_out.pitch, &motor_out.yaw);
 
-    // 4. 锁定检查 (未解锁时锁定电机并退出)
+    // 4. 解锁状态检查 (未解锁或等待校准时清零电机输出并退出，不破坏 WAITING_IMU_CALIB 状态)
     if (flight_target.is_armed != ARM_STATE_ARMED) {
-        Flight_Lock();
+        motor_out.lf = 0;
+        motor_out.rf = 0;
+        motor_out.lb = 0;
+        motor_out.rb = 0;
         return;
     }
 

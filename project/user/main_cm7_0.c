@@ -48,7 +48,7 @@
 // =================== 引脚与硬件宏定义 ===================
 #define LED1         (P19_0)
 #define UART_KEY     (P19_2)
-#define DEBUG_PROBE  (P02_3)  // 示波器探头: 高=主循环计算执行中 (P02_0 已分配给光流 UART5_RX)
+#define DEBUG_PROBE  (P02_3)  // 示波器探头: 高=主循环计算执行中 (P02_0 已分配给光流 UART5_RX，P02_3为空)
 
 // =================== 全局与静态通信变量 ===================
 float float_buffer[UART_DATA_LENGTH] = {0};
@@ -176,10 +176,12 @@ int main(void) {
         }
         if (periodic_print_pending) {
             periodic_print_pending = 0;
+            //wireless_uart_output_driver_status();
         }
-
-        // 前馈角接收打印
+        // 前馈角打印: 刚收到时刻立刻打印 (FFD_RECV) + 确认采纳时刻打印 (FFD_ACK)
+        wireless_uart_output_feedforward_recv();
         wireless_uart_output_feedforward_rx();
+
 
         gpio_low(DEBUG_PROBE);
         system_delay_us(400);

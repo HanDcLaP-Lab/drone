@@ -111,12 +111,16 @@ typedef struct {
 } duplex_uplink_frame_t;
 
 // ================= 对外状态 / 统计 =================
+#define DUPLEX_FF_RETENTION_MS    100U   // [新增] 未ACK前馈方向保留时间 (ms)
+
 // duplex_uplink_data 索引映射 (小车→无人机上传协议, 应答帧载荷):
 //   [0] imu roll  — 小车横滚角 (deg)
 //   [1] imu pitch — 小车俯仰角 (deg)
 //   [2] imu yaw   — 小车偏航角 (deg)
 //   [3] ff_deg    — 小车前馈方向角 (deg, -1=无前馈, 0°为有效方向) [新增, 已接入飞控, 供无线串口打印观察]
 extern float duplex_uplink_data[DUPLEX_UPLINK_COUNT];
+extern volatile float duplex_pending_ff_deg;          // [新增] 待处理/保留的前馈角 (-1=无)
+extern volatile uint32_t duplex_pending_ff_ms;         // [新增] 接收时刻
 // 前馈采纳反馈: 1 = 最近一次成功解码的应答载荷 [3] 已被飞控采纳, 0 = 未采纳 (含收到-1/无应答)。
 // 由 image_ctrl 中的 Car_Position_Predict_Feedforward 判定并刷新, 下传帧 [12] 反馈标志据此生成。
 extern volatile uint8_t duplex_ff_deg_received;
@@ -147,5 +151,6 @@ void Duplex_Comm_Trigger(const float *downlink);   // 视觉事件调用: 发起
 void Duplex_Comm_Set_Now_Ms(uint32_t ms);          // 喂入毫秒时基 (dataC.pit0_cnt)
 void Duplex_Comm_Reset_Stats(void);                // 清零收发统计 (启动稳定后调用)
 void Duplex_Comm_Print_Stats(void);                // 有线 printf 输出通讯质量 (CM7_0主循环调用, 内部限频)
-
+float Duplex_Get_Pending_Feedforward(void);        // [新增] 获取当前保留期内有效的待处理前馈角 (超时返回 -1.0f)
+void Duplex_Clear_Pending_Feedforward(void);       // [新增] 清除保留的前馈角
 #endif

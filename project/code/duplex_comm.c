@@ -11,6 +11,8 @@
 
 // ================= 对外状态 / 统计 =================
 float duplex_uplink_data[DUPLEX_UPLINK_COUNT] = {-1.0f, 0.0f, 0.0f, -1.0f}; // [3]=-1: 无前馈/未收到, 0°为有效方向
+volatile float duplex_pending_ff_deg = -1.0f;  // [新增] 待处理/保留的前馈角 (-1=无)
+volatile uint32_t duplex_pending_ff_ms = 0;    // [新增] 接收时刻
 volatile uint8_t duplex_ff_deg_received = 0;   // 前馈采纳反馈 (由 image_ctrl 控制)
 volatile uint8_t  duplex_uplink_update_flag = 0;
 volatile uint32_t duplex_request_count      = 0;
@@ -207,6 +209,13 @@ static void Duplex_Process_Full_Frame(void)
     }
     duplex_uplink_update_flag = 1;
 
+    // 若收到有效前馈角：更新 100ms 保留时间戳，并立刻输出一次 FFD_RECV
+    if (duplex_uplink_data[3] >= 0.0f) {
+        duplex_pending_ff_deg = duplex_uplink_data[3];
+        duplex_pending_ff_ms  = duplex_now_ms;
+        wireless_uart_output_feedforward_recv();
+    }
+
     if (duplex_awaiting_reply) {
         duplex_last_rtt_ms = duplex_now_ms - duplex_request_ms;
         if (duplex_last_rtt_ms > duplex_max_rtt_ms) {
@@ -370,4 +379,21 @@ void Duplex_Comm_Print_Stats(void)
            (double)duplex_uplink_data[2],
            (double)duplex_uplink_data[3],
            (unsigned)duplex_ff_deg_received);
+}
+
+// [新增] 获取当前保留期内有效的待处理前馈角 (超时返回 -1.0f)
+float Duplex_Get_Pending_Feedforward(void)
+{
+    if (duplex_pending_ff_deg < 0.0f) return -1.0f;
+    if ((uint32_t)(duplex_now_ms - duplex_pending_ff_ms) > DUPLEX_FF_RETENTION_MS) {
+        duplex_pending_ff_deg = -1.0f;
+        return -1.0f;
+    }
+    return (float)duplex_pending_ff_deg;
+}
+
+// [新增] 清除保留的前馈角
+void Duplex_Clear_Pending_Feedforward(void)
+{
+    duplex_pending_ff_deg = -1.0f;
 }
