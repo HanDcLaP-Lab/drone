@@ -19,10 +19,10 @@
 // FF_FLOW_CORRECTION_S: 光流速度修正时间常数, kick 瞬间将光流速度折算为位移并从抛向量中扣除; 光流失效时自动降级
 // FF_REVERSE_GAIN: 掉头/大角度反向增益系数 (90~180度夹角线性放大响应幅值, 1.0=保持当前策略)
 #define CAR_FF_ENABLE           1       // 开启/关闭小车方向前馈 (1:开启, 0:关闭)
-#define FF_THROW_DIST_CM        150.0f  // 收到前馈角时向该方向抛出的偏移距离峰值 (cm)
+#define FF_THROW_DIST_CM        170.0f  // 收到前馈角时向该方向抛出的偏移距离峰值 (cm)
 #define FF_CONVERGE_MS          2500U   // 前馈偏移线性收敛到真实小车位置的时间 (ms, 交棒位置环KI)
 #define FF_THROW_RAMP_MS        300U    // 抛出量斜坡上升时间 (ms): 事件后线性升至峰值
-#define FF_FLOW_CORRECTION_S    1.1f    // 光流速度修正时间常数 (s)
+#define FF_FLOW_CORRECTION_S    0.0f    // 光流速度修正时间常数 (s)
 #define FF_REVERSE_GAIN         1.0f    // 掉头/大角度反向增益系数 (90~180度线性放大, 1.0=保持当前策略)
 #endif
 
