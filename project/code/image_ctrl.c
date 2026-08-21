@@ -253,6 +253,8 @@ static void Flight_Hover_Position_Control(float car_pos_x, float car_pos_y, floa
  * @brief 航向扫描与搜寻状态机
  */
 static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) {
+    // 降落阶段不再更新或覆盖偏航目标角，保持设定的360度
+    if (flight_target.cur_state == FLIGHT_STATE_PRE_LANDING) return;
     // 逻辑A：当锁定了双目标（看到信标）
 #if TARGET_ALIGN_ENABLE
     if (locked_lights == 3) {
@@ -340,11 +342,11 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
         if (search_loss_active) {
             uint32_t search_elapsed_ms = dataC.pit0_cnt - search_loss_start_ms;
             // 仅当曾经见过信标时才启用搜索超时
-            if (search_beacon_ready && search_elapsed_ms >= SEARCH_TIMEOUT) {
+            if (search_beacon_ready && ff_event_ms > 0 && search_elapsed_ms >= SEARCH_TIMEOUT) {
                 search_loss_active = 0;
                 search_wait_timer = 0;
                 is_turning = 0;
-                // Flight_Request_Landing(); // 暂时关闭搜索超时自动降落
+                Flight_Request_Landing();
             } else if (search_elapsed_ms >= SEARCH_START_DELAY) {
                 // 对准关闭分支会每帧写入0度，因此搜索期间必须持续恢复当前搜索目标。
                 flight_target.target_yaw = search_target_yaw;

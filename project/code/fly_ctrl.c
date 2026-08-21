@@ -127,6 +127,7 @@ void Flight_Request_Landing(void) {
     landing_start_height = flight_target.height;
     landing_start_ms = dataC.pit0_cnt;
     landing_tof_seq = tof_update_seq;
+    flight_target.target_yaw = 360.0f; // [新增] 降落前设置目标偏航角为360度
     flight_target.cur_state = FLIGHT_STATE_PRE_LANDING;
 }
 
@@ -265,9 +266,14 @@ static void Flight_State_Update(void) {
         {
             uint32_t elapsed_ms = dataC.pit0_cnt - landing_start_ms;
             flight_target.target_height = 0.0f;
-            if (elapsed_ms < LANDING_DESCENT_TIME_MS) {
+            if (elapsed_ms < LANDING_ROTATE_WAIT_MS) {
+                // 等待旋转360度完成，保持原高度
+                flight_target.height = landing_start_height;
+            } else if (elapsed_ms < LANDING_ROTATE_WAIT_MS + LANDING_DESCENT_TIME_MS) {
+                // 旋转完成后线性下降至0
+                uint32_t descent_elapsed = elapsed_ms - LANDING_ROTATE_WAIT_MS;
                 flight_target.height = landing_start_height *
-                    (1.0f - (float)elapsed_ms / (float)LANDING_DESCENT_TIME_MS);
+                    (1.0f - (float)descent_elapsed / (float)LANDING_DESCENT_TIME_MS);
             } else {
                 flight_target.height = 0.0f;
             }
