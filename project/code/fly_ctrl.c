@@ -127,7 +127,7 @@ void Flight_Request_Landing(void) {
     landing_start_height = flight_target.height;
     landing_start_ms = dataC.pit0_cnt;
     landing_tof_seq = tof_update_seq;
-    flight_target.target_yaw = 360.0f; // [新增] 降落前设置目标偏航角为360度
+    flight_target.target_yaw = imu_data.yaw + 360.0f; // [新增] 降落前设置目标偏航角为当前角度+360度 (原地旋转一周)
     flight_target.cur_state = FLIGHT_STATE_PRE_LANDING;
 }
 

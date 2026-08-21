@@ -329,6 +329,10 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
         search_wait_timer = 0;
         is_turning = 0;
     } else if (locked_lights == 1) {
+        // 当开启前馈时，需满足至少触发过一次前馈才启动旋转搜索；若前馈关闭则自动降级放行
+#if CAR_FF_ENABLE
+        if (ff_event_ms == 0) return;
+#endif
         // 只要处于state1且搜索尚未激活，就立即开始搜索。
         if (!search_loss_active) {
             search_loss_active = 1;
@@ -341,8 +345,12 @@ static void Flight_Hover_Yaw_Control(uint8_t locked_lights, float snapshot_yaw) 
 
         if (search_loss_active) {
             uint32_t search_elapsed_ms = dataC.pit0_cnt - search_loss_start_ms;
-            // 仅当曾经见过信标时才启用搜索超时
+            // 仅当曾经见过信标且满足前馈门限(前馈开启时需触发过前馈, 关闭时自动降级)时才启用搜索超时
+#if CAR_FF_ENABLE
             if (search_beacon_ready && ff_event_ms > 0 && search_elapsed_ms >= SEARCH_TIMEOUT) {
+#else
+            if (search_beacon_ready && search_elapsed_ms >= SEARCH_TIMEOUT) {
+#endif
                 search_loss_active = 0;
                 search_wait_timer = 0;
                 is_turning = 0;
