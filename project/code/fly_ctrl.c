@@ -65,7 +65,7 @@ void Flight_Control_Init(void) {
 
     // ----------- 初始化 PID 参数 -----------
     // 高度环
-    PID_Init(&pid_height_pos, 0.7f, 0.4f, 0.0f, 30, 50, 40.0f);
+    PID_Init(&pid_height_pos, 0.7f, 0.4f, 0.0f, 30, 20, 40.0f);
     PID_Init(&pid_height_vel, 16.031f, 0.0f, 0.15f, 80, 2500, 15.0f);
     // 角度环a
     Nonline_PID_Init(&pid_roll, 9.328f, 0.239f, 0.0f, 0.05f, 20, 300, 40.0f);

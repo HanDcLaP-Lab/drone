@@ -11,7 +11,7 @@
 #define INIT_HOVER_PWM_LB           5048    // 左后电机 (LB) 初始悬停油门
 #define INIT_HOVER_PWM_RB           5369    // 右后电机 (RB) 初始悬停油门
 
-#define STRATEGY (3)
+#define STRATEGY (1)
 
 #if STRATEGY == 1
 // ================== 视觉前馈参数 ==================
