@@ -7,7 +7,7 @@
 // =================== 飞行参数配置 ===================
 #define TARGET_HEIGHT_CM 130.0f  // 目标高度
 #define LANDING_DESCENT_TIME_MS 7000U // 目标高度从当前值线性降至0的时间
-#define LANDING_ROTATE_WAIT_MS  8000U // [新增] 降落前等待旋转360度完成的时间 (ms)
+#define LANDING_ROTATE_WAIT_MS  0U // [新增] 降落前等待旋转360度完成的时间 (ms)
 #define FLIGHT_TIMEOUT_MS       70000U // [新增] 全局飞行超时 (ms)，超时自动降落
 #define LANDING_CUTOFF_HEIGHT_CM 30.0f  // 新ToF帧低于此高度时触发触地关停
 #define LANDING_CUTOFF_RAMP_MS  4000U  // 触地后 PWM scale 线性缩小到 0 的时间 (ms)
